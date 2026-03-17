@@ -3,7 +3,7 @@
 =========================== */
 const LS_KEY = "planner_prototype_ua_v2_full";
 const THEME_KEY = "planner_theme_pref";
-const SYNC_URL = "https://sync.usplan.space/sync";
+const SYNC_URL = "https://api.bps05.fun/sync";
 const SYNC_POLL_MS = 30000;
 const SYNC_DEBOUNCE_MS = 2500;
 const DEVICE_ID_KEY = "planner_device_id";
@@ -8194,3 +8194,4 @@ applyTheme(UI.theme);
 render();
 initAutoSync();
 initOverdueTicker();
+
