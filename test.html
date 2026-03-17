@@ -1,0 +1,50 @@
+﻿<!--
+MOBILE-FIRST PROTOTYPE (LOCALSTORAGE) — UA ONLY (FULL UPDATED CODE)
+Оновлення (на твоє прохання “№1 + повний код”):
+✅ Керівник у вкладці “Звіти” бачить “Хто не здав” по відділах на обрану дату
+✅ Кнопка “👥 Люди” відкриває список людей відділу на цю дату (вчасно/пізно/не здав)
+✅ Збереження обраної дати контролю у UI (UI.reportsControlDate)
+
+Також збережено попередні вимоги:
+✅ Люди/штат у начальника: хто здав/не здав сьогодні
+✅ Підсумок відділу (кнопка для начальника/в.о.)
+✅ Всі назви українською
+✅ Задачі керівника (“Моя задача”), задачі без дедлайну + контрольна дата
+✅ Заміщення (в.о.) — призначає тільки керівник
+
+HOW TO USE
+1) Save as: prototype.html
+2) Open in browser
+3) Login (demo):
+   - Керівник:      boss / 1234
+   - Нач. відділу2: head2 / 1234
+   - Нач. відділу5: head5 / 1234
+   - Виконавці: e21/e22/e51/e41 / 1234
+4) Дані локальні (localStorage). Для скидання — на екрані входу “Скинути дані”.
+-->
+
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Планувальник (Prototype UA)</title>
+    <link rel="stylesheet" href="styles.css?v=20260306" />
+</head>
+<body>
+  <div id="root"></div>
+
+  <div id="modal" class="modal" role="dialog" aria-modal="true">
+    <div class="sheet" id="sheet">
+      <div class="sheet-h">
+        <div class="t" id="sheetTitle">Модальне вікно</div>
+        <div class="iconbtn" id="sheetClose" title="Закрити">✕</div>
+      </div>
+      <div id="sheetBody"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="app.js?v=20260306"></script>
+</body>
+</html>
