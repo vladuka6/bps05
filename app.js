@@ -8021,6 +8021,7 @@ async function pushSync(){
     const res = await fetch(SYNC_URL, {
       method: "PUT",
       headers: {"Content-Type":"application/json"},
+      credentials: "include",
       body: JSON.stringify(payload),
     });
     if(res.ok){
@@ -8034,7 +8035,7 @@ async function pullSync(){
   _syncInFlight = true;
   const wasInitDone = _syncInitDone;
   try{
-    const res = await fetch(SYNC_URL);
+    const res = await fetch(SYNC_URL, { credentials: "include" });
     if(!res.ok){
       _syncInFlight = false;
       _syncInitDone = true;
@@ -8193,6 +8194,9 @@ applyTheme(UI.theme);
 render();
 initAutoSync();
 initOverdueTicker();
+
+
+
 
 
 
