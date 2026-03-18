@@ -8171,6 +8171,7 @@ async function pushSync(){
     });
     if(res.ok){
       _lastPushAt = nowIsoKyiv();
+      await ensureDbTasksCache(true);
     }
   } catch{}
   _syncInFlight = false;
@@ -8217,6 +8218,7 @@ async function pullSync(){
       saveState(STATE, {skipSyncStamp:true});
       _syncPending = false;
       render();
+      await ensureDbTasksCache(true);
       _lastPullAt = nowIsoKyiv();
       _syncInFlight = false;
       return;
@@ -8228,6 +8230,7 @@ async function pullSync(){
       saveState(STATE, {skipSyncStamp:true});
       _syncPending = false;
       render();
+      await ensureDbTasksCache(true);
     }
     _lastPullAt = nowIsoKyiv();
     if(_syncPending) queueSync();
@@ -8339,6 +8342,7 @@ applyTheme(UI.theme);
 render();
 initAutoSync();
 initOverdueTicker();
+
 
 
 
