@@ -4964,9 +4964,17 @@ function viewTasks(){
       </span>
     `;
   })();
+  const taskSourceLabel = u.role==="boss"
+    ? (Array.isArray(DB_TASKS_CACHE)
+        ? "D1"
+        : (DB_TASKS_LOADING ? "D1 (завантаження...)" : "local state"))
+    : "";
+  const taskSourceHint = u.role==="boss"
+    ? `<div class="subhint">джерело задач: <span class="mono">${taskSourceLabel}</span>${DB_TASKS_ERROR ? `, fallback після помилки` : ``}</div>`
+    : ``;
   const searchHint = (filter==="активні")
-    ? `<div class="hint task-count-hint">Показано: <span class="mono">${shownCount}</span> із <span class="mono">${activeCount}</span> активних ${deptNoteActionBtn || ""}</div>`
-    : `<div class="hint task-count-hint">Показано: <span class="mono">${shownCount}</span> із <span class="mono">${totalCount}</span> (всього) ${deptNoteActionBtn || ""}<div class="subhint">активні <span class="mono">${activeCount}</span>, закриті <span class="mono">${closedCount}</span></div></div>`;
+    ? `<div class="hint task-count-hint">Показано: <span class="mono">${shownCount}</span> із <span class="mono">${activeCount}</span> активних ${deptNoteActionBtn || ""}${taskSourceHint}</div>`
+    : `<div class="hint task-count-hint">Показано: <span class="mono">${shownCount}</span> із <span class="mono">${totalCount}</span> (всього) ${deptNoteActionBtn || ""}<div class="subhint">активні <span class="mono">${activeCount}</span>, закриті <span class="mono">${closedCount}</span></div>${taskSourceHint}</div>`;
   const announcementBtn = (u.role==="boss" && !u.readOnly && showAnnouncementsScope)
     ? `<button class="btn ghost" data-action="openCreateAnnouncement">📣 Оголошення</button>`
     : ``;
@@ -8331,6 +8339,7 @@ applyTheme(UI.theme);
 render();
 initAutoSync();
 initOverdueTicker();
+
 
 
 
