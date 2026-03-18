@@ -7317,6 +7317,7 @@ function viewProfile(){
         <div class="actions">
           ${u.role==="boss" ? `<button class="btn primary" data-action="openDelegations">🧩 Заміщення (в.о.)</button>` : ``}
           ${u.role==="boss" ? `<button class="btn ghost" data-action="openDbTasksPreview">🗄 D1 задачі</button>` : ``}
+          ${u.role==="boss" ? `<button class="btn ghost" data-action="exportBackupNow">💾 Експорт backup</button>` : ``}
           <button class="btn ghost" data-action="openAbout">ℹ️ Про прототип</button>
           <button class="btn danger" data-action="logout">🚪 Вийти</button>
         </div>
@@ -7393,6 +7394,32 @@ async function openDbTasksPreview(){
     `);
   }
 }
+function exportBackupNow(){
+  const u = currentSessionUser();
+  if(!u || u.role!=="boss") return;
+  try{
+    const payload = stateForSync(STATE);
+    const stamp = nowIsoKyiv().replaceAll(":","-").replace(" ", "_");
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `bps05-backup-${stamp}.json`;
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(()=>{
+      URL.revokeObjectURL(link.href);
+      link.remove();
+    }, 0);
+    showToast("Backup експортовано", "ok");
+  } catch(err){
+    showSheet("Помилка backup", `
+      <div class="hint">Не вдалося створити backup.<br/>${htmlesc(err?.message || "Невідома помилка")}</div>
+      <div class="sep"></div>
+      <button class="btn primary" data-action="hideSheet">Закрити</button>
+    `);
+  }
+}
+
 function openAbout(){
   showSheet("Про прототип", `
     <div class="hint">
@@ -7946,6 +7973,7 @@ const ACTIONS = {
   hideSheet,
   logout,
   openDbTasksPreview,
+  exportBackupNow,
   openAbout,
   openHelp,
   applyTextFormat,
@@ -8303,6 +8331,7 @@ applyTheme(UI.theme);
 render();
 initAutoSync();
 initOverdueTicker();
+
 
 
 
