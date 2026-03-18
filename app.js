@@ -81,11 +81,61 @@ const REPORT_DEADLINE_MIN = 17*60 + 30;
 function uid(prefix="id"){
   return `${prefix}_${Math.random().toString(16).slice(2)}_${Date.now().toString(16)}`;
 }
+function taskDisplayFingerprint(task){
+  if(!task || typeof task !== "object") return "";
+  const norm = (value)=>String(value || "").trim().toLowerCase();
+  return [
+    norm(task.type),
+    norm(task.category),
+    norm(task.title),
+    norm(task.description),
+    norm(task.departmentId),
+    norm(task.responsibleUserId),
+    norm(task.createdBy),
+    norm(task.status),
+    norm(task.priority),
+    norm(task.complexity),
+    norm(task.startDate),
+    norm(task.dueDate),
+    norm(task.nextControlDate),
+    norm(task.reportPlanId),
+    norm(task.reportMonth),
+    norm(task.audience),
+    String(!!task.controlAlways),
+  ].join("|");
+}
+function dedupeTasksForDisplay(tasks){
+  if(!Array.isArray(tasks) || !tasks.length) return Array.isArray(tasks) ? tasks.slice() : [];
+
+  const byFingerprint = new Map();
+
+  for(const task of tasks){
+    if(!task || typeof task !== "object"){
+      continue;
+    }
+
+    const fingerprint = taskDisplayFingerprint(task);
+    const prev = byFingerprint.get(fingerprint);
+
+    if(!prev){
+      byFingerprint.set(fingerprint, task);
+      continue;
+    }
+
+    const prevStamp = String(prev.updatedAt || prev.createdAt || "");
+    const nextStamp = String(task.updatedAt || task.createdAt || "");
+    if(nextStamp >= prevStamp){
+      byFingerprint.set(fingerprint, task);
+    }
+  }
+
+  return Array.from(byFingerprint.values());
+}
 function migrateState(st){
   if(!st || typeof st !== "object") return null;
 
   const rawTasks = Array.isArray(st.tasks) ? st.tasks : [];
-  const tasks = rawTasks.map(t=>{
+  const tasks = dedupeTasksForDisplay(rawTasks.map(t=>{
     if(!t || typeof t !== "object") return t;
     const task = {...t};
     task.controlAlways = !!task.controlAlways;
@@ -102,7 +152,7 @@ function migrateState(st){
       task.complexity = inferred || "середня";
     }
     return task;
-  });
+  }));
 
   const next = {
     version: st.version ?? 0,
@@ -539,6 +589,11 @@ function seed(){
 }
 
 let STATE = loadState() || seed();
+const dedupedBootTasks = dedupeTasksForDisplay(STATE.tasks);
+if(dedupedBootTasks.length !== STATE.tasks.length){
+  STATE = {...STATE, tasks: dedupedBootTasks};
+  saveState(STATE, {skipSyncStamp:true});
+}
 
 /* ===========================
    GETTERS / HELPERS
@@ -4731,15 +4786,22 @@ function deleteTaskNow(taskId){
   const t = STATE.tasks.find(x=>x.id===taskId);
   if(!u || !t) return;
   if(!canDeleteTask(u, t)){
-    showSheet("Немає прав", `<div class="hint">Ви не маєте прав видаляти цю задачу.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
+    showSheet("????? ????", `<div class="hint">?? ?? ????? ???? ???????? ?? ??????.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
     return;
   }
-  STATE.tasks = STATE.tasks.filter(x=>x.id!==taskId);
-  STATE.taskUpdates = STATE.taskUpdates.filter(x=>x.taskId!==taskId);
+  const targetFingerprint = taskDisplayFingerprint(t);
+  const duplicateIds = new Set(
+    STATE.tasks
+      .filter(x=>taskDisplayFingerprint(x) === targetFingerprint)
+      .map(x=>x.id)
+  );
+
+  STATE.tasks = STATE.tasks.filter(x=>!duplicateIds.has(x.id));
+  STATE.taskUpdates = STATE.taskUpdates.filter(x=>!duplicateIds.has(x.taskId));
   saveState(STATE);
   hideSheet();
   render();
-  showToast("Видалено", "ok");
+  showToast(duplicateIds.size > 1 ? `\u0412\u0438\u0434\u0430\u043b\u0435\u043d\u043e ${duplicateIds.size} \u0434\u0443\u0431\u043b\u0456\u043a\u0430\u0442\u0438` : "\u0412\u0438\u0434\u0430\u043b\u0435\u043d\u043e", "ok");
 }
 
 function viewTasks(){
@@ -8342,6 +8404,7 @@ applyTheme(UI.theme);
 render();
 initAutoSync();
 initOverdueTicker();
+
 
 
 
