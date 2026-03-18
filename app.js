@@ -2228,17 +2228,9 @@ function viewControl(){
       </div>
       <div class="card-b">
         <div class="actions">
-          <button class="btn ghost" data-action="openTaskList" data-arg1="активні">📌 Активні задачі</button>
-
-          ${!u.readOnly ? (u.role==="boss" ? `
-            <button class="btn ghost" data-action="openCreateTask" data-arg1="personal">➕ Моя задача</button>
-            <button class="btn ghost" data-action="openCreateTask" data-arg1="managerial">
-              <span class="qa-full">➕ Управлінська задача</span>
-              <span class="qa-short">➕ Управлінськ</span>
-            </button>
-          ` : `
-            <button class="btn ghost" data-action="openCreateTask" data-arg1="internal">➕ Внутрішня задача</button>
-          `) : ``}
+          ${u.role==="boss" ? `<button class="btn primary" data-action="openDelegations">🧩 Заміщення (в.о.)</button>` : ``}
+          <button class="btn ghost" data-action="openAbout">ℹ️ Про прототип</button>
+          <button class="btn danger" data-action="logout">🚪 Вийти</button>
         </div>
 
         ${u.role!=="boss" ? `` : ``}
@@ -2265,8 +2257,9 @@ function viewControl(){
     if(u.role==="boss"){
       showSheet("Додати", `
         <div class="actions">
-          <button class="btn primary" data-action="hideThen" data-next="openCreateTask" data-arg1="personal">➕ Моя задача</button>
-          <button class="btn ghost" data-action="hideThen" data-next="openCreateTask" data-arg1="managerial">➕ Управлінська</button>
+          ${u.role==="boss" ? `<button class="btn primary" data-action="openDelegations">🧩 Заміщення (в.о.)</button>` : ``}
+          <button class="btn ghost" data-action="openAbout">ℹ️ Про прототип</button>
+          <button class="btn danger" data-action="logout">🚪 Вийти</button>
         </div>
         <div class="sep"></div>
         <button class="btn ghost" data-action="hideSheet">Закрити</button>
@@ -2354,8 +2347,10 @@ function openDeptPeople(){
     ${rows || `<div class="hint">Немає людей у відділі.</div>`}
     <div class="sep"></div>
     <div class="actions">
-      <button class="btn ghost" data-action="hideSheet">Закрити</button>
-    </div>
+          ${u.role==="boss" ? `<button class="btn primary" data-action="openDelegations">🧩 Заміщення (в.о.)</button>` : ``}
+          <button class="btn ghost" data-action="openAbout">ℹ️ Про прототип</button>
+          <button class="btn danger" data-action="logout">🚪 Вийти</button>
+        </div>
   `);
 }
 
@@ -3303,9 +3298,10 @@ function confirmDeleteReportPlan(planId){
     <div class="hint">“${htmlesc(plan.title)}” буде видалено з плану. Уже створені задачі залишаться в історії.</div>
     <div class="sep"></div>
     <div class="actions">
-      <button class="btn danger" data-action="deleteReportPlanNow" data-arg1="${plan.id}">Видалити</button>
-      <button class="btn ghost" data-action="hideSheet">Скасувати</button>
-    </div>
+          ${u.role==="boss" ? `<button class="btn primary" data-action="openDelegations">🧩 Заміщення (в.о.)</button>` : ``}
+          <button class="btn ghost" data-action="openAbout">ℹ️ Про прототип</button>
+          <button class="btn danger" data-action="logout">🚪 Вийти</button>
+        </div>
   `);
 }
 function deleteReportPlanNow(planId){
@@ -4663,9 +4659,10 @@ function confirmDeleteTask(taskId){
   showSheet(isAnn ? "Видалити оголошення" : "Видалити задачу", `
     <div class="hint">Видалити "${htmlesc(t.title)}"? Це також прибере всі оновлення по задачі.</div>
     <div class="actions">
-      <button class="btn danger" data-action="deleteTaskNow" data-arg1="${t.id}">🗑 Видалити</button>
-      <button class="btn ghost" data-action="hideSheet">Скасувати</button>
-    </div>
+          ${u.role==="boss" ? `<button class="btn primary" data-action="openDelegations">🧩 Заміщення (в.о.)</button>` : ``}
+          <button class="btn ghost" data-action="openAbout">ℹ️ Про прототип</button>
+          <button class="btn danger" data-action="logout">🚪 Вийти</button>
+        </div>
   `);
 }
 function deleteTaskNow(taskId){
@@ -5255,8 +5252,9 @@ function viewTasks(){
     if(u.role==="boss"){
       showSheet("Додати", `
         <div class="actions">
-          <button class="btn primary" data-action="hideThen" data-next="openCreateTask" data-arg1="personal">➕ Моя задача</button>
-          <button class="btn ghost" data-action="hideThen" data-next="openCreateTask" data-arg1="managerial">➕ Управлінська</button>
+          ${u.role==="boss" ? `<button class="btn primary" data-action="openDelegations">🧩 Заміщення (в.о.)</button>` : ``}
+          <button class="btn ghost" data-action="openAbout">ℹ️ Про прототип</button>
+          <button class="btn danger" data-action="logout">🚪 Вийти</button>
         </div>
         <div class="sep"></div>
         <button class="btn ghost" data-action="hideSheet">Закрити</button>
@@ -5397,7 +5395,11 @@ function quickActionsForTask(u, t){
   const canDelete = canDeleteTask(u, t);
   if(!canUpdate || t.status==="закрито"){
     return canDelete
-      ? `<div class="actions"><button class="btn danger" data-action="confirmDeleteTask" data-arg1="${t.id}">🗑 Видалити</button></div>`
+      ? `<div class="actions">
+          ${u.role==="boss" ? `<button class="btn primary" data-action="openDelegations">🧩 Заміщення (в.о.)</button>` : ``}
+          <button class="btn ghost" data-action="openAbout">ℹ️ Про прототип</button>
+          <button class="btn danger" data-action="logout">🚪 Вийти</button>
+        </div>`
       : "";
   }
 
@@ -5416,7 +5418,11 @@ function quickActionsForTask(u, t){
       btns.push(`<button class="btn ghost" data-action="openEditTask" data-arg1="${t.id}">✏️ Редагувати</button>`);
     }
     if(canDelete) btns.push(`<button class="btn danger" data-action="confirmDeleteTask" data-arg1="${t.id}">🗑 Видалити</button>`);
-    return `<div class="actions">${btns.join("")}</div>`;
+    return `<div class="actions">
+          ${u.role==="boss" ? `<button class="btn primary" data-action="openDelegations">🧩 Заміщення (в.о.)</button>` : ``}
+          <button class="btn ghost" data-action="openAbout">ℹ️ Про прототип</button>
+          <button class="btn danger" data-action="logout">🚪 Вийти</button>
+        </div>`;
   }
 
   const btns = [];
@@ -5446,7 +5452,11 @@ function quickActionsForTask(u, t){
     btns.push(`<button class="btn ghost" data-action="openEditTask" data-arg1="${t.id}">✏️ Редагувати</button>`);
   }
   if(canDelete) btns.push(`<button class="btn danger" data-action="confirmDeleteTask" data-arg1="${t.id}">🗑 Видалити</button>`);
-  return `<div class="actions">${btns.join("")}</div>`;
+  return `<div class="actions">
+          ${u.role==="boss" ? `<button class="btn primary" data-action="openDelegations">🧩 Заміщення (в.о.)</button>` : ``}
+          <button class="btn ghost" data-action="openAbout">ℹ️ Про прототип</button>
+          <button class="btn danger" data-action="logout">🚪 Вийти</button>
+        </div>`;
 }
 
 function openStatusReasonModal(taskId, status){
@@ -7025,7 +7035,9 @@ function openDelegations(){
           </div>
         </div>
         <div class="actions">
-          <button class="btn danger" data-action="cancelDelegationUi" data-arg1="${d.id}">Скасувати</button>
+          ${u.role==="boss" ? `<button class="btn primary" data-action="openDelegations">🧩 Заміщення (в.о.)</button>` : ``}
+          <button class="btn ghost" data-action="openAbout">ℹ️ Про прототип</button>
+          <button class="btn danger" data-action="logout">🚪 Вийти</button>
         </div>
       </div>
     `;
@@ -7257,6 +7269,7 @@ function viewProfile(){
 
         <div class="actions">
           ${u.role==="boss" ? `<button class="btn primary" data-action="openDelegations">🧩 Заміщення (в.о.)</button>` : ``}
+          ${u.role==="boss" ? `<button class="btn ghost" data-action="openDbTasksPreview">🗄 D1 задачі</button>` : ``}
           <button class="btn ghost" data-action="openAbout">ℹ️ Про прототип</button>
           <button class="btn danger" data-action="logout">🚪 Вийти</button>
         </div>
@@ -7285,6 +7298,54 @@ function viewProfile(){
   appShell({title:"Профіль", subtitle, bodyHtml: body, showFab:false, fabAction:null, tabs});
 }
 
+async function openDbTasksPreview(){
+  const u = currentSessionUser();
+  if(!u || u.role!=="boss") return;
+  try{
+    const res = await fetch("/db/tasks", { credentials: "include" });
+    if(!res.ok){
+      throw new Error(`HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    const items = Array.isArray(data?.items) ? data.items : [];
+    const top = items.slice(0, 12);
+    const rows = top.length ? top.map((t, idx)=>`
+      <tr>
+        <td class="mono">${idx + 1}</td>
+        <td class="mono">${htmlesc(t.id || "")}</td>
+        <td>${htmlesc(t.title || "")}</td>
+        <td>${htmlesc(t.status || "")}</td>
+        <td>${htmlesc(t.department_id || "")}</td>
+      </tr>
+    `).join("") : `<tr><td colspan="5" class="hint">У D1 задач поки немає.</td></tr>`;
+    showSheet("D1 задачі", `
+      <div class="hint">У таблиці <span class="mono">tasks</span>: <b>${items.length}</b> записів. У локальному стані: <b>${STATE.tasks.length}</b>.</div>
+      <div class="sep"></div>
+      <div style="overflow:auto; max-height:55vh;">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>ID</th>
+              <th>Назва</th>
+              <th>Статус</th>
+              <th>Відділ</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div class="sep"></div>
+      <button class="btn primary" data-action="hideSheet">Закрити</button>
+    `);
+  } catch(err){
+    showSheet("Помилка D1", `
+      <div class="hint">Не вдалося прочитати <span class="mono">/db/tasks</span>.<br/>${htmlesc(err?.message || "Невідома помилка")}</div>
+      <div class="sep"></div>
+      <button class="btn primary" data-action="hideSheet">Закрити</button>
+    `);
+  }
+}
 function openAbout(){
   showSheet("Про прототип", `
     <div class="hint">
@@ -7837,6 +7898,7 @@ const ACTIONS = {
   openSyncLogin,
   hideSheet,
   logout,
+  openDbTasksPreview,
   openAbout,
   openHelp,
   applyTextFormat,
@@ -8194,6 +8256,10 @@ applyTheme(UI.theme);
 render();
 initAutoSync();
 initOverdueTicker();
+
+
+
+
 
 
 
