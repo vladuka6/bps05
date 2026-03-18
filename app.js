@@ -2257,9 +2257,8 @@ function viewControl(){
     if(u.role==="boss"){
       showSheet("Додати", `
         <div class="actions">
-          ${u.role==="boss" ? `<button class="btn primary" data-action="openDelegations">🧩 Заміщення (в.о.)</button>` : ``}
-          <button class="btn ghost" data-action="openAbout">ℹ️ Про прототип</button>
-          <button class="btn danger" data-action="logout">🚪 Вийти</button>
+          <button class="btn primary" data-action="hideThen" data-next="openCreateTask" data-arg1="personal">➕ Моя задача</button>
+          <button class="btn ghost" data-action="hideThen" data-next="openCreateTask" data-arg1="managerial">➕ Управлінська</button>
         </div>
         <div class="sep"></div>
         <button class="btn ghost" data-action="hideSheet">Закрити</button>
@@ -2347,10 +2346,8 @@ function openDeptPeople(){
     ${rows || `<div class="hint">Немає людей у відділі.</div>`}
     <div class="sep"></div>
     <div class="actions">
-          ${u.role==="boss" ? `<button class="btn primary" data-action="openDelegations">🧩 Заміщення (в.о.)</button>` : ``}
-          <button class="btn ghost" data-action="openAbout">ℹ️ Про прототип</button>
-          <button class="btn danger" data-action="logout">🚪 Вийти</button>
-        </div>
+      <button class="btn ghost" data-action="hideSheet">Закрити</button>
+    </div>
   `);
 }
 
@@ -3298,10 +3295,9 @@ function confirmDeleteReportPlan(planId){
     <div class="hint">“${htmlesc(plan.title)}” буде видалено з плану. Уже створені задачі залишаться в історії.</div>
     <div class="sep"></div>
     <div class="actions">
-          ${u.role==="boss" ? `<button class="btn primary" data-action="openDelegations">🧩 Заміщення (в.о.)</button>` : ``}
-          <button class="btn ghost" data-action="openAbout">ℹ️ Про прототип</button>
-          <button class="btn danger" data-action="logout">🚪 Вийти</button>
-        </div>
+      <button class="btn danger" data-action="deleteReportPlanNow" data-arg1="${plan.id}">Видалити</button>
+      <button class="btn ghost" data-action="hideSheet">Скасувати</button>
+    </div>
   `);
 }
 function deleteReportPlanNow(planId){
@@ -4659,10 +4655,9 @@ function confirmDeleteTask(taskId){
   showSheet(isAnn ? "Видалити оголошення" : "Видалити задачу", `
     <div class="hint">Видалити "${htmlesc(t.title)}"? Це також прибере всі оновлення по задачі.</div>
     <div class="actions">
-          ${u.role==="boss" ? `<button class="btn primary" data-action="openDelegations">🧩 Заміщення (в.о.)</button>` : ``}
-          <button class="btn ghost" data-action="openAbout">ℹ️ Про прототип</button>
-          <button class="btn danger" data-action="logout">🚪 Вийти</button>
-        </div>
+      <button class="btn danger" data-action="deleteTaskNow" data-arg1="${t.id}">🗑 Видалити</button>
+      <button class="btn ghost" data-action="hideSheet">Скасувати</button>
+    </div>
   `);
 }
 function deleteTaskNow(taskId){
@@ -5252,9 +5247,8 @@ function viewTasks(){
     if(u.role==="boss"){
       showSheet("Додати", `
         <div class="actions">
-          ${u.role==="boss" ? `<button class="btn primary" data-action="openDelegations">🧩 Заміщення (в.о.)</button>` : ``}
-          <button class="btn ghost" data-action="openAbout">ℹ️ Про прототип</button>
-          <button class="btn danger" data-action="logout">🚪 Вийти</button>
+          <button class="btn primary" data-action="hideThen" data-next="openCreateTask" data-arg1="personal">➕ Моя задача</button>
+          <button class="btn ghost" data-action="hideThen" data-next="openCreateTask" data-arg1="managerial">➕ Управлінська</button>
         </div>
         <div class="sep"></div>
         <button class="btn ghost" data-action="hideSheet">Закрити</button>
@@ -7035,9 +7029,7 @@ function openDelegations(){
           </div>
         </div>
         <div class="actions">
-          ${u.role==="boss" ? `<button class="btn primary" data-action="openDelegations">🧩 Заміщення (в.о.)</button>` : ``}
-          <button class="btn ghost" data-action="openAbout">ℹ️ Про прототип</button>
-          <button class="btn danger" data-action="logout">🚪 Вийти</button>
+          <button class="btn danger" data-action="cancelDelegationUi" data-arg1="${d.id}">Скасувати</button>
         </div>
       </div>
     `;
@@ -8256,6 +8248,7 @@ applyTheme(UI.theme);
 render();
 initAutoSync();
 initOverdueTicker();
+
 
 
 
