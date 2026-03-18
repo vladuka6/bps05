@@ -15,6 +15,9 @@ let _overdueTimer = null;
 let _syncReady = false;
 let _syncPending = false;
 let _syncInitDone = !SYNC_URL;
+let DB_TASKS_CACHE = null;
+let DB_TASKS_LOADING = false;
+let DB_TASKS_ERROR = null;
 const memoryStorage = {};
 function safeGet(key){
   try{
@@ -199,6 +202,8 @@ function markStateChanged(st){
   st.sync.revision += 1;
 }
 function saveState(st, opts={}){
+  DB_TASKS_CACHE = null;
+  DB_TASKS_ERROR = null;
   if(!opts.skipSyncStamp){
     markStateChanged(st);
     queueSync();
@@ -990,6 +995,67 @@ function getVisibleTasksForUser(u){
     return STATE.tasks.filter(t=>!isAnnouncement(t));
   }
   return STATE.tasks.filter(t=>!isAnnouncement(t) && t.departmentId===u.departmentId);
+}
+function normalizeDbTask(row){
+  if(!row || typeof row !== "object") return null;
+  const annOrder = row.ann_order == null ? null : Number(row.ann_order);
+  const meetingRepeatCount = row.meeting_repeat_count == null ? 0 : Number(row.meeting_repeat_count);
+  const category = row.audience ? "announcement" : null;
+  return {
+    id: row.id,
+    type: row.type || "managerial",
+    title: row.title || "",
+    description: row.description || "",
+    departmentId: row.department_id || null,
+    responsibleUserId: row.responsible_user_id || null,
+    createdBy: row.created_by || null,
+    priority: row.priority || null,
+    status: row.status || null,
+    startDate: row.start_date || null,
+    dueDate: row.due_date || null,
+    nextControlDate: row.next_control_date || null,
+    controlAlways: !!row.control_always,
+    complexity: row.complexity || null,
+    closedAt: row.closed_at || null,
+    reportPlanId: row.report_plan_id || null,
+    reportMonth: row.report_month || null,
+    audience: row.audience || null,
+    annOrder: Number.isFinite(annOrder) ? annOrder : null,
+    meetingRepeatCount: Number.isFinite(meetingRepeatCount) ? meetingRepeatCount : 0,
+    meetingLastDate: row.meeting_last_date || null,
+    meetingNextDate: row.meeting_next_date || null,
+    meetingSkipDate: row.meeting_skip_date || null,
+    createdAt: row.created_at || null,
+    updatedAt: row.updated_at || null,
+    category
+  };
+}
+async function ensureDbTasksCache(force=false){
+  if(DB_TASKS_LOADING) return;
+  if(!force && Array.isArray(DB_TASKS_CACHE)) return;
+  DB_TASKS_LOADING = true;
+  try{
+    const res = await fetch("/db/tasks", { credentials: "include" });
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const items = Array.isArray(data?.items) ? data.items : [];
+    DB_TASKS_CACHE = items.map(normalizeDbTask).filter(Boolean);
+    DB_TASKS_ERROR = null;
+  } catch(err){
+    DB_TASKS_ERROR = err;
+  } finally {
+    DB_TASKS_LOADING = false;
+    if(UI.tab===ROUTES.TASKS) render();
+  }
+}
+function getVisibleTasksForView(u){
+  const source = Array.isArray(DB_TASKS_CACHE) ? DB_TASKS_CACHE : STATE.tasks;
+  if(!u) return [];
+  if(u.role==="boss"){
+    if(u.readOnly) return source.filter(t=>!isAnnouncement(t) && t.type!=="personal");
+    return source.filter(t=>!isAnnouncement(t));
+  }
+  return source.filter(t=>!isAnnouncement(t) && t.departmentId===u.departmentId);
 }
 function updateTask(taskId, patch, authorId, note){
   const idx = STATE.tasks.findIndex(t=>t.id===taskId);
@@ -4682,8 +4748,9 @@ function viewTasks(){
   const u = currentSessionUser();
   const {isDeptHeadLike} = asDeptRole(u);
   UI.tab = ROUTES.TASKS;
+  ensureDbTasksCache();
 
-  let tasks = getVisibleTasksForUser(u);
+  let tasks = getVisibleTasksForView(u);
   const filter = UI.taskFilter;
   const deptFilter = UI.taskDeptFilter || "all";
   const taskSearch = UI.taskSearch || "";
@@ -8236,6 +8303,9 @@ applyTheme(UI.theme);
 render();
 initAutoSync();
 initOverdueTicker();
+
+
+
 
 
 
