@@ -5389,11 +5389,7 @@ function quickActionsForTask(u, t){
   const canDelete = canDeleteTask(u, t);
   if(!canUpdate || t.status==="закрито"){
     return canDelete
-      ? `<div class="actions">
-          ${u.role==="boss" ? `<button class="btn primary" data-action="openDelegations">🧩 Заміщення (в.о.)</button>` : ``}
-          <button class="btn ghost" data-action="openAbout">ℹ️ Про прототип</button>
-          <button class="btn danger" data-action="logout">🚪 Вийти</button>
-        </div>`
+      ? `<div class="actions"><button class="btn danger" data-action="confirmDeleteTask" data-arg1="${t.id}">🗑 Видалити</button></div>`
       : "";
   }
 
@@ -5412,11 +5408,7 @@ function quickActionsForTask(u, t){
       btns.push(`<button class="btn ghost" data-action="openEditTask" data-arg1="${t.id}">✏️ Редагувати</button>`);
     }
     if(canDelete) btns.push(`<button class="btn danger" data-action="confirmDeleteTask" data-arg1="${t.id}">🗑 Видалити</button>`);
-    return `<div class="actions">
-          ${u.role==="boss" ? `<button class="btn primary" data-action="openDelegations">🧩 Заміщення (в.о.)</button>` : ``}
-          <button class="btn ghost" data-action="openAbout">ℹ️ Про прототип</button>
-          <button class="btn danger" data-action="logout">🚪 Вийти</button>
-        </div>`;
+    return `<div class="actions">${btns.join("")}</div>`;
   }
 
   const btns = [];
@@ -5446,11 +5438,7 @@ function quickActionsForTask(u, t){
     btns.push(`<button class="btn ghost" data-action="openEditTask" data-arg1="${t.id}">✏️ Редагувати</button>`);
   }
   if(canDelete) btns.push(`<button class="btn danger" data-action="confirmDeleteTask" data-arg1="${t.id}">🗑 Видалити</button>`);
-  return `<div class="actions">
-          ${u.role==="boss" ? `<button class="btn primary" data-action="openDelegations">🧩 Заміщення (в.о.)</button>` : ``}
-          <button class="btn ghost" data-action="openAbout">ℹ️ Про прототип</button>
-          <button class="btn danger" data-action="logout">🚪 Вийти</button>
-        </div>`;
+  return `<div class="actions">${btns.join("")}</div>`;
 }
 
 function openStatusReasonModal(taskId, status){
@@ -8248,6 +8236,7 @@ applyTheme(UI.theme);
 render();
 initAutoSync();
 initOverdueTicker();
+
 
 
 
