@@ -2214,10 +2214,10 @@ function renderTabs(tabs){
    LOGIN VIEW
 =========================== */
 function viewLogin(){
-  const themeIcon = UI.theme === "dark" ? "??" : "??";
-  const themeTitle = UI.theme === "dark" ? "?????? ????" : "????? ????";
+  const themeIcon = UI.theme === "dark" ? "\u2600\ufe0f" : "\ud83c\udf19";
+  const themeTitle = UI.theme === "dark" ? "\u0421\u0432\u0456\u0442\u043b\u0430 \u0442\u0435\u043c\u0430" : "\u0422\u0435\u043c\u043d\u0430 \u0442\u0435\u043c\u0430";
   const syncLoading = !!SYNC_URL && !_syncInitDone;
-  const syncTitle = _syncReady ? "???? ???????????" : (_syncInitDone ? "???? ?? ???????????" : "???????????? ?????...");
+  const syncTitle = _syncReady ? "\u0414\u0430\u043d\u0456 \u0437\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0435\u043d\u043e" : (_syncInitDone ? "\u0414\u0430\u043d\u0456 \u043d\u0435 \u0437\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0435\u043d\u043e" : "\u0417\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0435\u043d\u043d\u044f \u0434\u0430\u043d\u0438\u0445...");
   const syncDot = SYNC_URL ? `<span class="sync-dot ${_syncReady ? "ok" : "err"}" title="${syncTitle}"></span>` : ``;
   document.body.classList.remove("role-boss");
   const html = `
@@ -2225,16 +2225,16 @@ function viewLogin(){
       <div class="topbar">
         <div class="topbar-inner">
           <div class="brand">
-            <div class="logo">?</div>
+            <div class="logo">\u041f</div>
             <div class="titleblock">
-              <div class="h">????????????</div>
-              <div class="s">Secure login ? Cloud sync ? ??????????</div>
+              <div class="h">\u041f\u043b\u0430\u043d\u0443\u0432\u0430\u043b\u044c\u043d\u0438\u043a</div>
+              <div class="s">Secure login \u2022 Cloud sync \u2022 \u0423\u043a\u0440\u0430\u0457\u043d\u0441\u044c\u043a\u0430</div>
             </div>
           </div>
           <div class="top-actions">
             <div class="pill mono">${kyivDateStr()}</div>
             ${syncDot}
-            <button class="iconbtn" data-action="openHelp" title="???????">?</button>
+            <button class="iconbtn" data-action="openHelp" title="\u0414\u043e\u0432\u0456\u0434\u043a\u0430">?</button>
             <button class="iconbtn" data-action="toggleTheme" title="${themeTitle}">${themeIcon}</button>
           </div>
         </div>
@@ -2243,27 +2243,27 @@ function viewLogin(){
       <div class="content">
         <div class="card">
           <div class="card-h">
-            <div class="t">????</div>
+            <div class="t">\u0412\u0445\u0456\u0434</div>
             <span class="badge b-blue">Server auth</span>
           </div>
           <div class="card-b">
             <div class="field">
-              <label>?????</label>
-              <input id="login" placeholder="??????? ?????" autocomplete="username" ${syncLoading ? "disabled" : ""} />
+              <label>\u041b\u043e\u0433\u0456\u043d</label>
+              <input id="login" placeholder="\u0412\u0432\u0435\u0434\u0456\u0442\u044c \u043b\u043e\u0433\u0456\u043d" autocomplete="username" ${syncLoading ? "disabled" : ""} />
             </div>
             <div class="field">
-              <label>??????</label>
-              <input id="pass" placeholder="??????? ??????" type="password" autocomplete="current-password" ${syncLoading ? "disabled" : ""} />
+              <label>\u041f\u0430\u0440\u043e\u043b\u044c</label>
+              <input id="pass" placeholder="\u0412\u0432\u0435\u0434\u0456\u0442\u044c \u043f\u0430\u0440\u043e\u043b\u044c" type="password" autocomplete="current-password" ${syncLoading ? "disabled" : ""} />
             </div>
 
             <div class="actions" style="margin-top:14px;">
-              <button class="btn primary" id="btnLogin" ${syncLoading ? "disabled" : ""}>??????</button>
-              <button class="btn ghost" id="btnReset">??????? ???????? ????</button>
+              <button class="btn primary" id="btnLogin" ${syncLoading ? "disabled" : ""}>\u0423\u0412\u0406\u0419\u0422\u0418</button>
+              <button class="btn ghost" id="btnReset">\u0421\u043a\u0438\u043d\u0443\u0442\u0438 \u043b\u043e\u043a\u0430\u043b\u044c\u043d\u0456 \u0434\u0430\u043d\u0456</button>
             </div>
 
-            ${syncLoading ? `<div class="hint">???????????? ????? ? ?????...</div>` : ``}
+            ${syncLoading ? `<div class="hint">\u0417\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0435\u043d\u043d\u044f \u0434\u0430\u043d\u0438\u0445 \u0437 \u0445\u043c\u0430\u0440\u0438...</div>` : ``}
             <div class="hint">
-              ???????? ???? ????????????? ?? ???????. ?????? ?????? ?? ???????????? ? ?????????.
+              \u041e\u0431\u043b\u0456\u043a\u043e\u0432\u0456 \u0434\u0430\u043d\u0456 \u043f\u0435\u0440\u0435\u0432\u0456\u0440\u044f\u044e\u0442\u044c\u0441\u044f \u043d\u0430 \u0441\u0435\u0440\u0432\u0435\u0440\u0456. \u041f\u0430\u0440\u043e\u043b\u0456 \u0431\u0456\u043b\u044c\u0448\u0435 \u043d\u0435 \u0437\u0431\u0435\u0440\u0456\u0433\u0430\u044e\u0442\u044c\u0441\u044f \u0443 \u0444\u0440\u043e\u043d\u0442\u0435\u043d\u0434\u0456.
             </div>
           </div>
         </div>
@@ -2278,7 +2278,7 @@ function viewLogin(){
     const btn = document.getElementById("btnLogin");
 
     if(!login || !pass){
-      showSheet("??????? ?????", `<div class="hint">??????? ????? ? ??????.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
+      showSheet("\u041f\u043e\u043c\u0438\u043b\u043a\u0430 \u0432\u0445\u043e\u0434\u0443", `<div class="hint">\u0412\u0432\u0435\u0434\u0456\u0442\u044c \u043b\u043e\u0433\u0456\u043d \u0456 \u043f\u0430\u0440\u043e\u043b\u044c.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
       return;
     }
 
@@ -2286,7 +2286,7 @@ function viewLogin(){
     try{
       const user = await authenticateUser(login, pass);
       if(!user || !user.id || !user.active){
-        showSheet("??????? ?????", `<div class="hint">???????? ????? ??? ??????.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
+        showSheet("\u041f\u043e\u043c\u0438\u043b\u043a\u0430 \u0432\u0445\u043e\u0434\u0443", `<div class="hint">\u041d\u0435\u0432\u0456\u0440\u043d\u0438\u0439 \u043b\u043e\u0433\u0456\u043d \u0430\u0431\u043e \u043f\u0430\u0440\u043e\u043b\u044c.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
         return;
       }
 
@@ -2298,7 +2298,7 @@ function viewLogin(){
       render();
       pullSync();
     } catch{
-      showSheet("??????? ?????", `<div class="hint">?? ??????? ?????????? ???????? ???? ?? ???????.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
+      showSheet("\u041f\u043e\u043c\u0438\u043b\u043a\u0430 \u0432\u0445\u043e\u0434\u0443", `<div class="hint">\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u043f\u0435\u0440\u0435\u0432\u0456\u0440\u0438\u0442\u0438 \u043e\u0431\u043b\u0456\u043a\u043e\u0432\u0456 \u0434\u0430\u043d\u0456 \u043d\u0430 \u0441\u0435\u0440\u0432\u0435\u0440\u0456.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
     } finally {
       btn.disabled = false;
     }
@@ -2309,7 +2309,7 @@ function viewLogin(){
     STATE = seed();
     render();
     pullSync();
-    showSheet("??????", `<div class="hint">???????? ???? ???????. ???????? ?????? ?? ???? ???? ??????????? ? ???????.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
+    showSheet("\u0413\u043e\u0442\u043e\u0432\u043e", `<div class="hint">\u041b\u043e\u043a\u0430\u043b\u044c\u043d\u0456 \u0434\u0430\u043d\u0456 \u0441\u043a\u0438\u043d\u0443\u0442\u043e. \u041e\u0431\u043b\u0456\u043a\u043e\u0432\u0456 \u0437\u0430\u043f\u0438\u0441\u0438 \u0442\u0430 \u0434\u0430\u043d\u0456 \u0431\u0443\u0434\u0435 \u0437\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0435\u043d\u043e \u0437 \u0441\u0435\u0440\u0432\u0435\u0440\u0430.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
   });
 }
 
