@@ -1148,6 +1148,18 @@ function updateTask(taskId, patch, authorId, note){
   const idx = STATE.tasks.findIndex(t=>t.id===taskId);
   if(idx < 0) return;
   STATE.tasks[idx] = {...STATE.tasks[idx], ...patch, updatedAt: nowIsoKyiv()};
+  if(Array.isArray(DB_TASKS_CACHE)){
+    const dbIdx = DB_TASKS_CACHE.findIndex(t=>t.id===taskId);
+    if(dbIdx >= 0){
+      DB_TASKS_CACHE[dbIdx] = {
+        ...DB_TASKS_CACHE[dbIdx],
+        ...STATE.tasks[idx],
+        category: STATE.tasks[idx].category || DB_TASKS_CACHE[dbIdx].category || null,
+        audience: STATE.tasks[idx].audience || DB_TASKS_CACHE[dbIdx].audience || null,
+        annOrder: STATE.tasks[idx].annOrder ?? DB_TASKS_CACHE[dbIdx].annOrder ?? null,
+      };
+    }
+  }
   STATE.taskUpdates.push({
     id: uid("upd"),
     taskId,
@@ -1160,7 +1172,10 @@ function updateTask(taskId, patch, authorId, note){
 }
 function createTask(task, authorId){
   STATE.tasks.push(task);
-  const note = task?.category === "announcement" ? "Створено оголошення" : "Створено задачу";
+  if(Array.isArray(DB_TASKS_CACHE)){
+    DB_TASKS_CACHE = [task, ...DB_TASKS_CACHE.filter(x=>x.id!==task.id)];
+  }
+  const note = task?.category === "announcement" ? "\u0421\u0442\u0432\u043e\u0440\u0435\u043d\u043e \u043e\u0433\u043e\u043b\u043e\u0448\u0435\u043d\u043d\u044f" : "\u0421\u0442\u0432\u043e\u0440\u0435\u043d\u043e \u0437\u0430\u0434\u0430\u0447\u0443";
   STATE.taskUpdates.push({
     id: uid("upd"),
     taskId: task.id,
