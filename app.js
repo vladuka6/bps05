@@ -5421,13 +5421,13 @@ function viewTasks(){
         openCreateAnnouncement();
         return;
       }
-      showSheet("??????", `
+      showSheet("\u0414\u043e\u0434\u0430\u0442\u0438", `
         <div class="actions">
-          <button class="btn primary" data-action="hideThen" data-next="openCreateTask" data-arg1="personal">? ??? ??????</button>
-          <button class="btn ghost" data-action="hideThen" data-next="openCreateTask" data-arg1="managerial">? ????????????</button>
+          <button class="btn primary" data-action="hideThen" data-next="openCreateTask" data-arg1="personal">? \u041c\u043e\u044f \u0437\u0430\u0434\u0430\u0447\u0430</button>
+          <button class="btn ghost" data-action="hideThen" data-next="openCreateTask" data-arg1="managerial">? \u0423\u043f\u0440\u0430\u0432\u043b\u0456\u043d\u0441\u044c\u043a\u0430</button>
         </div>
         <div class="sep"></div>
-        <button class="btn ghost" data-action="hideSheet">???????</button>
+        <button class="btn ghost" data-action="hideSheet">\u0417\u0430\u043a\u0440\u0438\u0442\u0438</button>
       `);
     } else {
       openCreateTask('internal');
