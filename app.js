@@ -134,6 +134,11 @@ function dedupeTasksForDisplay(tasks){
 function migrateState(st){
   if(!st || typeof st !== "object") return null;
 
+  const deletedTaskIds = Array.isArray(st.deletedTaskIds)
+    ? Array.from(new Set(st.deletedTaskIds.map(String).filter(Boolean)))
+    : [];
+  const deletedTaskIdSet = new Set(deletedTaskIds);
+
   const rawTasks = Array.isArray(st.tasks) ? st.tasks : [];
   const tasks = dedupeTasksForDisplay(rawTasks.map(t=>{
     if(!t || typeof t !== "object") return t;
@@ -163,7 +168,8 @@ function migrateState(st){
     departments: Array.isArray(st.departments) ? st.departments : [],
     users: Array.isArray(st.users) ? st.users : [],
     delegations: Array.isArray(st.delegations) ? st.delegations : [],
-    tasks,
+    tasks: tasks.filter(t=>t && !deletedTaskIdSet.has(String(t.id || ""))),
+    deletedTaskIds,
     taskUpdates: Array.isArray(st.taskUpdates) ? st.taskUpdates : [],
     dailyReports: Array.isArray(st.dailyReports) ? st.dailyReports : [],
     deptSummaries: Array.isArray(st.deptSummaries) ? st.deptSummaries : [],
@@ -580,6 +586,7 @@ function seed(){
     ],
     delegations: [],
     tasks: [],
+    deletedTaskIds: [],
     taskUpdates: [],
     dailyReports: [],
     deptSummaries: [],
@@ -1107,14 +1114,22 @@ async function ensureDbTasksCache(force=false){
   }
 }
 function getTaskSourceForView(){
-  if(!Array.isArray(DB_TASKS_CACHE)) return Array.isArray(STATE.tasks) ? STATE.tasks.slice() : [];
+  const deletedIds = new Set(Array.isArray(STATE.deletedTaskIds) ? STATE.deletedTaskIds.map(String) : []);
+  if(!Array.isArray(DB_TASKS_CACHE)){
+    return Array.isArray(STATE.tasks)
+      ? STATE.tasks.filter(t=>t && !deletedIds.has(String(t.id || "")))
+      : [];
+  }
 
-  const stateTasks = Array.isArray(STATE.tasks) ? STATE.tasks.filter(Boolean) : [];
+  const stateTasks = Array.isArray(STATE.tasks)
+    ? STATE.tasks.filter(t=>t && !deletedIds.has(String(t.id || "")))
+    : [];
   const stateById = new Map(stateTasks.map(t=>[t.id, t]));
   const merged = [];
   const seen = new Set();
 
   for(const dbTask of DB_TASKS_CACHE){
+    if(deletedIds.has(String(dbTask?.id || ""))) continue;
     if(!dbTask || !stateById.has(dbTask.id) || seen.has(dbTask.id)) continue;
     const stateTask = stateById.get(dbTask.id);
     merged.push({
@@ -1171,6 +1186,9 @@ function updateTask(taskId, patch, authorId, note){
   saveState(STATE);
 }
 function createTask(task, authorId){
+  if(Array.isArray(STATE.deletedTaskIds)){
+    STATE.deletedTaskIds = STATE.deletedTaskIds.filter(id=>String(id)!==String(task.id));
+  }
   STATE.tasks.push(task);
   if(Array.isArray(DB_TASKS_CACHE)){
     DB_TASKS_CACHE = [task, ...DB_TASKS_CACHE.filter(x=>x.id!==task.id)];
@@ -4842,6 +4860,11 @@ function deleteTaskNow(taskId){
       .filter(x=>taskDisplayFingerprint(x) === targetFingerprint)
       .map(x=>x.id)
   );
+
+  if(!Array.isArray(STATE.deletedTaskIds)) STATE.deletedTaskIds = [];
+  const deletedSet = new Set(STATE.deletedTaskIds.map(String));
+  duplicateIds.forEach(id=>deletedSet.add(String(id)));
+  STATE.deletedTaskIds = Array.from(deletedSet);
 
   STATE.tasks = STATE.tasks.filter(x=>!duplicateIds.has(x.id));
   STATE.taskUpdates = STATE.taskUpdates.filter(x=>!duplicateIds.has(x.taskId));
