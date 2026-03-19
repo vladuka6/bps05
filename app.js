@@ -4,6 +4,7 @@
 const LS_KEY = "planner_prototype_ua_v2_full";
 const THEME_KEY = "planner_theme_pref";
 const SYNC_URL = "/sync";
+const AUTH_LOGIN_URL = "/auth/login";
 const SYNC_POLL_MS = 30000;
 const SYNC_DEBOUNCE_MS = 2500;
 const DEVICE_ID_KEY = "planner_device_id";
@@ -609,6 +610,29 @@ if(dedupedBootTasks.length !== STATE.tasks.length){
    GETTERS / HELPERS
 =========================== */
 function getUserById(id){ return STATE.users.find(u=>u.id===id) || null; }
+function upsertStateUser(user){
+  if(!user || !user.id) return null;
+  const clean = {...user};
+  delete clean.pass;
+  const idx = STATE.users.findIndex(u=>u.id===clean.id);
+  if(idx >= 0){
+    STATE.users[idx] = {...STATE.users[idx], ...clean};
+    return STATE.users[idx];
+  }
+  STATE.users.push(clean);
+  return STATE.users[STATE.users.length - 1];
+}
+async function authenticateUser(login, pass){
+  const res = await fetch(AUTH_LOGIN_URL, {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    credentials: "include",
+    body: JSON.stringify({login, pass})
+  });
+  if(!res.ok) return null;
+  const data = await res.json().catch(()=>null);
+  return data?.user || null;
+}
 function getDeptById(id){ return STATE.departments.find(d=>d.id===id) || null; }
 function currentSessionUser(){ return STATE.session.userId ? getUserById(STATE.session.userId) : null; }
 
@@ -2004,6 +2028,25 @@ const ROUTES = {
   WEEKLY: "weekly",
   PROFILE: "profile",
 };
+const READ_ONLY_ALLOWED_TABS = new Set([
+  ROUTES.TASKS,
+  ROUTES.WEEKLY,
+  ROUTES.ANALYTICS,
+  ROUTES.REPORTING,
+  ROUTES.PLAN,
+]);
+function getVisibleTabsForUser(u, tabs){
+  const items = Array.isArray(tabs) ? tabs : [];
+  if(!u || !u.readOnly) return items;
+  return items.filter(t=>t && READ_ONLY_ALLOWED_TABS.has(t.key));
+}
+function enforceReadOnlyNavigation(u){
+  if(!u || !u.readOnly) return;
+  if(UI.route === ROUTES.PROFILE) UI.route = ROUTES.TASKS;
+  if(UI.tab === ROUTES.CONTROL || UI.tab === ROUTES.REPORTS || !READ_ONLY_ALLOWED_TABS.has(UI.tab)) {
+    UI.tab = ROUTES.TASKS;
+  }
+}
 function loadTheme(){
   return safeGet(THEME_KEY) === "dark" ? "dark" : "light";
 }
@@ -2081,6 +2124,7 @@ function openSyncLogin(){
 
 function appShell({title, subtitle, bodyHtml, showFab, fabAction, tabs}){
   const u = currentSessionUser();
+  const visibleTabs = getVisibleTabsForUser(u, tabs);
   const banner = actingBannerForUser(u);
   const date = kyivDateStr();
   const weekend = isWeekend(kyivNow());
@@ -2112,7 +2156,7 @@ function appShell({title, subtitle, bodyHtml, showFab, fabAction, tabs}){
             </div>
           </div>
           <div class="top-tabs">
-            ${renderTabs(tabs)}
+            ${renderTabs(visibleTabs)}
           </div>
           <div class="top-actions">
             ${syncDot}
@@ -2132,7 +2176,7 @@ function appShell({title, subtitle, bodyHtml, showFab, fabAction, tabs}){
 
       <div class="nav">
         <div class="nav-inner">
-          ${renderTabs(tabs)}
+          ${renderTabs(visibleTabs)}
         </div>
       </div>
     </div>
@@ -2170,10 +2214,10 @@ function renderTabs(tabs){
    LOGIN VIEW
 =========================== */
 function viewLogin(){
-  const themeIcon = UI.theme === "dark" ? "☀️" : "🌙";
-  const themeTitle = UI.theme === "dark" ? "Світла тема" : "Темна тема";
+  const themeIcon = UI.theme === "dark" ? "??" : "??";
+  const themeTitle = UI.theme === "dark" ? "?????? ????" : "????? ????";
   const syncLoading = !!SYNC_URL && !_syncInitDone;
-  const syncTitle = _syncReady ? "Дані завантажено" : (_syncInitDone ? "Дані не завантажено" : "Завантаження даних...");
+  const syncTitle = _syncReady ? "???? ???????????" : (_syncInitDone ? "???? ?? ???????????" : "???????????? ?????...");
   const syncDot = SYNC_URL ? `<span class="sync-dot ${_syncReady ? "ok" : "err"}" title="${syncTitle}"></span>` : ``;
   document.body.classList.remove("role-boss");
   const html = `
@@ -2181,16 +2225,16 @@ function viewLogin(){
       <div class="topbar">
         <div class="topbar-inner">
           <div class="brand">
-            <div class="logo">П</div>
+            <div class="logo">?</div>
             <div class="titleblock">
-              <div class="h">Планувальник</div>
-              <div class="s">Prototype • localStorage • Українська</div>
+              <div class="h">????????????</div>
+              <div class="s">Secure login ? Cloud sync ? ??????????</div>
             </div>
           </div>
           <div class="top-actions">
             <div class="pill mono">${kyivDateStr()}</div>
             ${syncDot}
-            <button class="iconbtn" data-action="openHelp" title="Довідка">❓</button>
+            <button class="iconbtn" data-action="openHelp" title="???????">?</button>
             <button class="iconbtn" data-action="toggleTheme" title="${themeTitle}">${themeIcon}</button>
           </div>
         </div>
@@ -2199,32 +2243,27 @@ function viewLogin(){
       <div class="content">
         <div class="card">
           <div class="card-h">
-            <div class="t">Вхід</div>
-            <span class="badge b-blue">Mobile-first</span>
+            <div class="t">????</div>
+            <span class="badge b-blue">Server auth</span>
           </div>
           <div class="card-b">
             <div class="field">
-              <label>Логін</label>
-              <input id="login" placeholder="boss / viewer / head2 / head5 / e21..." autocomplete="username" ${syncLoading ? "disabled" : ""} />
+              <label>?????</label>
+              <input id="login" placeholder="??????? ?????" autocomplete="username" ${syncLoading ? "disabled" : ""} />
             </div>
             <div class="field">
-              <label>Пароль</label>
-              <input id="pass" placeholder="1234" type="password" autocomplete="current-password" ${syncLoading ? "disabled" : ""} />
+              <label>??????</label>
+              <input id="pass" placeholder="??????? ??????" type="password" autocomplete="current-password" ${syncLoading ? "disabled" : ""} />
             </div>
 
             <div class="actions" style="margin-top:14px;">
-              <button class="btn primary" id="btnLogin" ${syncLoading ? "disabled" : ""}>УВІЙТИ</button>
-              <button class="btn ghost" id="btnReset">Скинути дані</button>
+              <button class="btn primary" id="btnLogin" ${syncLoading ? "disabled" : ""}>??????</button>
+              <button class="btn ghost" id="btnReset">??????? ???????? ????</button>
             </div>
 
-            ${syncLoading ? `<div class="hint">Завантаження даних з хмари...</div>` : ``}
+            ${syncLoading ? `<div class="hint">???????????? ????? ? ?????...</div>` : ``}
             <div class="hint">
-              Демо-акаунти:<br/>
-              <span class="mono">boss / 1234</span> (керівник)<br/>
-              <span class="mono">viewer / view</span> (перегляд)<br/>
-              <span class="mono">head2 / 1234</span> (нач. відділу №2)<br/>
-              <span class="mono">head5 / 1234</span> (нач. відділу №5)<br/>
-              Виконавці: <span class="mono">e21/e22/e51/e41 / 1234</span>
+              ???????? ???? ????????????? ?? ???????. ?????? ?????? ?? ???????????? ? ?????????.
             </div>
           </div>
         </div>
@@ -2233,25 +2272,44 @@ function viewLogin(){
   `;
   root.innerHTML = html;
 
-  document.getElementById("btnLogin").addEventListener("click", ()=>{
+  document.getElementById("btnLogin").addEventListener("click", async ()=>{
     const login = document.getElementById("login").value.trim();
     const pass = document.getElementById("pass").value.trim();
-    const user = STATE.users.find(u=>u.login===login && u.pass===pass && u.active);
-    if(!user){
-      showSheet("Помилка входу", `<div class="hint">Невірний логін або пароль.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
+    const btn = document.getElementById("btnLogin");
+
+    if(!login || !pass){
+      showSheet("??????? ?????", `<div class="hint">??????? ????? ? ??????.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
       return;
     }
-    recomputeDelegationStatuses();
-    STATE.session.userId = user.id;
-    saveState(STATE);
-    UI.tab = ROUTES.TASKS;
-    render();
+
+    btn.disabled = true;
+    try{
+      const user = await authenticateUser(login, pass);
+      if(!user || !user.id || !user.active){
+        showSheet("??????? ?????", `<div class="hint">???????? ????? ??? ??????.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
+        return;
+      }
+
+      upsertStateUser(user);
+      recomputeDelegationStatuses();
+      STATE.session.userId = user.id;
+      saveState(STATE);
+      UI.tab = ROUTES.TASKS;
+      render();
+      pullSync();
+    } catch{
+      showSheet("??????? ?????", `<div class="hint">?? ??????? ?????????? ???????? ???? ?? ???????.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
+    } finally {
+      btn.disabled = false;
+    }
   });
 
   document.getElementById("btnReset").addEventListener("click", ()=>{
     safeRemove(LS_KEY);
     STATE = seed();
-    showSheet("Готово", `<div class="hint">Дані скинуто. Завантажено демо.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
+    render();
+    pullSync();
+    showSheet("??????", `<div class="hint">???????? ???? ???????. ???????? ?????? ?? ???? ???? ??????????? ? ???????.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
   });
 }
 
@@ -8462,6 +8520,7 @@ function render(){
     UI.route = ROUTES.LOGIN;
     return viewLogin();
   }
+  enforceReadOnlyNavigation(user);
   runRecurringTemplates();
   runReportPlans();
 
