@@ -138,6 +138,9 @@ function migrateState(st){
   const tasks = dedupeTasksForDisplay(rawTasks.map(t=>{
     if(!t || typeof t !== "object") return t;
     const task = {...t};
+    if(!task.category && (task.audience === "staff" || task.audience === "meeting")){
+      task.category = "announcement";
+    }
     task.controlAlways = !!task.controlAlways;
     if(task.dueDate){
       task.nextControlDate = null;
@@ -1103,8 +1106,37 @@ async function ensureDbTasksCache(force=false){
     if(UI.tab===ROUTES.TASKS) render();
   }
 }
+function getTaskSourceForView(){
+  if(!Array.isArray(DB_TASKS_CACHE)) return Array.isArray(STATE.tasks) ? STATE.tasks.slice() : [];
+
+  const stateTasks = Array.isArray(STATE.tasks) ? STATE.tasks.filter(Boolean) : [];
+  const stateById = new Map(stateTasks.map(t=>[t.id, t]));
+  const merged = [];
+  const seen = new Set();
+
+  for(const dbTask of DB_TASKS_CACHE){
+    if(!dbTask || !stateById.has(dbTask.id) || seen.has(dbTask.id)) continue;
+    const stateTask = stateById.get(dbTask.id);
+    merged.push({
+      ...dbTask,
+      ...stateTask,
+      category: stateTask.category || dbTask.category || null,
+      audience: stateTask.audience || dbTask.audience || null,
+      annOrder: stateTask.annOrder ?? dbTask.annOrder ?? null,
+    });
+    seen.add(dbTask.id);
+  }
+
+  for(const task of stateTasks){
+    if(seen.has(task.id)) continue;
+    merged.push(task);
+    seen.add(task.id);
+  }
+
+  return merged;
+}
 function getVisibleTasksForView(u){
-  const source = Array.isArray(DB_TASKS_CACHE) ? DB_TASKS_CACHE : STATE.tasks;
+  const source = getTaskSourceForView();
   if(!u) return [];
   if(u.role==="boss"){
     if(u.readOnly) return source.filter(t=>!isAnnouncement(t) && t.type!=="personal");
@@ -1188,7 +1220,7 @@ function taskTypeLabel(type){
   return type;
 }
 function isAnnouncement(t){
-  return !!t && t.category === "announcement";
+  return !!t && (t.category === "announcement" || t.audience === "staff" || t.audience === "meeting");
 }
 function announcementAudienceLabel(a){
   if(a === "meeting") return "Нарада";
@@ -4786,7 +4818,7 @@ function deleteTaskNow(taskId){
   const t = STATE.tasks.find(x=>x.id===taskId);
   if(!u || !t) return;
   if(!canDeleteTask(u, t)){
-    showSheet("????? ????", `<div class="hint">?? ?? ????? ???? ???????? ?? ??????.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
+    showSheet("\u041d\u0435\u043c\u0430\u0454 \u043f\u0440\u0430\u0432", `<div class="hint">\u0412\u0438 \u043d\u0435 \u043c\u0430\u0454\u0442\u0435 \u043f\u0440\u0430\u0432 \u0432\u0438\u0434\u0430\u043b\u044f\u0442\u0438 \u0446\u044e \u0437\u0430\u0434\u0430\u0447\u0443.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
     return;
   }
   const targetFingerprint = taskDisplayFingerprint(t);
@@ -4798,6 +4830,9 @@ function deleteTaskNow(taskId){
 
   STATE.tasks = STATE.tasks.filter(x=>!duplicateIds.has(x.id));
   STATE.taskUpdates = STATE.taskUpdates.filter(x=>!duplicateIds.has(x.taskId));
+  if(Array.isArray(DB_TASKS_CACHE)){
+    DB_TASKS_CACHE = DB_TASKS_CACHE.filter(x=>!duplicateIds.has(x.id));
+  }
   saveState(STATE);
   hideSheet();
   render();
@@ -5382,13 +5417,17 @@ function viewTasks(){
   const subtitle = roleSubtitle(u);
   const fabAction = ()=>{
     if(u.role==="boss"){
-      showSheet("Додати", `
+      if(showAnnouncementsScope && effectivePersonalFilter==="announcements"){
+        openCreateAnnouncement();
+        return;
+      }
+      showSheet("??????", `
         <div class="actions">
-          <button class="btn primary" data-action="hideThen" data-next="openCreateTask" data-arg1="personal">➕ Моя задача</button>
-          <button class="btn ghost" data-action="hideThen" data-next="openCreateTask" data-arg1="managerial">➕ Управлінська</button>
+          <button class="btn primary" data-action="hideThen" data-next="openCreateTask" data-arg1="personal">? ??? ??????</button>
+          <button class="btn ghost" data-action="hideThen" data-next="openCreateTask" data-arg1="managerial">? ????????????</button>
         </div>
         <div class="sep"></div>
-        <button class="btn ghost" data-action="hideSheet">Закрити</button>
+        <button class="btn ghost" data-action="hideSheet">???????</button>
       `);
     } else {
       openCreateTask('internal');
