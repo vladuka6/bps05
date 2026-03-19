@@ -1251,7 +1251,7 @@ function canSeeAnnouncement(u, t){
 }
 function getVisibleAnnouncementsForUser(u){
   if(!u) return [];
-  return STATE.tasks.filter(isAnnouncement).filter(t=>canSeeAnnouncement(u, t));
+  return getTaskSourceForView().filter(isAnnouncement).filter(t=>canSeeAnnouncement(u, t));
 }
 function taskExportRows(tasks){
   return tasks.map(t=>{
