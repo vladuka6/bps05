@@ -8329,18 +8329,22 @@ async function pullSync(){
     const isFirstSync = !_syncReady;
     _syncReady = true;
     _syncInitDone = true;
+    const localStamp = stateStamp(STATE);
+    const remoteStamp = stateStamp(remote);
     if(isFirstSync){
-      STATE = remote;
-      saveState(STATE, {skipSyncStamp:true});
-      _syncPending = false;
+      if(remoteStamp && (!localStamp || remoteStamp > localStamp)){
+        STATE = remote;
+        saveState(STATE, {skipSyncStamp:true});
+        _syncPending = false;
+      } else {
+        queueSync();
+      }
       render();
       await ensureDbTasksCache(true);
       _lastPullAt = nowIsoKyiv();
       _syncInFlight = false;
       return;
     }
-    const localStamp = stateStamp(STATE);
-    const remoteStamp = stateStamp(remote);
     if(remoteStamp && (!localStamp || remoteStamp > localStamp)){
       STATE = remote;
       saveState(STATE, {skipSyncStamp:true});
