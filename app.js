@@ -4288,7 +4288,7 @@ function appShell({title, subtitle, bodyHtml, showFab, fabAction, tabs}){
 
   const weekend = isWeekend(kyivNow());
 
-  const deadlineInfo = weekend ? "Вихідний" : "Дедлайн звіту: 17:30";
+  const deadlineInfo = weekend ? "Вихідний" : "Дедлайн звіту 17:30";
 
   const themeIcon = UI.theme === "dark" ? "☀️" : "🌙";
 
@@ -4299,6 +4299,8 @@ function appShell({title, subtitle, bodyHtml, showFab, fabAction, tabs}){
   const profileIcon = (u && u.readOnly) ? "🚪" : "👤";
 
   const syncTitle = _syncReady ? "Дані завантажено" : (_syncInitDone ? "Дані не завантажено" : "Завантаження даних...");
+
+  const syncLabel = _syncReady ? "Синхрон." : "Офлайн";
 
   const syncDot = SYNC_URL ? `<span class="sync-dot ${_syncReady ? "ok" : "err"}" title="${syncTitle}"></span>` : ``;
 
@@ -4340,7 +4342,15 @@ function appShell({title, subtitle, bodyHtml, showFab, fabAction, tabs}){
 
               <div class="h">${htmlesc(title)}</div>
 
-              <div class="s">${htmlesc(subtitle)} • <span class="mono">${date}</span> • ${deadlineInfo}</div>
+              <div class="topbar-meta">
+
+                <span class="header-pill">${htmlesc(subtitle)}</span>
+
+                <span class="header-pill mono">${date}</span>
+
+                <span class="header-pill">${deadlineInfo}</span>
+
+              </div>
 
             </div>
 
@@ -4354,7 +4364,13 @@ function appShell({title, subtitle, bodyHtml, showFab, fabAction, tabs}){
 
           <div class="top-actions">
 
-            ${syncDot}
+            <div class="header-sync" title="${syncTitle}">
+
+              ${syncDot}
+
+              <span class="header-sync-label">${syncLabel}</span>
+
+            </div>
 
             <button class="iconbtn" data-action="openHelp" title="Довідка">❓</button>
 
@@ -10532,6 +10548,12 @@ function viewTasks(){
 
     const annDesc = (isAnn && t.audience==="meeting" && hasDesc) ? `<div class="task-desc rich-text">Опис:${descStartsWithBreak ? "<br/>" : " "}${richText(descRaw)}</div>` : "";
 
+    const contextHtml = isAnn
+
+      ? `<div class="task-context"><span class="task-context-pill">${htmlesc(annLabel || "Оголошення")}</span><span class="task-context-code mono">${htmlesc(t.id || "")}</span></div>`
+
+      : `<div class="task-context"><span class="task-context-pill">${htmlesc(deptName)}</span>${respName !== "—" ? `<span class="task-context-pill subtle">${htmlesc(respName)}</span>` : ``}<span class="task-context-code mono">${htmlesc(t.id || "")}</span></div>`;
+
     const closeUpd = isDone ? getCloseUpdate(t) : null;
 
     const closeAt = isDone ? (closeUpd?.at || t.updatedAt || "") : "";
@@ -10562,11 +10584,13 @@ function viewTasks(){
 
         <div class="row" data-action="openTask" data-arg1="${t.id}">
 
-          <div>
+          <div class="task-main">
 
             <div class="task-line">
 
               <div class="task-title">
+
+                ${contextHtml}
 
                 <div class="name ${titleTypeClass}"><span class="task-num mono">${numbering}</span> ${titleHtml}</div>
 
@@ -13662,7 +13686,7 @@ function openCreateTask(kind, preselectDeptId=null, preselectDueDate=null){
 
       </div>
 
-      <textarea id="tDesc" class="task-desc-input" placeholder="?????? / ?????????? ?????????"></textarea>
+      <textarea id="tDesc" class="task-desc-input" placeholder="Деталі / очікуваний результат"></textarea>
 
     </div>
 
