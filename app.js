@@ -10376,22 +10376,6 @@ function viewTasks(){
 
     : `${shownCount} із ${totalCount} записів`;
 
-  const taskHeadSummary = `
-
-    <div class="task-head-summary">
-
-      <span class="task-head-pill accent">Режим: ${htmlesc(currentFilterLabel)}</span>
-
-      <span class="task-head-pill">Контекст: ${htmlesc(currentScopeLabel)}</span>
-
-      <span class="task-head-pill strong">Показано: <span class="mono">${htmlesc(currentCountLabel)}</span></span>
-
-      ${u.role==="boss" ? `<span class="task-head-pill subtle">Джерело: <span class="mono">${htmlesc(taskSourceLabel)}</span></span>` : ``}
-
-    </div>
-
-  `;
-
   const deptNoteActionBtn = (()=> {
 
     const deptId = (u.role === "boss") ? deptFilter : u.departmentId;
@@ -10457,6 +10441,22 @@ function viewTasks(){
     ? `<div class="hint task-count-hint">Показано: <span class="mono">${shownCount}</span> із <span class="mono">${activeCount}</span> активних ${deptNoteActionBtn || ""}${taskSourceHint}</div>`
 
     : `<div class="hint task-count-hint">Показано: <span class="mono">${shownCount}</span> із <span class="mono">${totalCount}</span> (всього) ${deptNoteActionBtn || ""}<div class="subhint">активні <span class="mono">${activeCount}</span>, закриті <span class="mono">${closedCount}</span></div>${taskSourceHint}</div>`;
+
+  const taskHeadSummary = `
+
+    <div class="task-head-summary">
+
+      <span class="task-head-pill accent">Режим: ${htmlesc(currentFilterLabel)}</span>
+
+      <span class="task-head-pill">Контекст: ${htmlesc(currentScopeLabel)}</span>
+
+      <span class="task-head-pill strong">Показано: <span class="mono">${htmlesc(currentCountLabel)}</span></span>
+
+      ${u.role==="boss" ? `<span class="task-head-pill subtle">Джерело: <span class="mono">${htmlesc(taskSourceLabel)}</span></span>` : ``}
+
+    </div>
+
+  `;
 
   const announcementBtn = (u.role==="boss" && !u.readOnly && showAnnouncementsScope)
 
