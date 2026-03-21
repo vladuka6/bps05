@@ -4124,6 +4124,8 @@ let UI = {
 
   taskSearch: "",
 
+  taskDensity: "comfortable",
+
   taskPersonalFilter: "all",
 
   taskAnnAudienceFilter: "all",
@@ -4171,6 +4173,14 @@ function toggleTheme(){
 function toggleAnalyticsDetails(){
 
   UI.analyticsShowDetails = !UI.analyticsShowDetails;
+
+  render();
+
+}
+
+function toggleTaskDensity(){
+
+  UI.taskDensity = UI.taskDensity === "compact" ? "comfortable" : "compact";
 
   render();
 
@@ -4318,7 +4328,21 @@ function appShell({title, subtitle, bodyHtml, showFab, fabAction, tabs}){
 
   ` : "";
 
-  const compactTasks = !!(u && u.role==="boss" && UI.tab===ROUTES.TASKS && UI.taskDeptFilter && !["all","personal"].includes(UI.taskDeptFilter));
+  const compactTasks = !!(
+
+    u &&
+
+    UI.tab===ROUTES.TASKS &&
+
+    (
+
+      UI.taskDensity === "compact" ||
+
+      (u.role==="boss" && UI.taskDeptFilter && !["all","personal"].includes(UI.taskDeptFilter))
+
+    )
+
+  );
 
   const scopeAll = !!(u && u.role==="boss" && UI.tab===ROUTES.TASKS && UI.taskDeptFilter==="all");
 
@@ -4344,11 +4368,11 @@ function appShell({title, subtitle, bodyHtml, showFab, fabAction, tabs}){
 
               <div class="topbar-meta">
 
-                <span class="header-pill">${htmlesc(subtitle)}</span>
+                <span class="header-pill header-role-pill">${htmlesc(subtitle)}</span>
 
-                <span class="header-pill mono">${date}</span>
+                <span class="header-pill header-date-pill mono ${weekend ? "is-weekend" : ""}">${date}</span>
 
-                <span class="header-pill">${deadlineInfo}</span>
+                <span class="header-pill header-deadline-pill ${weekend ? "is-weekend" : ""}">${deadlineInfo}</span>
 
               </div>
 
@@ -4828,7 +4852,7 @@ function viewControl(){
 
         <div class="t">Контроль</div>
 
-        <span class="badge ${weekend ? "b-warn":"b-blue"}">${weekend ? "Вихідний" : "Будній"}</span>
+        <span class="badge control-day-badge ${weekend ? "b-warn":"b-blue"}">${weekend ? "Вихідний" : "Будній"}</span>
 
       </div>
 
@@ -4988,13 +5012,11 @@ function viewControl(){
 
         <div class="t">Швидкі дії</div>
 
-        <span class="badge b-blue">1–2 натискання</span>
-
       </div>
 
       <div class="card-b">
 
-        <div class="actions">
+        <div class="actions control-actions">
 
           ${u.role==="boss" ? `<button class="btn primary" data-action="openDelegations">🧩 Заміщення (в.о.)</button>` : ``}
 
@@ -10464,6 +10486,8 @@ function viewTasks(){
 
     : ``;
 
+  const densityBtn = `<button class="btn ghost btn-density ${UI.taskDensity==="compact" ? "active" : ""}" data-action="toggleTaskDensity" title="Щільність списку задач">${UI.taskDensity==="compact" ? "▥ Щільно" : "☰ Зручно"}</button>`;
+
   const buildDeptIndexMap = (list)=>{
 
     const map = {};
@@ -11073,6 +11097,8 @@ function viewTasks(){
           <div class="card-actions">
 
           ${u.role==="boss" ? `<button class="btn ghost" data-action="openTasksExportDialog">⬇️ Excel</button>` : ``}
+
+          ${densityBtn}
 
           ${announcementBtn}
 
@@ -16633,6 +16659,8 @@ const ACTIONS = {
   confirmDeleteWeeklyTask,
 
   deleteWeeklyTaskNow,
+
+  toggleTaskDensity,
 
   toggleTheme,
 
