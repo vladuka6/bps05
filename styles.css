@@ -1240,9 +1240,6 @@
       align-items:flex-start;
       gap:18px;
     }
-    .task-item .task-line{
-      grid-template-columns:minmax(0, 1fr);
-    }
     .task-main{min-width:0;flex:1;}
     .task-title{
       display:flex;
