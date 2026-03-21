@@ -10328,6 +10328,70 @@ function viewTasks(){
 
     + (showAnns ? announcements.filter(t=>t.status==="закрито" || t.status==="скасовано").length : 0);
 
+  const filterLabelMap = {
+
+    "активні": "Активні",
+
+    "очікує_підтвердження": "Очікує підтвердження",
+
+    "прострочені": "Прострочені",
+
+    "блокери": "Блокери",
+
+    "без_оновлень": "Без оновлень",
+
+    "закриті": "Закриті"
+
+  };
+
+  const currentFilterLabel = filterLabelMap[filter] || "Активні";
+
+  const currentScopeLabel = (()=> {
+
+    if(deptFilter==="personal"){
+
+      if(effectivePersonalFilter==="tasks") return "Мої задачі";
+
+      if(effectivePersonalFilter==="announcements") return "Оголошення";
+
+      return "Мої / оголошення";
+
+    }
+
+    if(deptFilter && deptFilter!=="all"){
+
+      const dept = getDeptById(deptFilter);
+
+      return dept ? dept.name : deptFilter;
+
+    }
+
+    return u.role==="boss" ? "Усі відділи" : "Мій відділ";
+
+  })();
+
+  const currentCountLabel = (filter==="активні")
+
+    ? `${shownCount} із ${activeCount} активних`
+
+    : `${shownCount} із ${totalCount} записів`;
+
+  const taskHeadSummary = `
+
+    <div class="task-head-summary">
+
+      <span class="task-head-pill accent">Режим: ${htmlesc(currentFilterLabel)}</span>
+
+      <span class="task-head-pill">Контекст: ${htmlesc(currentScopeLabel)}</span>
+
+      <span class="task-head-pill strong">Показано: <span class="mono">${htmlesc(currentCountLabel)}</span></span>
+
+      ${u.role==="boss" ? `<span class="task-head-pill subtle">Джерело: <span class="mono">${htmlesc(taskSourceLabel)}</span></span>` : ``}
+
+    </div>
+
+  `;
+
   const deptNoteActionBtn = (()=> {
 
     const deptId = (u.role === "boss") ? deptFilter : u.departmentId;
@@ -11017,6 +11081,8 @@ function viewTasks(){
           </div>
 
         </div>
+
+        ${taskHeadSummary}
 
         ${(statusChips || personalChips || searchBlock) ? `
 
