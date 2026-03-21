@@ -11110,8 +11110,6 @@ function viewTasks(){
 
           ${deptChips}
 
-          ${searchHint}
-
         </div>
 
         <div class="list">${list}</div>
