@@ -4216,6 +4216,16 @@ function setTab(tab){
 
 function goProfile(){
 
+  const u = currentSessionUser();
+
+  if(u && u.readOnly){
+
+    logout();
+
+    return;
+
+  }
+
   UI.route = ROUTES.PROFILE;
 
   render();
@@ -4284,6 +4294,10 @@ function appShell({title, subtitle, bodyHtml, showFab, fabAction, tabs}){
 
   const themeTitle = UI.theme === "dark" ? "Світла тема" : "Темна тема";
 
+  const profileTitle = (u && u.readOnly) ? "Змінити користувача" : "Профіль";
+
+  const profileIcon = (u && u.readOnly) ? "🚪" : "👤";
+
   const syncTitle = _syncReady ? "Дані завантажено" : (_syncInitDone ? "Дані не завантажено" : "Завантаження даних...");
 
   const syncDot = SYNC_URL ? `<span class="sync-dot ${_syncReady ? "ok" : "err"}" title="${syncTitle}"></span>` : ``;
@@ -4346,7 +4360,7 @@ function appShell({title, subtitle, bodyHtml, showFab, fabAction, tabs}){
 
             <button class="iconbtn" data-action="toggleTheme" title="${themeTitle}">${themeIcon}</button>
 
-            <button class="iconbtn" data-action="goProfile" title="Профіль">👤</button>
+            <button class="iconbtn" data-action="goProfile" title="${profileTitle}">${profileIcon}</button>
 
           </div>
 
