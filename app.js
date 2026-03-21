@@ -4222,6 +4222,26 @@ function goProfile(){
 
 }
 
+function openTasksAnalytics(){
+
+  const u = currentSessionUser();
+
+  if(!u || u.role!=="boss") return;
+
+  const deptId = UI.taskDeptFilter;
+
+  if(deptId && deptId!=="all" && deptId!=="personal"){
+
+    openDeptAnalytics(deptId, "week");
+
+    return;
+
+  }
+
+  setTab(ROUTES.ANALYTICS);
+
+}
+
 function openSyncLogin(){
 
   if(!SYNC_URL) return;
@@ -10164,21 +10184,25 @@ function viewTasks(){
 
   const chips = `
 
-    <div class="chips task-chips status-chips">
+    <div class="task-menu-row task-menu-row-primary">
 
-      <div class="chip ${filter==="активні"?"active":""}" data-action="setTaskFilter" data-arg1="активні"><span class="chip-ico">📌</span><span class="chip-text">Активні</span></div>
+      <div class="chips task-chips status-chips modern-status-chips">
 
-      <div class="chip ${filter==="очікує_підтвердження"?"active":""}" data-action="setTaskFilter" data-arg1="очікує_підтвердження"><span class="chip-ico">🟣</span><span class="chip-text">Очікує підтвердження</span></div>
+        <div class="chip ${filter==="активні"?"active":""}" data-action="setTaskFilter" data-arg1="активні"><span class="chip-ico">📌</span><span class="chip-text">Активні</span></div>
 
-      <div class="chip ${filter==="прострочені"?"active":""}" data-action="setTaskFilter" data-arg1="прострочені"><span class="chip-ico">🟠</span><span class="chip-text">Прострочені</span></div>
+        <div class="chip ${filter==="очікує_підтвердження"?"active":""}" data-action="setTaskFilter" data-arg1="очікує_підтвердження"><span class="chip-ico">🟣</span><span class="chip-text">Очікує</span></div>
 
-      <div class="chip ${filter==="блокери"?"active":""}" data-action="setTaskFilter" data-arg1="блокери"><span class="chip-ico">⛔</span><span class="chip-text">Блокери</span></div>
+        <div class="chip ${filter==="прострочені"?"active":""}" data-action="setTaskFilter" data-arg1="прострочені"><span class="chip-ico">🟠</span><span class="chip-text">Прострочені</span></div>
 
-      <div class="chip ${filter==="без_оновлень"?"active":""}" data-action="setTaskFilter" data-arg1="без_оновлень"><span class="chip-ico">⏳</span><span class="chip-text">Без оновлень</span></div>
+        <div class="chip ${filter==="блокери"?"active":""}" data-action="setTaskFilter" data-arg1="блокери"><span class="chip-ico">⛔</span><span class="chip-text">Блокери</span></div>
 
-      <div class="chip ${filter==="закриті"?"active":""}" data-action="setTaskFilter" data-arg1="закриті"><span class="chip-ico">✅</span><span class="chip-text">Закриті</span></div>
+        <div class="chip ${filter==="без_оновлень"?"active":""}" data-action="setTaskFilter" data-arg1="без_оновлень"><span class="chip-ico">⏳</span><span class="chip-text">Без оновлень</span></div>
 
-      ${u.role==="boss" ? `<div class="chip" data-action="openAllDeptReport" data-arg1="week" title="Звіт по всім відділам"><span class="chip-ico">📊</span><span class="chip-text">Звіт</span></div>` : ``}
+        <div class="chip ${filter==="закриті"?"active":""}" data-action="setTaskFilter" data-arg1="закриті"><span class="chip-ico">✅</span><span class="chip-text">Закриті</span></div>
+
+      </div>
+
+      ${u.role==="boss" ? `<button class="btn ghost btn-analytics-short" data-action="openTasksAnalytics" title="Аналітика по вибраному контексту">📊 Аналітика</button>` : ``}
 
     </div>
 
@@ -10188,13 +10212,17 @@ function viewTasks(){
 
   const personalChips = showAnnouncementsScope ? `
 
-    <div class="chips task-chips personal-chips">
+    <div class="task-menu-row task-menu-row-secondary">
 
-      <div class="chip ${personalFilter==="all"?"active":""}" data-action="setTaskPersonalFilter" data-arg1="all">Все</div>
+      <div class="chips task-chips personal-chips modern-personal-chips">
 
-      <div class="chip ${personalFilter==="tasks"?"active":""}" data-action="setTaskPersonalFilter" data-arg1="tasks">Задачі</div>
+        <div class="chip ${personalFilter==="all"?"active":""}" data-action="setTaskPersonalFilter" data-arg1="all">Все</div>
 
-      <div class="chip ${personalFilter==="announcements"?"active":""}" data-action="setTaskPersonalFilter" data-arg1="announcements">Оголошення</div>
+        <div class="chip ${personalFilter==="tasks"?"active":""}" data-action="setTaskPersonalFilter" data-arg1="tasks">Задачі</div>
+
+        <div class="chip ${personalFilter==="announcements"?"active":""}" data-action="setTaskPersonalFilter" data-arg1="announcements">Оголошення</div>
+
+      </div>
 
     </div>
 
@@ -10202,33 +10230,31 @@ function viewTasks(){
 
   const deptChips = (u.role==="boss") ? `
 
-    <div class="chips dept-chips dept-segments">
+    <div class="task-menu-row task-menu-row-depts">
 
-      ${STATE.departments.map(d=>{
+      <div class="chips dept-chips dept-segments modern-dept-segments">
 
-        const active = deptFilter===d.id ? "active" : "";
+        ${STATE.departments.map(d=>{
 
-        return `
+          const active = deptFilter===d.id ? "active" : "";
 
-          <div class="chip ${active}" data-action="setTaskDeptFilter" data-arg1="${d.id}">
+          return `
 
-            <span class="dept-label" title="${htmlesc(d.name)}">${htmlesc(deptShortLabel(d))}</span>
+            <div class="chip ${active}" data-action="setTaskDeptFilter" data-arg1="${d.id}" title="${htmlesc(d.name)}">
 
-            <button class="dept-report-btn mini" data-action="openDeptAnalytics" data-arg1="${d.id}" data-arg2="week" title="Звіт відділу">
+              <span class="dept-label">${htmlesc(deptShortLabel(d))}</span>
 
-              <span class="dr-ico">📊</span>
+            </div>
 
-            </button>
+          `;
 
-          </div>
+        }).join("")}
 
-        `;
+        <div class="chip ${(deptFilter==="personal" && personalFilter==="tasks") ? "active" : ""}" data-action="openMyTasks">Мої</div>
 
-      }).join("")}
+        <div class="chip ${(deptFilter==="personal" && personalFilter==="announcements") ? "active" : ""}" data-action="openAnnouncementsAudience" data-arg1="all">Оголошення</div>
 
-      <div class="chip ${(deptFilter==="personal" && personalFilter==="tasks") ? "active" : ""}" data-action="openMyTasks">Мої</div>
-
-      <div class="chip ${(deptFilter==="personal" && personalFilter==="announcements") ? "active" : ""}" data-action="openAnnouncementsAudience" data-arg1="all">Оголошення</div>
+      </div>
 
     </div>
 
@@ -16379,6 +16405,8 @@ const ACTIONS = {
   openDeptPeopleBoss,
 
   openDeptAnalytics,
+
+  openTasksAnalytics,
 
   openAllDeptReport,
 
