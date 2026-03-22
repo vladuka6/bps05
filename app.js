@@ -8308,13 +8308,6 @@ function viewReporting(){
 
       : `<span class="reporting-inline-text mono">—</span>`;
 
-    const metaCompact = [
-      `${deptIds.length || 0} відд.`,
-      `${scheduleDates.length || 0} подій`,
-      `створено ${createdLabel}`,
-      `закрито ${closedLabel}`
-    ].filter(Boolean).join(" • ");
-
     return `
 
       <div class="item reporting-plan-card reporting-plan-compact" style="cursor:default;">
@@ -8324,10 +8317,6 @@ function viewReporting(){
           <div class="reporting-plan-title">
 
             <div class="name">${planIndex + 1}. ${htmlesc(plan.title || "Без назви")}</div>
-
-            <div class="sub reporting-plan-meta reporting-plan-meta-compact reporting-plan-meta-text">
-              ${htmlesc(metaCompact)}
-            </div>
 
           </div>
 
