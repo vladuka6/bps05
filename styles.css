@@ -1257,6 +1257,51 @@
     }
     .report-details[open] summary::after{transform: rotate(180deg);}
     .report-details > *:not(summary){margin-top:8px;}
+    .reporting-toolbar{
+      display:grid;
+      grid-template-columns: minmax(220px, 280px) 1fr;
+      gap:12px;
+      align-items:start;
+      margin-bottom:12px;
+    }
+    .reporting-month-field{
+      padding:12px;
+      border-radius:14px;
+      border:1px solid rgba(150,170,205,.35);
+      background: rgba(255,255,255,.82);
+    }
+    .reporting-summary-grid{
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    }
+    .reporting-intro{
+      margin-bottom:10px;
+    }
+    .reporting-plan-card{
+      border-color: rgba(150,170,205,.3);
+      background: linear-gradient(180deg, rgba(255,255,255,.94), rgba(247,250,255,.9));
+    }
+    .reporting-plan-head{
+      align-items:flex-start;
+      gap:12px;
+    }
+    .reporting-plan-title{
+      min-width:0;
+      flex:1;
+    }
+    .reporting-plan-meta{
+      margin-top:8px;
+    }
+    .reporting-plan-details{
+      margin-top:10px;
+      padding-top:10px;
+      border-top:1px solid rgba(150,170,205,.2);
+    }
+    .reporting-plan-schedule{
+      margin-bottom:8px;
+    }
+    .reporting-plan-list{
+      margin-top:8px;
+    }
     .task-meta{
       margin-top:0;
       display:flex;
@@ -1651,6 +1696,13 @@
         padding-top:8px;
       }
       .control-day-badge{display:none;}
+      .reporting-toolbar{
+        grid-template-columns:1fr;
+        gap:10px;
+      }
+      .reporting-month-field{
+        padding:10px;
+      }
     }
     @media (max-width: 640px){
       .task-toolbar{grid-template-columns:1fr;}
@@ -2333,6 +2385,17 @@
     body.theme-dark .task-context-pill.subtle{
       background: rgba(17,19,26,.88);
       color: #cfd8ea;
+    }
+    body.theme-dark .reporting-month-field{
+      background: rgba(21,25,37,.78);
+      border-color: rgba(35,42,58,.78);
+    }
+    body.theme-dark .reporting-plan-card{
+      border-color: rgba(35,42,58,.75);
+      background: linear-gradient(180deg, rgba(21,25,37,.92), rgba(17,19,26,.9));
+    }
+    body.theme-dark .reporting-plan-details{
+      border-top-color: rgba(35,42,58,.65);
     }
     body.theme-dark .task-desc,
     body.theme-dark .task-result{

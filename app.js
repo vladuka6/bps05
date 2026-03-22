@@ -7848,6 +7848,12 @@ function viewReporting(){
 
   }, 0);
 
+  const missingPlanned = Math.max(totalPlanned - tasksForMonth.length, 0);
+
+  const createdPct = totalPlanned ? pct(tasksForMonth.length, totalPlanned) : 0;
+
+  const donePct = totalPlanned ? pct(doneInMonth, totalPlanned) : 0;
+
 
 
   const planList = plans.length ? plans.map(plan=>{
@@ -7980,6 +7986,12 @@ function viewReporting(){
 
     const dayLabelText = monthDayList.length ? monthDayList.join(", ") : "—";
 
+    const nextScheduled = scheduleDates.find(d=>d >= today) || scheduleDates[0] || "";
+
+    const occurrenceTotal = deptIds.length * scheduleDates.length;
+
+    const createdLabel = occurrenceTotal ? `${planTasks.length}/${occurrenceTotal}` : `${planTasks.length}`;
+
     const schedulePills = scheduleDates.length
 
       ? scheduleDates.map(d=>`<span class="pill mono">${fmtDate(d)}</span>`).join("")
@@ -7990,27 +8002,25 @@ function viewReporting(){
 
     return `
 
-      <div class="item" style="cursor:default;">
+      <div class="item reporting-plan-card" style="cursor:default;">
 
-        <div class="row">
+        <div class="row reporting-plan-head">
 
-          <div>
+          <div class="reporting-plan-title">
 
             <div class="name">${htmlesc(plan.title || "Без назви")}</div>
 
-            <div class="sub">
+            <div class="sub reporting-plan-meta">
 
-              <span class="pill">Дні місяця: <span class="mono">${htmlesc(dayLabelText)}</span></span>
-
-              <span class="pill">Дні тижня: <span class="mono">${htmlesc(weekLabelText)}</span></span>
-
-              ${schedulePills}
+              <span class="pill">Подій: <span class="mono">${scheduleDates.length}</span></span>
 
               <span class="pill">Відділів: <span class="mono">${deptIds.length}</span></span>
 
-              <span class="pill">Створено: <span class="mono">${planTasks.length}</span></span>
+              <span class="pill">Створено: <span class="mono">${createdLabel}</span></span>
 
-              <span class="pill">Закрито в місяці: <span class="mono">${closedInMonth}</span></span>
+              <span class="pill">Закрито: <span class="mono">${closedInMonth}</span></span>
+
+              ${nextScheduled ? `<span class="pill">Найближча: <span class="mono">${fmtDate(nextScheduled)}</span></span>` : ``}
 
             </div>
 
@@ -8022,7 +8032,23 @@ function viewReporting(){
 
         ${desc}
 
-        ${deptIds.length ? `<div class="list" style="margin-top:10px;">${deptRows}</div>` : `<div class="hint">Відділи не вибрані.</div>`}
+        <details class="report-details reporting-plan-details">
+
+          <summary>Графік і відділи</summary>
+
+          <div class="report-line reporting-plan-schedule">
+
+            <span class="pill">Дні місяця: <span class="mono">${htmlesc(dayLabelText)}</span></span>
+
+            <span class="pill">Дні тижня: <span class="mono">${htmlesc(weekLabelText)}</span></span>
+
+            ${schedulePills}
+
+          </div>
+
+          ${deptIds.length ? `<div class="list reporting-plan-list">${deptRows}</div>` : `<div class="hint">Відділи не вибрані.</div>`}
+
+        </details>
 
       </div>
 
@@ -8046,35 +8072,63 @@ function viewReporting(){
 
       <div class="card-b">
 
-        <div class="field">
+        <div class="reporting-toolbar">
 
-          <label>Звітний місяць</label>
+          <div class="field reporting-month-field">
 
-          <input type="month" id="reportMonthInput" value="${monthStr}" data-change="setReportingMonthFromInput" />
+            <label>Звітний місяць</label>
 
-        </div>
-
-
-
-        <div class="item" style="cursor:default;">
-
-          <div class="row">
-
-            <div class="name">Підсумок за місяць</div>
-
-            <span class="badge b-blue mono">${totalPlanned}</span>
+            <input type="month" id="reportMonthInput" value="${monthStr}" data-change="setReportingMonthFromInput" />
 
           </div>
 
-          <div class="sub">
+          <div class="report-grid reporting-summary-grid">
 
-            <span class="pill">Створено задач: <span class="mono">${tasksForMonth.length}</span></span>
+            <div class="report-tile">
 
-            <span class="pill">Закрито в місяці: <span class="mono">${doneInMonth}</span></span>
+              <div class="k">Планових подій</div>
+
+              <div class="v">${totalPlanned}</div>
+
+              <div class="s">на ${htmlesc(monthStr)}</div>
+
+            </div>
+
+            <div class="report-tile">
+
+              <div class="k">Створено задач</div>
+
+              <div class="v">${tasksForMonth.length}</div>
+
+              <div class="s">${totalPlanned ? `${createdPct}% від плану` : "ще немає плану"}</div>
+
+            </div>
+
+            <div class="report-tile">
+
+              <div class="k">Закрито в місяці</div>
+
+              <div class="v">${doneInMonth}</div>
+
+              <div class="s">${totalPlanned ? `${donePct}% від плану` : "—"}</div>
+
+            </div>
+
+            <div class="report-tile">
+
+              <div class="k">Ще не створено</div>
+
+              <div class="v">${missingPlanned}</div>
+
+              <div class="s">планових задач</div>
+
+            </div>
 
           </div>
 
         </div>
+
+        <div class="hint reporting-intro">Кожен захід показаний компактно. Графік і відділи відкриваються лише за потреби.</div>
 
 
 
