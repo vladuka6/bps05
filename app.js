@@ -268,6 +268,18 @@ function dedupeTasksForDisplay(tasks){
 
 }
 
+function normalizeReferenceNotes(source){
+
+  const data = (source && typeof source === "object") ? source : {};
+  const byDept = (data.byDept && typeof data.byDept === "object") ? data.byDept : {};
+
+  return {
+    general: typeof data.general === "string" ? data.general : "",
+    byDept: {...byDept},
+  };
+
+}
+
 function migrateState(st){
 
   if(!st || typeof st !== "object") return null;
@@ -359,6 +371,8 @@ function migrateState(st){
     recurringTemplates: Array.isArray(st.recurringTemplates) ? st.recurringTemplates : [],
 
     reportPlans: Array.isArray(st.reportPlans) ? st.reportPlans : [],
+
+    referenceNotes: normalizeReferenceNotes(st.referenceNotes),
 
     sync: (st.sync && typeof st.sync === "object") ? st.sync : null,
 
@@ -1220,7 +1234,7 @@ function seed(){
 
   const st = {
 
-    version: 6,
+    version: 7,
 
     session: { userId: null },
 
@@ -1281,6 +1295,11 @@ function seed(){
     recurringTemplates: [],
 
     reportPlans: [],
+
+    referenceNotes: {
+      general: "",
+      byDept: {},
+    },
 
   };
 
@@ -2148,6 +2167,38 @@ const TASK_EVAL_PRESETS = [
   }
 
 ];
+
+function guessTaskEvaluationPreset(task){
+
+  const title = String(task?.title || "").toLowerCase();
+
+  if(!title) return null;
+
+  if(/лист|уточнен|записк|довест|відповідь|звернен/.test(title)) return "letter";
+
+  if(/таблиц|довідк|слайд|аналіт|порівнял/.test(title)) return "analysis";
+
+  if(/взаємод|зустріч|виробник|компан|нгу|нацпол|окоіз|диндурк|квантум/.test(title)) return "external";
+
+  if(/допуск|декларац|перепуст|оформлен|допуску|перепрацюванн.*звіт/.test(title)) return "permits";
+
+  if(/участ|навчан|демонстрац|захід|школ|оператор|випробуван/.test(title)) return "event";
+
+  if(/арм|робочого місця|токен|доступ|налаштуван/.test(title)) return "support";
+
+  if(/майн|закуп|догов|підписан|контрол|харчуван/.test(title)) return "assets";
+
+  return null;
+
+}
+
+function getTaskEvaluationPreset(task, evaluation=null){
+
+  const presetKey = evaluation?.presetKey || guessTaskEvaluationPreset(task);
+
+  return TASK_EVAL_PRESETS.find(x=>x.key===presetKey) || null;
+
+}
 
 function getTaskEvaluation(taskId){
 
@@ -4333,6 +4384,8 @@ const ROUTES = {
 
 const READ_ONLY_ALLOWED_TABS = new Set([
 
+  ROUTES.CONTROL,
+
   ROUTES.TASKS,
 
   ROUTES.WEEKLY,
@@ -4418,6 +4471,8 @@ let UI = {
   analyticsEvalStatusFilter: "pending",
 
   analyticsEvalTypeFilter: "all",
+
+  analyticsEvalPresetFilter: "all",
 
   reportFilter: "сьогодні",
 
@@ -4991,330 +5046,177 @@ function viewLogin(){
 
 =========================== */
 
+function referenceNotePreview(text, fallback="Немає запису. Натисни, щоб додати коротку довідку."){
+
+  const value = String(text || "").trim();
+
+  if(!value) return fallback;
+
+  return value.length > 180 ? `${value.slice(0, 180)}…` : value;
+
+}
+
+function openReferenceGeneral(){
+
+  const u = currentSessionUser();
+  const notes = normalizeReferenceNotes(STATE.referenceNotes);
+  const readOnly = !!u?.readOnly;
+
+  showSheet("Цікаве — загальне", `
+
+    <div class="hint">Тут можна тримати під рукою загальну довідкову інформацію: ключові накази, контакти, нотатки, правила роботи, короткі нагадування.</div>
+    <div class="sep"></div>
+    <div class="field">
+      <label>Загальна довідка</label>
+      <textarea id="referenceGeneralText" class="task-desc-input" placeholder="Наприклад: хто за що відповідає, якими наказами керуємось, важливі контакти, особливості роботи по відділах..." ${readOnly ? "readonly" : ""}>${htmlesc(notes.general || "")}</textarea>
+    </div>
+    <div class="actions" style="margin-top:14px;">
+      ${readOnly ? "" : `<button class="btn primary" data-action="saveReferenceGeneralNow">Зберегти</button>`}
+      <button class="btn ghost" data-action="hideSheet">${readOnly ? "Закрити" : "Скасувати"}</button>
+    </div>
+
+  `);
+
+}
+
+function openReferenceDept(deptId){
+
+  const u = currentSessionUser();
+  const dept = getDeptById(deptId);
+  if(!dept) return;
+
+  const notes = normalizeReferenceNotes(STATE.referenceNotes);
+  const text = notes.byDept?.[deptId] || "";
+  const readOnly = !!u?.readOnly;
+
+  showSheet(`Цікаве — ${dept.name}`, `
+
+    <div class="hint">Сюди зручно записувати саме довідкову інформацію по відділу: накази, штатні пропозиції, особливості, контакти, примітки по напрямку.</div>
+    <div class="sep"></div>
+    <div class="field">
+      <label>${htmlesc(dept.name)}</label>
+      <textarea id="referenceDeptText" class="task-desc-input" placeholder="Наприклад: по НРК — які накази, які штатні пропозиції, особливості по напряму, кому дзвонити, що часто треба перевіряти..." ${readOnly ? "readonly" : ""}>${htmlesc(text)}</textarea>
+    </div>
+    <div class="actions" style="margin-top:14px;">
+      ${readOnly ? "" : `<button class="btn primary" data-action="saveReferenceDeptNow" data-arg1="${dept.id}">Зберегти</button>`}
+      <button class="btn ghost" data-action="hideSheet">${readOnly ? "Закрити" : "Скасувати"}</button>
+    </div>
+
+  `);
+
+}
+
+function saveReferenceGeneralNow(){
+
+  const text = (document.getElementById("referenceGeneralText")?.value || "").trim();
+
+  STATE.referenceNotes = normalizeReferenceNotes(STATE.referenceNotes);
+  STATE.referenceNotes.general = text;
+
+  saveState(STATE);
+  hideSheet();
+  showToast("Загальну довідку збережено", "ok");
+  render();
+
+}
+
+function saveReferenceDeptNow(deptId){
+
+  const dept = getDeptById(deptId);
+  if(!dept) return;
+
+  const text = (document.getElementById("referenceDeptText")?.value || "").trim();
+
+  STATE.referenceNotes = normalizeReferenceNotes(STATE.referenceNotes);
+  STATE.referenceNotes.byDept[deptId] = text;
+
+  saveState(STATE);
+  hideSheet();
+  showToast(`Збережено: ${dept.name}`, "ok");
+  render();
+
+}
+
 function viewControl(){
 
   if(!ensureLoggedIn()) return viewLogin();
 
-  recomputeDelegationStatuses();
-
-
-
   const u = currentSessionUser();
+  const notes = normalizeReferenceNotes(STATE.referenceNotes);
 
   UI.tab = ROUTES.CONTROL;
+  const filledCount = STATE.departments.filter(d=>String(notes.byDept?.[d.id] || "").trim()).length;
+  const generalFilled = !!String(notes.general || "").trim();
 
-
-
-  const today = kyivDateStr();
-
-  const weekend = isWeekend(kyivNow());
-
-
-
-  // Блок "Не здали до 17:30" прибрано з контролю.
-
-
-
-  const tasksVis = getVisibleTasksForUser(u);
-
-  const requestClose = tasksVis.filter(t=>t.type==="managerial" && t.status==="очікує_підтвердження");
-
-  const overdue = tasksVis.filter(t=>isOverdue(t));
-
-  const notBlocked = (t)=>!["блокер","очікування"].includes(t.status);
-
-  const isDeptTask = (t)=>!!t.departmentId;
-
-  const controlTasksDate = tasksVis.filter(t=>t.nextControlDate && !t.controlAlways && notBlocked(t) && isDeptTask(t));
-
-  const controlTasksAlways = tasksVis.filter(t=>t.controlAlways && !t.nextControlDate && notBlocked(t) && isDeptTask(t));
-
-  const deadlineTasks = tasksVis.filter(t=>t.dueDate && isDeptTask(t) && t.status!=="закрито" && t.status!=="скасовано");
-
-  const controlByDeptDate = (u.role==="boss")
-
-    ? STATE.departments.map(d=>{
-
-        const list = controlTasksDate.filter(t=>t.departmentId===d.id);
-
-        return {dept:d, count:list.length};
-
-      }).filter(x=>x.count>0)
-
-    : [];
-
-  const controlByDeptAlways = (u.role==="boss")
-
-    ? STATE.departments.map(d=>{
-
-        const list = controlTasksAlways.filter(t=>t.departmentId===d.id);
-
-        return {dept:d, count:list.length};
-
-      }).filter(x=>x.count>0)
-
-    : [];
-
-  const controlByDeptDeadline = (u.role==="boss")
-
-    ? STATE.departments.map(d=>{
-
-        const list = deadlineTasks.filter(t=>t.departmentId===d.id);
-
-        return {dept:d, count:list.length};
-
-      }).filter(x=>x.count>0)
-
-    : [];
-
-  const blockers = tasksVis.filter(t=>["блокер","очікування"].includes(t.status));
-
-  const stale = tasksVis.filter(t=>staleTask(t, 7));
-
-  const activeDelegations = (u.role==="boss") ? STATE.delegations.filter(d=>d.status==="активне") : [];
-
-
-
-  const {isDeptHeadLike} = asDeptRole(u);
-
-
-
-  let summaryBadge = "";
-
-  if(u.role!=="boss"){
-
-    const sum = STATE.deptSummaries.find(s=>s.departmentId===u.departmentId && s.summaryDate===today);
-
-    summaryBadge = sum ? `<span class="badge b-ok">✅ Підсумок подано</span>` : `<span class="badge b-warn">🟡 Підсумку немає</span>`;
-
-  }
-
-
-
-  const overview = `
-
-    <div class="desk-overview">
-
-      <div class="ov-item ov-warn" data-action="openTaskList" data-arg1="блокери">
-
-        <div class="k">⛔ Блокери / очікування</div>
-
-        <div class="v mono">${blockers.length}</div>
-
+  const deptCards = STATE.departments.map(dept=>{
+    const text = notes.byDept?.[dept.id] || "";
+    const filled = !!String(text).trim();
+    return `
+      <div class="ref-card">
+        <div class="ref-card-top">
+          ${deptBadgeHtml(dept)}
+          <span class="badge ${filled ? "b-ok" : "b-warn"}">${filled ? "Заповнено" : "Порожньо"}</span>
+        </div>
+        <div class="ref-card-body">
+          <div class="ref-preview">${htmlesc(referenceNotePreview(text))}</div>
+        </div>
+        <div class="actions ref-card-actions">
+          <button class="btn ghost btn-mini" data-action="openReferenceDept" data-arg1="${dept.id}">${u.readOnly ? "Відкрити" : "Редагувати"}</button>
+        </div>
       </div>
-
-      <div class="ov-item ov-danger" data-action="openTaskList" data-arg1="прострочені">
-
-        <div class="k">🟠 Прострочені</div>
-
-        <div class="v mono">${overdue.length}</div>
-
-      </div>
-
-      <div class="ov-item ov-violet" data-action="openTaskList" data-arg1="очікує_підтвердження">
-
-        <div class="k">🟣 Очікує підтвердження</div>
-
-        <div class="v mono">${requestClose.length}</div>
-
-      </div>
-
-    </div>
-
-  `;
-
-
+    `;
+  }).join("");
 
   const body = `
 
-    ${overview}
-
-    <div class="card">
-
-      <div class="card-h">
-
-        <div class="t">Контроль</div>
-
-        <span class="badge control-day-badge ${weekend ? "b-warn":"b-blue"}">${weekend ? "Вихідний" : "Будній"}</span>
-
-      </div>
-
-      <div class="card-b">
-
-        <div class="statlist">
-
-          ${u.role==="boss" ? `
-
-          <div class="stat" data-action="openControlByDept">
-
-            <div class="l">
-
-              <div class="k">🎯 <span class="qa-full">На контролі по відділах</span><span class="qa-short">По відділам</span></div>
-
-              <div class="d control-lines">
-
-                ${
-
-                  (!controlByDeptDate.length && !controlByDeptAlways.length && !controlByDeptDeadline.length)
-
-                    ? `<span>Немає задач на контролі</span>`
-
-                    : ``
-
-                }
-
-              </div>
-
-            </div>
-
-            <div class="r control-counts">
-
-              <span class="pill mono">⏱ ${deadlineTasks.length}</span>
-
-              <span class="pill mono">🗓 ${controlTasksDate.length}</span>
-
-              <span class="pill mono">🎯 ${controlTasksAlways.length}</span>
-
-            </div>
-
-          </div>
-
-          ` : ``}
-
-
-
-          <div class="stat" data-action="openTaskList" data-arg1="очікує_підтвердження">
-
-            <div class="l">
-
-              <div class="k">🟣 Очікує підтвердження</div>
-
-              <div class="d">Управлінські задачі</div>
-
-            </div>
-
-            <div class="r"><span class="mono">${requestClose.length}</span> ›</div>
-
-          </div>
-
-
-
-          <div class="stat" data-action="openTaskList" data-arg1="прострочені">
-
-            <div class="l">
-
-              <div class="k">🟠 Прострочені задачі</div>
-
-              <div class="d">Є дедлайн і він минув</div>
-
-            </div>
-
-            <div class="r"><span class="mono">${overdue.length}</span> ›</div>
-
-          </div>
-
-
-
-          <div class="stat" data-action="openTaskList" data-arg1="блокери">
-
-            <div class="l">
-
-              <div class="k">🟡 Блокери / очікування</div>
-
-              <div class="d">Потребує уваги</div>
-
-            </div>
-
-            <div class="r"><span class="mono">${blockers.length}</span> ›</div>
-
-          </div>
-
-
-
-          <div class="stat" data-action="openTaskList" data-arg1="без_оновлень">
-
-            <div class="l">
-
-              <div class="k">⏳ Без оновлення &gt; 7 днів</div>
-
-              <div class="d">Довгі задачі “висять”</div>
-
-            </div>
-
-            <div class="r"><span class="mono">${stale.length}</span> ›</div>
-
-          </div>
-
-
-
-          ${u.role==="boss" ? `
-
-          <div class="stat" data-action="openDelegations">
-
-            <div class="l">
-
-              <div class="k">🧩 Активні заміщення (в.о.)</div>
-
-              <div class="d">Хто зараз виконує обов’язки</div>
-
-            </div>
-
-            <div class="r"><span class="mono">${activeDelegations.length}</span> ›</div>
-
-          </div>
-
-          ` : `
-
-          <div class="stat" data-action="openDeptPeople">
-
-            <div class="l">
-
-              <div class="k">👥 Люди / звітність сьогодні</div>
-
-              <div class="d">Хто здав / не здав</div>
-
-            </div>
-
-            <div class="r">›</div>
-
-          </div>
-
-          `}
-
+    <div class="ref-hero">
+      <div class="ref-hero-card">
+        <div class="ref-hero-eyebrow">Довідка керівника</div>
+        <div class="ref-hero-title">Цікаве — короткі нотатки, правила і опорна інформація</div>
+        <div class="ref-hero-sub">Тут можна тримати під рукою все, що не хочеться щоразу шукати: накази, штатні пропозиції, особливості по відділах, контакти, внутрішні примітки.</div>
+        <div class="ref-hero-metrics">
+          <div class="ref-hero-metric"><div class="k">Загальне</div><div class="v mono">${generalFilled ? "є" : "—"}</div></div>
+          <div class="ref-hero-metric"><div class="k">Відділи</div><div class="v mono">${filledCount}/${STATE.departments.length}</div></div>
+          <div class="ref-hero-metric"><div class="k">Доступ</div><div class="v mono">${u.readOnly ? "читання" : "редагування"}</div></div>
         </div>
-
       </div>
-
     </div>
 
-
+    <div class="card">
+      <div class="card-h">
+        <div class="t">Загальна довідка</div>
+        <span class="badge ${generalFilled ? "b-ok" : "b-warn"}">${generalFilled ? "Заповнено" : "Порожньо"}</span>
+      </div>
+      <div class="card-b">
+        <div class="ref-preview ref-general-preview">${htmlesc(referenceNotePreview(notes.general, "Тут можна тримати загальні речі: ключові накази, контакти, нагадування, робочі правила."))}</div>
+        <div class="actions" style="margin-top:12px;">
+          <button class="btn primary" data-action="openReferenceGeneral">${u.readOnly ? "Відкрити" : "Редагувати загальне"}</button>
+        </div>
+      </div>
+    </div>
 
     <div class="card">
-
       <div class="card-h">
-
-        <div class="t">Швидкі дії</div>
-
+        <div class="t">По відділах</div>
+        <span class="badge b-blue">${filledCount} / ${STATE.departments.length}</span>
       </div>
-
       <div class="card-b">
-
-        <div class="actions control-actions">
-
-          ${u.role==="boss" ? `<button class="btn primary" data-action="openDelegations">🧩 Заміщення (в.о.)</button>` : ``}
-
-          <button class="btn ghost" data-action="openAbout">ℹ️ Про прототип</button>
-
-          <button class="btn danger" data-action="logout">🚪 Вийти</button>
-
+        <div class="ref-grid">
+          ${deptCards}
         </div>
-
-
-
-        ${u.role!=="boss" ? `` : ``}
-
       </div>
+    </div>
 
+    <div class="card">
+      <div class="card-h">
+        <div class="t">Швидкі дії</div>
+      </div>
+      <div class="card-b">
+        <div class="actions control-actions">
+          <button class="btn ghost" data-action="openAbout">ℹ️ Про прототип</button>
+          <button class="btn danger" data-action="logout">🚪 Вийти</button>
+        </div>
+      </div>
     </div>
 
   `;
@@ -5325,7 +5227,7 @@ function viewControl(){
 
     ? [
 
-      {key:ROUTES.CONTROL, label:"Контроль", ico:"🧭"},
+      {key:ROUTES.CONTROL, label:"Цікаве", ico:"📚"},
 
       {key:ROUTES.TASKS, label:"Задачі", ico:"📋"},
 
@@ -5341,57 +5243,23 @@ function viewControl(){
 
     : [
 
-      {key:ROUTES.CONTROL, label:"Контроль", ico:"🧭"},
+      {key:ROUTES.CONTROL, label:"Цікаве", ico:"📚"},
 
       {key:ROUTES.TASKS, label:"Задачі", ico:"📋"},
 
     ];
 
-
-
-  const subtitle = roleSubtitle(u);
-
-  const fabAction = ()=>{
-
-    if(u.role==="boss"){
-
-      showSheet("Додати", `
-
-        <div class="actions">
-
-          <button class="btn primary" data-action="hideThen" data-next="openCreateTask" data-arg1="personal">➕ Моя задача</button>
-
-          <button class="btn ghost" data-action="hideThen" data-next="openCreateTask" data-arg1="managerial">➕ Управлінська</button>
-
-        </div>
-
-        <div class="sep"></div>
-
-        <button class="btn ghost" data-action="hideSheet">Закрити</button>
-
-      `);
-
-    } else {
-
-      openCreateTask('internal');
-
-    }
-
-  };
-
-
-
   appShell({
 
-    title: "Контроль",
+    title: "Цікаве",
 
-    subtitle,
+    subtitle: roleSubtitle(u),
 
     bodyHtml: body,
 
-    showFab: !u.readOnly,
+    showFab: false,
 
-    fabAction,
+    fabAction: null,
 
     tabs
 
@@ -7849,7 +7717,7 @@ function viewReports(){
 
     ? [
 
-      {key:ROUTES.CONTROL, label:"Контроль", ico:"🧭"},
+      {key:ROUTES.CONTROL, label:"Цікаве", ico:"📚"},
 
       {key:ROUTES.WEEKLY, label:"Тиждень", ico:"🗓"},
 
@@ -7865,7 +7733,7 @@ function viewReports(){
 
     : [
 
-      {key:ROUTES.CONTROL, label:"Контроль", ico:"🧭"},
+      {key:ROUTES.CONTROL, label:"Цікаве", ico:"📚"},
 
       {key:ROUTES.TASKS, label:"Задачі", ico:"📋"},
 
@@ -8459,7 +8327,7 @@ function viewReporting(){
 
   const tabs = [
 
-    {key:ROUTES.CONTROL, label:"Контроль", ico:"🧭"},
+    {key:ROUTES.CONTROL, label:"Цікаве", ico:"📚"},
 
     {key:ROUTES.TASKS, label:"Задачі", ico:"📋"},
 
@@ -9077,7 +8945,7 @@ function viewPlan(){
 
   const tabs = [
 
-    {key:ROUTES.CONTROL, label:"Контроль", ico:"🧭"},
+    {key:ROUTES.CONTROL, label:"Цікаве", ico:"📚"},
 
     {key:ROUTES.TASKS, label:"Задачі", ico:"📋"},
 
@@ -10035,7 +9903,7 @@ function viewWeeklyTasks(){
 
   const tabs = [
 
-    {key:ROUTES.CONTROL, label:"Контроль", ico:"🧭"},
+    {key:ROUTES.CONTROL, label:"Цікаве", ico:"📚"},
 
     {key:ROUTES.TASKS, label:"Задачі", ico:"📋"},
 
@@ -11529,7 +11397,7 @@ function viewTasks(){
 
     ? [
 
-      {key:ROUTES.CONTROL, label:"Контроль", ico:"🧭"},
+      {key:ROUTES.CONTROL, label:"Цікаве", ico:"📚"},
 
       {key:ROUTES.TASKS, label:"Задачі", ico:"📋"},
 
@@ -11545,7 +11413,7 @@ function viewTasks(){
 
     : [
 
-      {key:ROUTES.CONTROL, label:"Контроль", ico:"🧭"},
+      {key:ROUTES.CONTROL, label:"Цікаве", ico:"📚"},
 
       {key:ROUTES.TASKS, label:"Задачі", ico:"📋"},
 
@@ -15603,7 +15471,7 @@ function viewProfile(){
 
     ? [
 
-      {key:ROUTES.CONTROL, label:"Контроль", ico:"🧭"},
+      {key:ROUTES.CONTROL, label:"Цікаве", ico:"📚"},
 
       {key:ROUTES.TASKS, label:"Задачі", ico:"📋"},
 
@@ -15619,7 +15487,7 @@ function viewProfile(){
 
     : [
 
-      {key:ROUTES.CONTROL, label:"Контроль", ico:"🧭"},
+      {key:ROUTES.CONTROL, label:"Цікаве", ico:"📚"},
 
       {key:ROUTES.TASKS, label:"Задачі", ico:"📋"},
 
@@ -15883,6 +15751,16 @@ function setAnalyticsEvalTypeFilterFromInput(){
 
 }
 
+function setAnalyticsEvalPresetFilterFromInput(){
+
+  const el = document.getElementById("analyticsPresetFilter");
+
+  UI.analyticsEvalPresetFilter = el?.value || "all";
+
+  render();
+
+}
+
 function applyTaskEvaluationPresetFromInput(){
 
   const select = document.getElementById("eval_preset");
@@ -15914,14 +15792,17 @@ function openTaskEvaluation(taskId){
   const evaluation = getTaskEvaluation(taskId) || {};
   const dept = task.departmentId ? getDeptById(task.departmentId)?.name || "Відділ" : "Особисто";
   const closeDate = getCloseDateForTask(task);
-  const presetOptions = TASK_EVAL_PRESETS.map(item=>`<option value="${item.key}">${htmlesc(item.label)}</option>`).join("");
+  const guessedPresetKey = evaluation.presetKey || guessTaskEvaluationPreset(task);
+  const guessedPreset = TASK_EVAL_PRESETS.find(x=>x.key===guessedPresetKey) || null;
+  const initialScores = Object.keys(evaluation).length ? evaluation : (guessedPreset?.scores || {});
+  const presetOptions = TASK_EVAL_PRESETS.map(item=>`<option value="${item.key}" ${item.key===guessedPresetKey ? "selected" : ""}>${htmlesc(item.label)}</option>`).join("");
 
   const fields = TASK_EVAL_CRITERIA.map(item=>`
 
     <div class="field">
       <label>${item.label}</label>
       <select id="eval_${item.key}">
-        ${[1,2,3,4,5].map(score=>`<option value="${score}" ${Number(evaluation[item.key] || 0)===score ? "selected" : ""}>${score}</option>`).join("")}
+        ${[1,2,3,4,5].map(score=>`<option value="${score}" ${Number(initialScores[item.key] || 0)===score ? "selected" : ""}>${score}</option>`).join("")}
       </select>
       <div class="hint" style="margin-top:6px;">${TASK_EVAL_HINTS[item.key] || ""}</div>
     </div>
@@ -15944,7 +15825,10 @@ function openTaskEvaluation(taskId){
         </select>
         <button class="btn ghost" data-action="applyTaskEvaluationPresetFromInput">Підставити</button>
       </div>
-      <div class="hint" style="margin-top:6px;">Шаблон лише підставляє стартові бали. Після цього ти можеш спокійно скоригувати оцінку вручну.</div>
+      <div class="hint" style="margin-top:6px;">
+        ${guessedPreset ? `Рекомендовано за назвою задачі: <b>${htmlesc(guessedPreset.label)}</b>.<br/>` : ""}
+        Шаблон лише підставляє стартові бали. Після цього ти можеш спокійно скоригувати оцінку вручну.
+      </div>
     </div>
     <div class="sep"></div>
     <div class="eval-form-grid">
@@ -16089,6 +15973,19 @@ function openTaskEvaluationHelp(){
       </div>
     </div>
 
+    <div class="item" style="cursor:default;">
+      <div class="name">Типові задачі і який шаблон обирати</div>
+      <div class="hint">
+        <b>Лист / уточнення / записка</b> — лист на нацпол, лист на виробників, уточнення по наявності, службова записка.<br/>
+        <b>Таблиця / довідка / слайди</b> — порівняльні таблиці, довідки, слайди, аналітичні матеріали.<br/>
+        <b>Зовнішня взаємодія / зустріч</b> — виробники, компанії, НГУ, зовнішні органи, координаційні зустрічі.<br/>
+        <b>Допуск / декларація / оформлення</b> — допуски, перепустки, декларації, оформлення документів.<br/>
+        <b>Організація участі / навчання / заходу</b> — навчання, демонстрації, участь у заходах, супровід випробувань.<br/>
+        <b>АРМ / доступ / токен / налаштування</b> — робоче місце, АРМ, доступи, токени, технічні налаштування.<br/>
+        <b>Майно / закупівлі / договір / контроль</b> — майно, закупівлі, договори, контроль підписання, забезпечення.
+      </div>
+    </div>
+
     <div class="sep"></div>
     <div class="actions">
       <button class="btn primary" data-action="hideSheet">Зрозуміло</button>
@@ -16118,6 +16015,10 @@ function saveTaskEvaluationNow(taskId){
     evaluatedBy: u.id,
     note: (document.getElementById("eval_note")?.value || "").trim(),
   };
+  const selectedPresetKey = document.getElementById("eval_preset")?.value || "";
+  payload.presetKey = TASK_EVAL_PRESETS.some(x=>x.key===selectedPresetKey)
+    ? selectedPresetKey
+    : (guessTaskEvaluationPreset(task) || null);
 
   let hasError = false;
 
@@ -16196,6 +16097,7 @@ function viewAnalytics(){
   const deptOptions = STATE.departments.filter(d=>closedTasks.some(t=>t.departmentId===d.id));
   const userIds = Array.from(new Set(closedTasks.map(t=>t.responsibleUserId).filter(Boolean)));
   const userOptions = userIds.map(getUserById).filter(Boolean);
+  const presetOptions = TASK_EVAL_PRESETS.filter(item=>closedTasks.some(t=>getTaskEvaluationPreset(t, getTaskEvaluation(t))?.key === item.key));
 
   const filteredClosed = closedTasks.filter(t=>{
     if(UI.analyticsEvalDeptFilter !== "all" && (t.departmentId || "") !== UI.analyticsEvalDeptFilter) return false;
@@ -16203,6 +16105,9 @@ function viewAnalytics(){
     if(UI.analyticsEvalTypeFilter !== "all" && (t.type || "") !== UI.analyticsEvalTypeFilter) return false;
 
     const evaluation = getTaskEvaluation(t.id);
+    const preset = getTaskEvaluationPreset(t, evaluation);
+
+    if(UI.analyticsEvalPresetFilter !== "all" && (preset?.key || "") !== UI.analyticsEvalPresetFilter) return false;
 
     if(UI.analyticsEvalStatusFilter === "pending" && evaluation) return false;
     if(UI.analyticsEvalStatusFilter === "evaluated" && !evaluation) return false;
@@ -16212,6 +16117,7 @@ function viewAnalytics(){
     task,
     evaluation: getTaskEvaluation(task.id),
     closeDate: getCloseDateForTask(task),
+    preset: getTaskEvaluationPreset(task, getTaskEvaluation(task.id)),
   }));
 
   const evaluatedRows = filteredClosed.filter(x=>x.evaluation);
@@ -16245,6 +16151,13 @@ function viewAnalytics(){
     return {user, count: rows.length, score, avg};
   }).filter(x=>x.count > 0).sort((a,b)=>b.score-a.score);
 
+  const presetScoreRows = TASK_EVAL_PRESETS.map(preset=>{
+    const rows = evaluatedRows.filter(x=>(x.preset?.key || "")===preset.key);
+    const score = rows.reduce((sum, row)=>sum + evalTotalScore(row.evaluation), 0);
+    const avg = rows.length ? (score / rows.length) : 0;
+    return {preset, count: rows.length, score, avg};
+  }).filter(x=>x.count > 0).sort((a,b)=>b.score-a.score);
+
   const recentEvaluatedRows = evaluatedRows.slice().sort((a,b)=>(b.evaluation.evaluatedAt || "").localeCompare(a.evaluation.evaluatedAt || "")).slice(0,8);
 
   const statusDonut = buildEvalSlices([
@@ -16260,6 +16173,7 @@ function viewAnalytics(){
   const maxDeptScore = Math.max(1, ...deptScoreRows.map(x=>x.score), 1);
   const maxCriteria = Math.max(1, ...criteriaRows.map(x=>x.value), 1);
   const maxUserScore = Math.max(1, ...userScoreRows.map(x=>x.score), 1);
+  const maxPresetScore = Math.max(1, ...presetScoreRows.map(x=>x.score), 1);
   const topDept = deptScoreRows[0] || null;
   const topPendingDept = pendingDeptRows[0] || null;
 
@@ -16299,6 +16213,13 @@ function viewAnalytics(){
           <select id="analyticsTypeFilter" data-change="setAnalyticsEvalTypeFilterFromInput">
             <option value="all">Усі типи</option>
             ${["managerial","internal","personal"].map(type=>`<option value="${type}" ${UI.analyticsEvalTypeFilter===type ? "selected" : ""}>${htmlesc(taskTypeLabel(type))}</option>`).join("")}
+          </select>
+        </div>
+        <div class="field">
+          <label>Шаблон оцінки</label>
+          <select id="analyticsPresetFilter" data-change="setAnalyticsEvalPresetFilterFromInput">
+            <option value="all">Усі шаблони</option>
+            ${presetOptions.map(item=>`<option value="${item.key}" ${UI.analyticsEvalPresetFilter===item.key ? "selected" : ""}>${htmlesc(item.label)}</option>`).join("")}
           </select>
         </div>
       </div>
@@ -16426,6 +16347,22 @@ function viewAnalytics(){
     </div>
   `;
 
+  const presetBars = `
+    <div class="item analytics-block" style="cursor:default;">
+      <div class="row"><div class="name">Які типи задач дали найбільше балів</div><span class="badge b-violet mono">${presetScoreRows.length}</span></div>
+      <div class="eval-bars">
+        ${presetScoreRows.length ? presetScoreRows.map(row=>`
+          <div class="eval-bar-row">
+            <div class="eval-label">${htmlesc(row.preset.label)}</div>
+            <div class="eval-bar-wrap"><div class="eval-bar alt" style="width:${Math.max(8, Math.round((row.score / maxPresetScore) * 100))}%"></div></div>
+            <div class="eval-value mono">${row.score}</div>
+          </div>
+          <div class="hint" style="margin:-6px 0 8px;">${row.count} задач • середній ${row.avg.toFixed(1)}</div>
+        `).join("") : `<div class="hint">Ще немає оцінених задач по шаблонах.</div>`}
+      </div>
+    </div>
+  `;
+
   const pendingList = `
     <div class="item analytics-block" style="cursor:default;">
       <div class="row"><div class="name">Потребують оцінювання</div><span class="badge b-warn mono">${pendingRows.length}</span></div>
@@ -16441,6 +16378,7 @@ function viewAnalytics(){
                   ${dept ? deptBadgeHtml(dept) : `<span class="pill">Особисто</span>`}
                   <span class="pill">${htmlesc(user?.name || "Без виконавця")}</span>
                   <span class="pill mono">${row.closeDate ? fmtDate(row.closeDate) : "—"}</span>
+                  ${row.preset ? `<span class="pill">Шаблон: ${htmlesc(row.preset.label)}</span>` : ``}
                 </div>
               </div>
               <div class="eval-task-actions">
@@ -16468,6 +16406,7 @@ function viewAnalytics(){
                 <div class="eval-task-meta">
                   ${dept ? deptBadgeHtml(dept) : `<span class="pill">Особисто</span>`}
                   <span class="pill mono">${fmtDate(toDateOnly(row.evaluation.evaluatedAt) || row.closeDate || "")}</span>
+                  ${row.preset ? `<span class="pill">Тип: ${htmlesc(row.preset.label)}</span>` : ``}
                   <span class="badge b-ok mono">${score}/20</span>
                 </div>
               </div>
@@ -16515,6 +16454,7 @@ function viewAnalytics(){
         <div class="analytics-grid">
           ${criteriaBars}
           ${deptRanking}
+          ${presetBars}
           ${deptBars}
           ${pendingList}
           ${recentList}
@@ -16525,7 +16465,7 @@ function viewAnalytics(){
   `;
 
   const tabs = [
-    {key:ROUTES.CONTROL, label:"Контроль", ico:"🧭"},
+    {key:ROUTES.CONTROL, label:"Цікаве", ico:"📚"},
     {key:ROUTES.TASKS, label:"Задачі", ico:"📋"},
     {key:ROUTES.WEEKLY, label:"Тиждень", ico:"🗓"},
     {key:ROUTES.ANALYTICS, label:"Аналітика", ico:"📈"},
@@ -16581,7 +16521,7 @@ function openHelp(){
 
       <div class="hint">
 
-        🧭 Контроль: що критично сьогодні (не здали звіт, блокери, задачі на підтвердження).<br/>
+        📚 Цікаве: довідкові записи по відділах і загальна інформація під рукою.<br/>
 
         📝 Звіти: щоденні звіти виконавців та підсумки відділів.<br/>
 
@@ -16605,7 +16545,7 @@ function openHelp(){
 
       <div class="hint">
 
-        1) Відкрий “Контроль” і перевір плитку “Очікує підтвердження”.<br/>
+        1) Відкрий “Задачі” або “Аналітику” і перевір, що потребує уваги.<br/>
 
         2) Перейди в “Задачі” → фільтр “Очікує підтвердження”.<br/>
 
@@ -16631,7 +16571,7 @@ function openHelp(){
 
         3) В кінці дня перевір “Люди/штат” (хто здав/не здав).<br/>
 
-        4) Подай підсумок відділу (3–5 речень) у вкладці “Контроль”.
+        4) За потреби тримай важливі службові примітки у вкладці “Цікаве”.
 
       </div>
 
@@ -16885,6 +16825,14 @@ const ACTIONS = {
 
   saveTaskEvaluationNow,
 
+  openReferenceGeneral,
+
+  openReferenceDept,
+
+  saveReferenceGeneralNow,
+
+  saveReferenceDeptNow,
+
   setAnalyticsEvalPeriod,
 
   toggleTaskDensity,
@@ -16916,6 +16864,8 @@ const CHANGE_ACTIONS = {
   setAnalyticsEvalStatusFilterFromInput,
 
   setAnalyticsEvalTypeFilterFromInput,
+
+  setAnalyticsEvalPresetFilterFromInput,
 
   setWeeklyPeriodFromSelect,
 
@@ -17000,6 +16950,10 @@ const READONLY_BLOCKED_ACTIONS = new Set([
   "deleteReportPlanNow",
 
   "saveAnnouncementEdits",
+
+  "saveReferenceDeptNow",
+
+  "saveReferenceGeneralNow",
 
   "saveTaskEvaluationNow",
 
