@@ -723,6 +723,7 @@
     }
     .announcement-list{display:flex;flex-direction:column;gap:10px;}
     .section-title{font-weight:900;font-size:16px;color:var(--text);text-align:center;margin:6px 0 2px;}
+    .ref-section-title{text-align:left;margin:2px 2px 10px;font-size:14px;color:var(--text-soft);letter-spacing:.01em;}
     .weekly-list{gap:6px;margin-top: 6px;}
     .weekly-list .weekly-item{padding:8px 10px;}
     .weekly-controls{
@@ -3335,5 +3336,6 @@
       border-color: rgba(110,168,254,.45);
       background: rgba(110,168,254,.18);
     }
+
 
 
