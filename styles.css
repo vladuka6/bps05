@@ -1271,7 +1271,7 @@
       background: rgba(255,255,255,.82);
     }
     .reporting-summary-grid{
-      grid-template-columns: repeat(auto-fit, minmax(124px, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
     }
     .reporting-intro{
       margin-bottom:10px;
@@ -1280,6 +1280,9 @@
       border-color: rgba(150,170,205,.3);
       background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(249,251,255,.92));
       padding:10px 10px 8px;
+    }
+    .reporting-plan-compact{
+      padding:10px;
     }
     .reporting-plan-head{
       align-items:flex-start;
@@ -1296,6 +1299,10 @@
     .reporting-plan-meta{
       margin-top:4px;
       gap:5px;
+    }
+    .reporting-plan-meta-compact .pill{
+      padding:5px 8px;
+      font-size:11px;
     }
     .reporting-plan-actions{
       display:flex;
@@ -1328,6 +1335,28 @@
       margin-top:6px;
       padding-top:6px;
       border-top:1px solid rgba(150,170,205,.2);
+    }
+    .reporting-plan-inline-compact{
+      margin-top:6px;
+      margin-bottom:0;
+      gap:5px;
+    }
+    .reporting-plan-desc{
+      margin-top:6px;
+    }
+    .reporting-plan-toggle{
+      margin-top:8px;
+    }
+    .reporting-plan-toggle summary{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      cursor:pointer;
+      font-size:12px;
+      font-weight:900;
+      color:var(--muted);
+      list-style:none;
+      padding:6px 0 2px;
     }
     .reporting-plan-inline{
       display:flex;

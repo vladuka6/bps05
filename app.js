@@ -402,6 +402,10 @@ function migrateState(st){
 
     referenceNotes: normalizeReferenceNotes(st.referenceNotes),
 
+    evaluationStartDate: typeof st.evaluationStartDate === "string" && st.evaluationStartDate
+      ? st.evaluationStartDate
+      : kyivDateStr(),
+
     sync: (st.sync && typeof st.sync === "object") ? st.sync : null,
 
   };
@@ -1262,7 +1266,7 @@ function seed(){
 
   const st = {
 
-    version: 7,
+    version: 8,
 
     session: { userId: null },
 
@@ -1328,6 +1332,8 @@ function seed(){
       general: {orders:"", contacts:"", staff:"", other:""},
       byDept: {},
     },
+
+    evaluationStartDate: today,
 
   };
 
@@ -2246,7 +2252,12 @@ function evalTotalScore(evaluation){
 
 function isTaskAwaitingEvaluation(task){
 
-  return !!task && task.status==="закрито" && !isAnnouncement(task) && !getTaskEvaluation(task.id);
+  if(!task || task.status!=="закрито" || isAnnouncement(task) || getTaskEvaluation(task.id)) return false;
+
+  const closeDate = getCloseDateForTask(task) || "";
+  const startDate = String(STATE.evaluationStartDate || kyivDateStr());
+
+  return !!closeDate && closeDate >= startDate;
 
 }
 
@@ -2254,7 +2265,9 @@ function evaluationStatusLabel(task){
 
   if(!task || task.status!=="закрито") return "Не закрито";
 
-  return getTaskEvaluation(task.id) ? "Оцінено" : "Не оцінено";
+  if(getTaskEvaluation(task.id)) return "Оцінено";
+
+  return isTaskAwaitingEvaluation(task) ? "Не оцінено" : "Поза періодом оцінювання";
 
 }
 
@@ -8273,17 +8286,15 @@ function viewReporting(){
 
       : `<span class="pill">Відділи не вибрані</span>`;
 
-    const schedulePills = scheduleDates.length
-
-      ? scheduleDates.map(d=>`<span class="pill mono">${fmtDate(d)}</span>`).join("")
-
+    const schedulePreview = scheduleDates.length
+      ? scheduleDates.slice(0,3).map(d=>`<span class="pill mono">${fmtDate(d)}</span>`).join("")
       : `<span class="pill">—</span>`;
 
-
+    const moreDates = scheduleDates.length > 3 ? `<span class="pill">+${scheduleDates.length - 3}</span>` : ``;
 
     return `
 
-      <div class="item reporting-plan-card" style="cursor:default;">
+      <div class="item reporting-plan-card reporting-plan-compact" style="cursor:default;">
 
         <div class="row reporting-plan-head">
 
@@ -8291,14 +8302,11 @@ function viewReporting(){
 
             <div class="name">${planIndex + 1}. ${htmlesc(plan.title || "Без назви")}</div>
 
-            <div class="sub reporting-plan-meta">
-
-              <span class="pill"><span class="reporting-pill-ico">🛠</span><span class="reporting-pill-label">Створено</span><span class="mono">${createdLabel}</span></span>
-
-              <span class="pill"><span class="reporting-pill-ico">✅</span><span class="reporting-pill-label">Закрито</span><span class="mono">${closedLabel}</span></span>
-
-              ${nextScheduled ? `<span class="pill"><span class="reporting-pill-ico">📍</span><span class="reporting-pill-label">Найближча</span><span class="mono">${fmtDate(nextScheduled)}</span></span>` : ``}
-
+            <div class="sub reporting-plan-meta reporting-plan-meta-compact">
+              <span class="pill"><span class="reporting-pill-label">Відділи</span><span class="mono">${deptIds.length || 0}</span></span>
+              <span class="pill"><span class="reporting-pill-label">Створено</span><span class="mono">${createdLabel}</span></span>
+              <span class="pill"><span class="reporting-pill-label">Закрито</span><span class="mono">${closedLabel}</span></span>
+              ${nextScheduled ? `<span class="pill"><span class="reporting-pill-label">Найближча</span><span class="mono">${fmtDate(nextScheduled)}</span></span>` : ``}
             </div>
 
           </div>
@@ -8307,41 +8315,28 @@ function viewReporting(){
 
         </div>
 
-        ${desc}
-
-        <div class="reporting-plan-details">
-
-          <div class="reporting-plan-inline">
-
-            <div class="reporting-plan-inline-row">
-
-              <span class="reporting-inline-label">Відділи</span>
-
-              <div class="reporting-inline-values">${deptSummary}</div>
-
-            </div>
-
-            <div class="reporting-plan-inline-row">
-
-              <span class="reporting-inline-label">Графік</span>
-
-              <div class="reporting-inline-values">${schedulePills}</div>
-
-            </div>
-
+        <div class="reporting-plan-inline reporting-plan-inline-compact">
+          <div class="reporting-plan-inline-row">
+            <span class="reporting-inline-label">Відділи</span>
+            <div class="reporting-inline-values">${deptSummary}</div>
           </div>
-
-          ${((dayLabelText !== "—") || (weekLabelText !== "—")) ? `
-            <div class="reporting-plan-mini">
-              ${dayLabelText !== "—" ? `Дні місяця: <span class="mono">${htmlesc(dayLabelText)}</span>` : ``}
-              ${(dayLabelText !== "—" && weekLabelText !== "—") ? `<span class="reporting-mini-sep">•</span>` : ``}
-              ${weekLabelText !== "—" ? `Дні тижня: <span class="mono">${htmlesc(weekLabelText)}</span>` : ``}
-            </div>
-          ` : ``}
-
-          ${deptIds.length ? `<div class="list reporting-plan-list">${deptRows}</div>` : `<div class="hint">Відділи не вибрані.</div>`}
-
+          <div class="reporting-plan-inline-row">
+            <span class="reporting-inline-label">Графік</span>
+            <div class="reporting-inline-values">${schedulePreview}${moreDates}</div>
+          </div>
         </div>
+
+        ${desc ? `<div class="reporting-plan-desc">${desc}</div>` : ``}
+
+        <details class="report-details reporting-plan-toggle">
+          <summary>Розклад і статуси</summary>
+          <div class="reporting-plan-mini">
+            ${dayLabelText !== "—" ? `Дні місяця: <span class="mono">${htmlesc(dayLabelText)}</span>` : ``}
+            ${(dayLabelText !== "—" && weekLabelText !== "—") ? `<span class="reporting-mini-sep">•</span>` : ``}
+            ${weekLabelText !== "—" ? `Дні тижня: <span class="mono">${htmlesc(weekLabelText)}</span>` : ``}
+          </div>
+          ${deptIds.length ? `<div class="list reporting-plan-list">${deptRows}</div>` : `<div class="hint">Відділи не вибрані.</div>`}
+        </details>
 
       </div>
 
@@ -8379,49 +8374,37 @@ function viewReporting(){
 
             <div class="report-tile">
 
-              <div class="k">Планових подій</div>
+              <div class="k">План</div>
 
               <div class="v">${totalPlanned}</div>
 
-              <div class="s">на ${htmlesc(monthStr)}</div>
+              <div class="s">подій у ${htmlesc(monthStr)}</div>
 
             </div>
 
             <div class="report-tile">
 
-              <div class="k">Створено задач</div>
+              <div class="k">Створено</div>
 
               <div class="v">${tasksForMonth.length}</div>
 
-              <div class="s">${totalPlanned ? `${createdPct}% від плану` : "ще немає плану"}</div>
+              <div class="s">${totalPlanned ? `${createdPct}% від плану` : "без плану"}</div>
 
             </div>
 
             <div class="report-tile">
 
-              <div class="k">Закрито в місяці</div>
+              <div class="k">Закрито</div>
 
               <div class="v">${doneInMonth}</div>
 
-              <div class="s">${totalPlanned ? `${donePct}% від плану` : "—"}</div>
-
-            </div>
-
-            <div class="report-tile">
-
-              <div class="k">Ще не створено</div>
-
-              <div class="v">${missingPlanned}</div>
-
-              <div class="s">планових задач</div>
+              <div class="s">${missingPlanned ? `ще ${missingPlanned} не створено` : (totalPlanned ? `${donePct}% від плану` : "—")}</div>
 
             </div>
 
           </div>
 
         </div>
-
-        <div class="hint reporting-intro">Кожен захід показаний компактно. Графік і відділи відкриваються лише за потреби.</div>
 
 
 
@@ -15875,6 +15858,17 @@ function setAnalyticsEvalPresetFilterFromInput(){
 
 }
 
+function setEvaluationStartDateFromInput(){
+
+  const value = (document.getElementById("evaluationStartDate")?.value || "").trim();
+
+  STATE.evaluationStartDate = value || kyivDateStr();
+
+  saveState(STATE);
+  render();
+
+}
+
 function applyTaskEvaluationPresetFromInput(){
 
   const select = document.getElementById("eval_preset");
@@ -16198,6 +16192,7 @@ function viewAnalytics(){
 
   const tasksAll = STATE.tasks.filter(t=>!isAnnouncement(t));
   const period = analyticsEvalPeriodRange(UI.analyticsEvalPeriod);
+  const evaluationStartDate = String(STATE.evaluationStartDate || kyivDateStr());
 
   const closedTasks = tasksAll.filter(t=>{
     if(t.status!=="закрито") return false;
@@ -16220,10 +16215,12 @@ function viewAnalytics(){
 
     const evaluation = getTaskEvaluation(t.id);
     const preset = getTaskEvaluationPreset(t, evaluation);
+    const closeDate = getCloseDateForTask(t) || "";
+    const needsEvaluationNow = !evaluation && !!closeDate && closeDate >= evaluationStartDate;
 
     if(UI.analyticsEvalPresetFilter !== "all" && (preset?.key || "") !== UI.analyticsEvalPresetFilter) return false;
 
-    if(UI.analyticsEvalStatusFilter === "pending" && evaluation) return false;
+    if(UI.analyticsEvalStatusFilter === "pending" && !needsEvaluationNow) return false;
     if(UI.analyticsEvalStatusFilter === "evaluated" && !evaluation) return false;
 
     return true;
@@ -16235,7 +16232,7 @@ function viewAnalytics(){
   }));
 
   const evaluatedRows = filteredClosed.filter(x=>x.evaluation);
-  const pendingRows = filteredClosed.filter(x=>!x.evaluation);
+  const pendingRows = filteredClosed.filter(x=>!x.evaluation && x.closeDate && x.closeDate >= evaluationStartDate);
   const totalScore = evaluatedRows.reduce((sum, row)=>sum + evalTotalScore(row.evaluation), 0);
   const avgScore = evaluatedRows.length ? (totalScore / evaluatedRows.length).toFixed(1) : "—";
 
@@ -16301,6 +16298,10 @@ function viewAnalytics(){
       </div>
       <div class="eval-filter-grid">
         <div class="field">
+          <label>Старт оцінювання</label>
+          <input type="date" id="evaluationStartDate" value="${htmlesc(evaluationStartDate)}" data-change="setEvaluationStartDateFromInput" />
+        </div>
+        <div class="field">
           <label>Відділ</label>
           <select id="analyticsDeptFilter" data-change="setAnalyticsEvalDeptFilterFromInput">
             <option value="all">Усі відділи</option>
@@ -16357,6 +16358,7 @@ function viewAnalytics(){
         <div class="eval-hero-title">Керівницький дашборд якості виконання</div>
         <div class="eval-hero-sub">
           Період: <span class="mono">${htmlesc(period.label)}</span>
+          • Старт оцінювання: <span class="mono">${fmtDate(evaluationStartDate)}</span>
           ${topDept ? ` • Лідер: <b>${htmlesc(topDept.dept.name)}</b>` : ``}
         </div>
         <div class="eval-hero-metrics">
@@ -16501,7 +16503,7 @@ function viewAnalytics(){
               </div>
             </div>
           `;
-        }).join("") : `<div class="hint">Немає закритих задач, які очікують оцінки.</div>`}
+        }).join("") : `<div class="hint">Немає закритих задач, які очікують оцінки після ${fmtDate(evaluationStartDate)}.</div>`}
       </div>
     </div>
   `;
@@ -16980,6 +16982,8 @@ const CHANGE_ACTIONS = {
   setAnalyticsEvalTypeFilterFromInput,
 
   setAnalyticsEvalPresetFilterFromInput,
+
+  setEvaluationStartDateFromInput,
 
   setReferenceSearchFromInput,
 
