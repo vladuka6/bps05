@@ -308,6 +308,8 @@ function normalizeReferenceNotes(source){
 
 }
 
+const DEFAULT_EVALUATION_START_DATE = "2026-03-23";
+
 function migrateState(st){
 
   if(!st || typeof st !== "object") return null;
@@ -404,7 +406,7 @@ function migrateState(st){
 
     evaluationStartDate: typeof st.evaluationStartDate === "string" && st.evaluationStartDate
       ? st.evaluationStartDate
-      : kyivDateStr(),
+      : DEFAULT_EVALUATION_START_DATE,
 
     sync: (st.sync && typeof st.sync === "object") ? st.sync : null,
 
@@ -460,6 +462,18 @@ function migrateState(st){
   if(next.version < 6){
 
     next.version = 6;
+
+  }
+
+  if(next.version < 9){
+
+    if(!next.evaluationStartDate || next.evaluationStartDate < DEFAULT_EVALUATION_START_DATE){
+
+      next.evaluationStartDate = DEFAULT_EVALUATION_START_DATE;
+
+    }
+
+    next.version = 9;
 
   }
 
@@ -1266,7 +1280,7 @@ function seed(){
 
   const st = {
 
-    version: 8,
+    version: 9,
 
     session: { userId: null },
 
@@ -1333,7 +1347,7 @@ function seed(){
       byDept: {},
     },
 
-    evaluationStartDate: today,
+    evaluationStartDate: DEFAULT_EVALUATION_START_DATE,
 
   };
 
