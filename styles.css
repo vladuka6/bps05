@@ -1352,6 +1352,15 @@
       line-height:1.4;
       overflow-wrap:anywhere;
     }
+    .reporting-inline-sep{
+      color:var(--muted);
+      opacity:.8;
+    }
+    .reporting-strike{
+      text-decoration: line-through;
+      text-decoration-thickness: 1.5px;
+      opacity:.58;
+    }
     .reporting-plan-desc{
       margin-top:6px;
     }

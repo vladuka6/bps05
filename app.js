@@ -8274,32 +8274,45 @@ function viewReporting(){
 
     const dayLabelText = monthDayList.length ? monthDayList.join(", ") : "—";
 
-    const nextScheduled = scheduleDates.find(d=>d >= today) || scheduleDates[0] || "";
-
     const occurrenceTotal = deptIds.length * scheduleDates.length;
 
     const createdLabel = occurrenceTotal ? `${planTasks.length}/${occurrenceTotal}` : `${planTasks.length}`;
 
     const closedLabel = occurrenceTotal ? `${closedInMonth}/${occurrenceTotal}` : `${closedInMonth}`;
 
-    const deptSummary = deptIds.length
+    const deptSummaryHtml = deptIds.length
 
-      ? deptIds.map(deptId=>deptShortLabel(getDeptById(deptId))).filter(Boolean).join(", ")
+      ? deptIds.map(deptId=>{
 
-      : "Відділи не вибрані";
+          const dept = getDeptById(deptId);
+          const deptTasks = scheduleDates.map(date=>taskMap.get(`${deptId}__${date}`) || null);
+          const deptDone = deptTasks.length > 0 && deptTasks.every(task=>task && task.status === "закрито");
+          const cls = deptDone ? "reporting-strike" : "";
 
-    const schedulePreviewText = scheduleDates.length
-      ? scheduleDates.slice(0,3).map(d=>fmtDate(d)).join(", ")
-      : "—";
+          return `<span class="reporting-inline-text ${cls}">${htmlesc(deptShortLabel(dept) || dept?.name || "Відділ")}</span>`;
 
-    const moreDatesText = scheduleDates.length > 3 ? ` +${scheduleDates.length - 3}` : "";
+        }).join(`<span class="reporting-inline-sep">,</span> `)
+
+      : `<span class="reporting-inline-text">Відділи не вибрані</span>`;
+
+    const schedulePreviewHtml = scheduleDates.length
+      ? scheduleDates.map(date=>{
+
+          const tasksForDate = deptIds.map(deptId=>taskMap.get(`${deptId}__${date}`) || null);
+          const dateDone = tasksForDate.length > 0 && tasksForDate.every(task=>task && task.status === "закрито");
+          const cls = dateDone ? "reporting-strike" : "";
+
+          return `<span class="reporting-inline-text mono ${cls}">${fmtDate(date)}</span>`;
+
+        }).join(`<span class="reporting-inline-sep">,</span> `)
+
+      : `<span class="reporting-inline-text mono">—</span>`;
 
     const metaCompact = [
       `${deptIds.length || 0} відд.`,
       `${scheduleDates.length || 0} подій`,
       `створено ${createdLabel}`,
-      `закрито ${closedLabel}`,
-      nextScheduled ? `найближча ${fmtDate(nextScheduled)}` : ""
+      `закрито ${closedLabel}`
     ].filter(Boolean).join(" • ");
 
     return `
@@ -8325,11 +8338,11 @@ function viewReporting(){
         <div class="reporting-plan-inline reporting-plan-inline-compact">
           <div class="reporting-plan-inline-row">
             <span class="reporting-inline-label">Відділи</span>
-            <div class="reporting-inline-values"><span class="reporting-inline-text">${htmlesc(deptSummary)}</span></div>
+            <div class="reporting-inline-values">${deptSummaryHtml}</div>
           </div>
           <div class="reporting-plan-inline-row">
             <span class="reporting-inline-label">Графік</span>
-            <div class="reporting-inline-values"><span class="reporting-inline-text mono">${htmlesc(schedulePreviewText + moreDatesText)}</span></div>
+            <div class="reporting-inline-values">${schedulePreviewHtml}</div>
           </div>
         </div>
 
