@@ -1278,28 +1278,28 @@
     }
     .reporting-plan-card{
       border-color: rgba(150,170,205,.3);
-      background: linear-gradient(180deg, rgba(255,255,255,.94), rgba(247,250,255,.9));
-      padding:12px 12px 10px;
+      background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(249,251,255,.92));
+      padding:10px 10px 8px;
     }
     .reporting-plan-head{
       align-items:flex-start;
-      gap:10px;
+      gap:8px;
     }
     .reporting-plan-title{
       min-width:0;
       flex:1;
     }
     .reporting-plan-title .name{
-      font-size:15px;
-      line-height:1.28;
+      font-size:14px;
+      line-height:1.24;
     }
     .reporting-plan-meta{
-      margin-top:6px;
-      gap:6px;
+      margin-top:4px;
+      gap:5px;
     }
     .reporting-plan-actions{
       display:flex;
-      gap:6px;
+      gap:4px;
       flex-wrap:wrap;
     }
     .reporting-icon-btn{
@@ -1325,50 +1325,56 @@
       line-height:1;
     }
     .reporting-plan-details{
-      margin-top:8px;
-      padding-top:8px;
+      margin-top:6px;
+      padding-top:6px;
       border-top:1px solid rgba(150,170,205,.2);
     }
     .reporting-plan-inline{
       display:flex;
       flex-direction:column;
-      gap:6px;
-      margin-bottom:8px;
+      gap:4px;
+      margin-bottom:6px;
     }
     .reporting-plan-inline-row{
       display:grid;
-      grid-template-columns: 66px minmax(0,1fr);
-      gap:8px;
+      grid-template-columns: 58px minmax(0,1fr);
+      gap:6px;
       align-items:flex-start;
     }
     .reporting-inline-label{
-      font-size:11px;
+      font-size:10px;
       font-weight:900;
       color:var(--muted);
-      padding-top:6px;
+      padding-top:5px;
     }
     .reporting-inline-values{
       display:flex;
       flex-wrap:wrap;
-      gap:6px;
+      gap:4px;
       min-width:0;
     }
-    .reporting-plan-schedule{
-      margin-bottom:8px;
-      gap:6px;
+    .reporting-plan-mini{
+      margin-bottom:6px;
+      font-size:11px;
+      color:var(--muted);
+      line-height:1.35;
+    }
+    .reporting-mini-sep{
+      margin:0 6px;
+      opacity:.6;
     }
     .reporting-plan-list{
-      margin-top:8px;
+      margin-top:6px;
     }
     .reporting-plan-list .item{
-      padding:10px 12px;
-      border-radius:14px;
-      background: rgba(255,255,255,.72);
-      border:1px solid rgba(150,170,205,.24);
+      padding:8px 10px;
+      border-radius:12px;
+      background: rgba(255,255,255,.74);
+      border:1px solid rgba(150,170,205,.22);
     }
     .reporting-plan-list .item .sub{
-      gap:6px;
-      margin-top:5px;
+      gap:5px;
+      margin-top:4px;
     }
     .task-meta{
       margin-top:0;
@@ -1824,15 +1830,15 @@
         flex:0 0 auto;
       }
       .reporting-plan-card{
-        padding:10px 10px 8px;
+        padding:9px 9px 7px;
       }
       .reporting-plan-inline-row{
-        grid-template-columns: 54px minmax(0,1fr);
-        gap:6px;
+        grid-template-columns: 48px minmax(0,1fr);
+        gap:5px;
       }
       .reporting-inline-label{
         font-size:10px;
-        padding-top:5px;
+        padding-top:4px;
       }
       .reporting-inline-values{
         gap:4px;
@@ -1841,15 +1847,16 @@
       .reporting-inline-values .dept-badge{
         flex:0 0 auto;
       }
-      .reporting-plan-schedule{
-        margin-bottom:6px;
-      }
-      .reporting-plan-schedule .pill{
+      .reporting-plan-meta .pill{
         padding:4px 8px;
         font-size:10px;
       }
+      .reporting-plan-mini{
+        font-size:10px;
+        margin-bottom:5px;
+      }
       .reporting-plan-list .item{
-        padding:9px 10px;
+        padding:8px 9px;
       }
     }
     @media (max-width: 640px){

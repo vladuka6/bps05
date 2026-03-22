@@ -8105,8 +8105,6 @@ function viewReporting(){
 
             <div class="sub reporting-plan-meta">
 
-              <span class="pill"><span class="reporting-pill-ico">🗓</span><span class="reporting-pill-label">Подій</span><span class="mono">${scheduleDates.length}</span></span>
-
               <span class="pill"><span class="reporting-pill-ico">🛠</span><span class="reporting-pill-label">Створено</span><span class="mono">${createdLabel}</span></span>
 
               <span class="pill"><span class="reporting-pill-ico">✅</span><span class="reporting-pill-label">Закрито</span><span class="mono">${closedLabel}</span></span>
@@ -8145,13 +8143,13 @@ function viewReporting(){
 
           </div>
 
-          <div class="report-line reporting-plan-schedule">
-
-            <span class="pill">Дні місяця: <span class="mono">${htmlesc(dayLabelText)}</span></span>
-
-            <span class="pill">Дні тижня: <span class="mono">${htmlesc(weekLabelText)}</span></span>
-
-          </div>
+          ${((dayLabelText !== "—") || (weekLabelText !== "—")) ? `
+            <div class="reporting-plan-mini">
+              ${dayLabelText !== "—" ? `Дні місяця: <span class="mono">${htmlesc(dayLabelText)}</span>` : ``}
+              ${(dayLabelText !== "—" && weekLabelText !== "—") ? `<span class="reporting-mini-sep">•</span>` : ``}
+              ${weekLabelText !== "—" ? `Дні тижня: <span class="mono">${htmlesc(weekLabelText)}</span>` : ``}
+            </div>
+          ` : ``}
 
           ${deptIds.length ? `<div class="list reporting-plan-list">${deptRows}</div>` : `<div class="hint">Відділи не вибрані.</div>`}
 
