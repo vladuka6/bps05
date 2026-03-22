@@ -3534,6 +3534,8 @@ function reportingMissingLabel(monthStr, scheduledDate){
 
   const currentMonth = today.slice(0,7);
 
+  const pctSafe = (value, total)=> total ? Math.round((Number(value || 0) / total) * 100) : 0;
+
   const isPastMonth = monthStr < currentMonth;
 
   const shouldExist = isPastMonth || ((monthStr === currentMonth) && (today >= scheduledDate));
@@ -7850,9 +7852,9 @@ function viewReporting(){
 
   const missingPlanned = Math.max(totalPlanned - tasksForMonth.length, 0);
 
-  const createdPct = totalPlanned ? pct(tasksForMonth.length, totalPlanned) : 0;
+  const createdPct = totalPlanned ? pctSafe(tasksForMonth.length, totalPlanned) : 0;
 
-  const donePct = totalPlanned ? pct(doneInMonth, totalPlanned) : 0;
+  const donePct = totalPlanned ? pctSafe(doneInMonth, totalPlanned) : 0;
 
 
 
