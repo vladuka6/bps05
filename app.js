@@ -7810,6 +7810,8 @@ function viewReporting(){
 
   const currentMonth = today.slice(0,7);
 
+  const pctSafe = (value, total)=> total ? Math.round((Number(value || 0) / total) * 100) : 0;
+
 
 
   const plans = (STATE.reportPlans || []).slice().sort((a,b)=>{
