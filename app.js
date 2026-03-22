@@ -7935,7 +7935,7 @@ function viewReporting(){
 
 
 
-  const planList = plans.length ? plans.map(plan=>{
+  const planList = plans.length ? plans.map((plan, planIndex)=>{
 
     const deptIds = Array.isArray(plan.deptIds) ? plan.deptIds : [];
 
@@ -8093,7 +8093,7 @@ function viewReporting(){
 
           <div class="reporting-plan-title">
 
-            <div class="name">${htmlesc(plan.title || "Без назви")}</div>
+            <div class="name">${planIndex + 1}. ${htmlesc(plan.title || "Без назви")}</div>
 
             <div class="sub reporting-plan-meta">
 
@@ -8117,9 +8117,7 @@ function viewReporting(){
 
         ${desc}
 
-        <details class="report-details reporting-plan-details">
-
-          <summary>Графік і відділи</summary>
+        <div class="reporting-plan-details">
 
           <div class="report-line reporting-plan-schedule">
 
@@ -8133,7 +8131,7 @@ function viewReporting(){
 
           ${deptIds.length ? `<div class="list reporting-plan-list">${deptRows}</div>` : `<div class="hint">Відділи не вибрані.</div>`}
 
-        </details>
+        </div>
 
       </div>
 

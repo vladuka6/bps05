@@ -30,7 +30,7 @@
       max-width: var(--max);
       width: 100%;
       margin: 0 auto;
-      padding-bottom: calc(64px + env(safe-area-inset-bottom));
+      padding-bottom: calc(56px + env(safe-area-inset-bottom));
     }
     .topbar{
       position: sticky;
@@ -1066,7 +1066,7 @@
 
     .fab{
       position: fixed;right: 16px;
-      bottom: calc(66px + env(safe-area-inset-bottom));
+      bottom: calc(58px + env(safe-area-inset-bottom));
       z-index: 30;width: 56px;height: 56px;border-radius: 18px;
       border: 1px solid rgba(110,168,254,.55);
       background: linear-gradient(160deg, rgba(110,168,254,.25), rgba(183,131,255,.18));
@@ -1078,16 +1078,16 @@
 
     .nav{
       position: fixed;left:0; right:0; bottom:0;z-index: 40;
-      background: rgba(246,249,255,.92);
+      background: rgba(246,249,255,.82);
       backdrop-filter: blur(10px);
       border-top: 1px solid rgba(150,170,205,.50);
       padding-bottom: env(safe-area-inset-bottom);
     }
-    .nav-inner{max-width: var(--max);margin: 0 auto;display:grid;gap:4px;padding: 6px 8px;}
+    .nav-inner{max-width: var(--max);margin: 0 auto;display:grid;gap:3px;padding: 5px 6px;}
     .tabs{display:grid;grid-template-columns: repeat(4, 1fr);gap: 4px;}
     .tabs.three{ grid-template-columns: repeat(3, 1fr); }
     .tab{
-      height: 42px;border-radius: 12px;
+      height: 38px;border-radius: 11px;
       border: 1px solid rgba(150,170,205,.55);
       background: rgba(255,255,255,.72);
       display:flex;flex-direction: column;align-items:center;justify-content:center;gap:4px;
@@ -1095,7 +1095,7 @@
       position: relative;
     }
     .tab.active{background: rgba(110,168,254,.16);border-color: rgba(110,168,254,.5);color: #2d5fbd;}
-    .tab .ico{font-size: 16px; line-height: 1;}
+    .tab .ico{font-size: 14px; line-height: 1;}
     .tab .label{display:none;}
 
     .modal{
@@ -1687,26 +1687,26 @@
 
     @media (max-width: 640px){
       .app{
-        padding-bottom: calc(58px + env(safe-area-inset-bottom));
+        padding-bottom: calc(52px + env(safe-area-inset-bottom));
       }
       .fab{
-        width:52px;
-        height:52px;
-        border-radius:16px;
-        bottom: calc(60px + env(safe-area-inset-bottom));
+        width:50px;
+        height:50px;
+        border-radius:15px;
+        bottom: calc(54px + env(safe-area-inset-bottom));
       }
       .nav-inner{
-        padding:5px 6px;
+        padding:4px 5px;
       }
       .tabs{
-        gap:4px;
+        gap:3px;
       }
       .tab{
-        height:40px;
-        border-radius:11px;
+        height:36px;
+        border-radius:10px;
       }
       .tab .ico{
-        font-size:15px;
+        font-size:14px;
       }
       .task-toolbar-sticky{
         position: sticky;
