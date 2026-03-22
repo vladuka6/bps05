@@ -271,11 +271,39 @@ function dedupeTasksForDisplay(tasks){
 function normalizeReferenceNotes(source){
 
   const data = (source && typeof source === "object") ? source : {};
-  const byDept = (data.byDept && typeof data.byDept === "object") ? data.byDept : {};
+  const byDeptRaw = (data.byDept && typeof data.byDept === "object") ? data.byDept : {};
+
+  const normalizeSections = (value)=>{
+
+    if(typeof value === "string"){
+      return {
+        orders: "",
+        contacts: "",
+        staff: "",
+        other: value,
+      };
+    }
+
+    const item = (value && typeof value === "object") ? value : {};
+
+    return {
+      orders: typeof item.orders === "string" ? item.orders : "",
+      contacts: typeof item.contacts === "string" ? item.contacts : "",
+      staff: typeof item.staff === "string" ? item.staff : "",
+      other: typeof item.other === "string" ? item.other : "",
+    };
+
+  };
+
+  const byDept = {};
+
+  Object.keys(byDeptRaw).forEach(key=>{
+    byDept[key] = normalizeSections(byDeptRaw[key]);
+  });
 
   return {
-    general: typeof data.general === "string" ? data.general : "",
-    byDept: {...byDept},
+    general: normalizeSections(data.general),
+    byDept,
   };
 
 }
@@ -1297,7 +1325,7 @@ function seed(){
     reportPlans: [],
 
     referenceNotes: {
-      general: "",
+      general: {orders:"", contacts:"", staff:"", other:""},
       byDept: {},
     },
 
@@ -4474,6 +4502,8 @@ let UI = {
 
   analyticsEvalPresetFilter: "all",
 
+  refSearch: "",
+
   reportFilter: "сьогодні",
 
   reportsControlDate: null, // NEW
@@ -5056,6 +5086,73 @@ function referenceNotePreview(text, fallback="Немає запису. Нати�
 
 }
 
+const REFERENCE_SECTION_FIELDS = [
+
+  {key:"orders", label:"Накази / нормативка", placeholder:"Які накази, положення, нормативні документи або правила тут важливо пам’ятати."},
+
+  {key:"contacts", label:"Контакти / канали", placeholder:"Ключові телефони, установи, кому писати або дзвонити по цьому напрямку."},
+
+  {key:"staff", label:"Штатні пропозиції / структура", placeholder:"Короткі нотатки про штат, потреби, пропозиції, посади, навантаження."},
+
+  {key:"other", label:"Інше", placeholder:"Будь-які інші примітки, які треба тримати під рукою."},
+
+];
+
+function referenceSectionsToText(sections){
+
+  const data = normalizeReferenceNotes({general: sections}).general;
+
+  return REFERENCE_SECTION_FIELDS
+    .map(field=>{
+      const value = String(data[field.key] || "").trim();
+      return value ? `${field.label}: ${value}` : "";
+    })
+    .filter(Boolean)
+    .join("\n");
+
+}
+
+function referenceSectionsFilledCount(sections){
+
+  const data = normalizeReferenceNotes({general: sections}).general;
+
+  return REFERENCE_SECTION_FIELDS.filter(field=>String(data[field.key] || "").trim()).length;
+
+}
+
+function buildReferenceEditorFields(prefix, sections){
+
+  const data = normalizeReferenceNotes({general: sections}).general;
+
+  return REFERENCE_SECTION_FIELDS.map(field=>`
+    <div class="field">
+      <label>${field.label}</label>
+      <textarea id="${prefix}_${field.key}" class="task-desc-input" placeholder="${field.placeholder}">${htmlesc(data[field.key] || "")}</textarea>
+    </div>
+  `).join("");
+
+}
+
+function readReferenceEditorFields(prefix){
+
+  const next = {};
+
+  REFERENCE_SECTION_FIELDS.forEach(field=>{
+    next[field.key] = (document.getElementById(`${prefix}_${field.key}`)?.value || "").trim();
+  });
+
+  return next;
+
+}
+
+function setReferenceSearchFromInput(){
+
+  UI.refSearch = (document.getElementById("referenceSearch")?.value || "").trim().toLowerCase();
+
+  render();
+
+}
+
 function openReferenceGeneral(){
 
   const u = currentSessionUser();
@@ -5066,10 +5163,7 @@ function openReferenceGeneral(){
 
     <div class="hint">Тут можна тримати під рукою загальну довідкову інформацію: ключові накази, контакти, нотатки, правила роботи, короткі нагадування.</div>
     <div class="sep"></div>
-    <div class="field">
-      <label>Загальна довідка</label>
-      <textarea id="referenceGeneralText" class="task-desc-input" placeholder="Наприклад: хто за що відповідає, якими наказами керуємось, важливі контакти, особливості роботи по відділах..." ${readOnly ? "readonly" : ""}>${htmlesc(notes.general || "")}</textarea>
-    </div>
+    ${buildReferenceEditorFields("referenceGeneral", notes.general).replaceAll("<textarea ", `<textarea ${readOnly ? "readonly" : ""} `)}
     <div class="actions" style="margin-top:14px;">
       ${readOnly ? "" : `<button class="btn primary" data-action="saveReferenceGeneralNow">Зберегти</button>`}
       <button class="btn ghost" data-action="hideSheet">${readOnly ? "Закрити" : "Скасувати"}</button>
@@ -5093,10 +5187,7 @@ function openReferenceDept(deptId){
 
     <div class="hint">Сюди зручно записувати саме довідкову інформацію по відділу: накази, штатні пропозиції, особливості, контакти, примітки по напрямку.</div>
     <div class="sep"></div>
-    <div class="field">
-      <label>${htmlesc(dept.name)}</label>
-      <textarea id="referenceDeptText" class="task-desc-input" placeholder="Наприклад: по НРК — які накази, які штатні пропозиції, особливості по напряму, кому дзвонити, що часто треба перевіряти..." ${readOnly ? "readonly" : ""}>${htmlesc(text)}</textarea>
-    </div>
+    ${buildReferenceEditorFields("referenceDept", text).replaceAll("<textarea ", `<textarea ${readOnly ? "readonly" : ""} `)}
     <div class="actions" style="margin-top:14px;">
       ${readOnly ? "" : `<button class="btn primary" data-action="saveReferenceDeptNow" data-arg1="${dept.id}">Зберегти</button>`}
       <button class="btn ghost" data-action="hideSheet">${readOnly ? "Закрити" : "Скасувати"}</button>
@@ -5108,7 +5199,7 @@ function openReferenceDept(deptId){
 
 function saveReferenceGeneralNow(){
 
-  const text = (document.getElementById("referenceGeneralText")?.value || "").trim();
+  const text = readReferenceEditorFields("referenceGeneral");
 
   STATE.referenceNotes = normalizeReferenceNotes(STATE.referenceNotes);
   STATE.referenceNotes.general = text;
@@ -5125,7 +5216,7 @@ function saveReferenceDeptNow(deptId){
   const dept = getDeptById(deptId);
   if(!dept) return;
 
-  const text = (document.getElementById("referenceDeptText")?.value || "").trim();
+  const text = readReferenceEditorFields("referenceDept");
 
   STATE.referenceNotes = normalizeReferenceNotes(STATE.referenceNotes);
   STATE.referenceNotes.byDept[deptId] = text;
@@ -5145,20 +5236,29 @@ function viewControl(){
   const notes = normalizeReferenceNotes(STATE.referenceNotes);
 
   UI.tab = ROUTES.CONTROL;
-  const filledCount = STATE.departments.filter(d=>String(notes.byDept?.[d.id] || "").trim()).length;
-  const generalFilled = !!String(notes.general || "").trim();
+  const refSearch = String(UI.refSearch || "").trim().toLowerCase();
+  const filledCount = STATE.departments.filter(d=>referenceSectionsFilledCount(notes.byDept?.[d.id]) > 0).length;
+  const generalFilled = referenceSectionsFilledCount(notes.general) > 0;
+  const generalPreview = referenceSectionsToText(notes.general);
+  const generalMatches = !refSearch || `загальне ${generalPreview}`.toLowerCase().includes(refSearch);
 
-  const deptCards = STATE.departments.map(dept=>{
-    const text = notes.byDept?.[dept.id] || "";
-    const filled = !!String(text).trim();
+  const visibleDepts = STATE.departments.filter(dept=>{
+    if(!refSearch) return true;
+    const text = referenceSectionsToText(notes.byDept?.[dept.id]);
+    return `${dept.name} ${text}`.toLowerCase().includes(refSearch);
+  });
+
+  const deptCards = visibleDepts.map(dept=>{
+    const text = notes.byDept?.[dept.id] || {};
+    const filled = referenceSectionsFilledCount(text) > 0;
     return `
       <div class="ref-card">
         <div class="ref-card-top">
           ${deptBadgeHtml(dept)}
-          <span class="badge ${filled ? "b-ok" : "b-warn"}">${filled ? "Заповнено" : "Порожньо"}</span>
+          <span class="badge ${filled ? "b-ok" : "b-warn"}">${filled ? `${referenceSectionsFilledCount(text)}/4` : "Порожньо"}</span>
         </div>
         <div class="ref-card-body">
-          <div class="ref-preview">${htmlesc(referenceNotePreview(text))}</div>
+          <div class="ref-preview">${htmlesc(referenceNotePreview(referenceSectionsToText(text)))}</div>
         </div>
         <div class="actions ref-card-actions">
           <button class="btn ghost btn-mini" data-action="openReferenceDept" data-arg1="${dept.id}">${u.readOnly ? "Відкрити" : "Редагувати"}</button>
@@ -5175,7 +5275,7 @@ function viewControl(){
         <div class="ref-hero-title">Цікаве — короткі нотатки, правила і опорна інформація</div>
         <div class="ref-hero-sub">Тут можна тримати під рукою все, що не хочеться щоразу шукати: накази, штатні пропозиції, особливості по відділах, контакти, внутрішні примітки.</div>
         <div class="ref-hero-metrics">
-          <div class="ref-hero-metric"><div class="k">Загальне</div><div class="v mono">${generalFilled ? "є" : "—"}</div></div>
+          <div class="ref-hero-metric"><div class="k">Загальне</div><div class="v mono">${generalFilled ? `${referenceSectionsFilledCount(notes.general)}/4` : "—"}</div></div>
           <div class="ref-hero-metric"><div class="k">Відділи</div><div class="v mono">${filledCount}/${STATE.departments.length}</div></div>
           <div class="ref-hero-metric"><div class="k">Доступ</div><div class="v mono">${u.readOnly ? "читання" : "редагування"}</div></div>
         </div>
@@ -5184,25 +5284,39 @@ function viewControl(){
 
     <div class="card">
       <div class="card-h">
-        <div class="t">Загальна довідка</div>
-        <span class="badge ${generalFilled ? "b-ok" : "b-warn"}">${generalFilled ? "Заповнено" : "Порожньо"}</span>
+        <div class="t">Пошук по довідці</div>
       </div>
       <div class="card-b">
-        <div class="ref-preview ref-general-preview">${htmlesc(referenceNotePreview(notes.general, "Тут можна тримати загальні речі: ключові накази, контакти, нагадування, робочі правила."))}</div>
+        <div class="field">
+          <label>Пошук по загальному блоку і по відділах</label>
+          <input id="referenceSearch" type="search" placeholder="Наприклад: наказ, НРК, контакт, штат, допуск..." value="${htmlesc(UI.refSearch || "")}" data-change="setReferenceSearchFromInput" />
+        </div>
+      </div>
+    </div>
+
+    ${generalMatches ? `
+    <div class="card">
+      <div class="card-h">
+        <div class="t">Загальна довідка</div>
+        <span class="badge ${generalFilled ? "b-ok" : "b-warn"}">${generalFilled ? `${referenceSectionsFilledCount(notes.general)}/4` : "Порожньо"}</span>
+      </div>
+      <div class="card-b">
+        <div class="ref-preview ref-general-preview">${htmlesc(referenceNotePreview(generalPreview, "Тут можна тримати загальні речі: ключові накази, контакти, нагадування, робочі правила."))}</div>
         <div class="actions" style="margin-top:12px;">
           <button class="btn primary" data-action="openReferenceGeneral">${u.readOnly ? "Відкрити" : "Редагувати загальне"}</button>
         </div>
       </div>
     </div>
+    ` : ``}
 
     <div class="card">
       <div class="card-h">
         <div class="t">По відділах</div>
-        <span class="badge b-blue">${filledCount} / ${STATE.departments.length}</span>
+        <span class="badge b-blue">${visibleDepts.length} / ${STATE.departments.length}</span>
       </div>
       <div class="card-b">
         <div class="ref-grid">
-          ${deptCards}
+          ${deptCards || `<div class="hint">За цим пошуком нічого не знайдено.</div>`}
         </div>
       </div>
     </div>
@@ -16866,6 +16980,8 @@ const CHANGE_ACTIONS = {
   setAnalyticsEvalTypeFilterFromInput,
 
   setAnalyticsEvalPresetFilterFromInput,
+
+  setReferenceSearchFromInput,
 
   setWeeklyPeriodFromSelect,
 
