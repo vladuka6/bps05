@@ -8077,6 +8077,14 @@ function viewReporting(){
 
     const createdLabel = occurrenceTotal ? `${planTasks.length}/${occurrenceTotal}` : `${planTasks.length}`;
 
+    const closedLabel = occurrenceTotal ? `${closedInMonth}/${occurrenceTotal}` : `${closedInMonth}`;
+
+    const deptSummary = deptIds.length
+
+      ? deptIds.map(deptId=>deptBadgeHtml(getDeptById(deptId))).join("")
+
+      : `<span class="pill">Відділи не вибрані</span>`;
+
     const schedulePills = scheduleDates.length
 
       ? scheduleDates.map(d=>`<span class="pill mono">${fmtDate(d)}</span>`).join("")
@@ -8099,11 +8107,9 @@ function viewReporting(){
 
               <span class="pill"><span class="reporting-pill-ico">🗓</span><span class="reporting-pill-label">Подій</span><span class="mono">${scheduleDates.length}</span></span>
 
-              <span class="pill"><span class="reporting-pill-ico">🏢</span><span class="reporting-pill-label">Відділів</span><span class="mono">${deptIds.length}</span></span>
-
               <span class="pill"><span class="reporting-pill-ico">🛠</span><span class="reporting-pill-label">Створено</span><span class="mono">${createdLabel}</span></span>
 
-              <span class="pill"><span class="reporting-pill-ico">✅</span><span class="reporting-pill-label">Закрито</span><span class="mono">${closedInMonth}</span></span>
+              <span class="pill"><span class="reporting-pill-ico">✅</span><span class="reporting-pill-label">Закрито</span><span class="mono">${closedLabel}</span></span>
 
               ${nextScheduled ? `<span class="pill"><span class="reporting-pill-ico">📍</span><span class="reporting-pill-label">Найближча</span><span class="mono">${fmtDate(nextScheduled)}</span></span>` : ``}
 
@@ -8119,13 +8125,31 @@ function viewReporting(){
 
         <div class="reporting-plan-details">
 
+          <div class="reporting-plan-inline">
+
+            <div class="reporting-plan-inline-row">
+
+              <span class="reporting-inline-label">Відділи</span>
+
+              <div class="reporting-inline-values">${deptSummary}</div>
+
+            </div>
+
+            <div class="reporting-plan-inline-row">
+
+              <span class="reporting-inline-label">Графік</span>
+
+              <div class="reporting-inline-values">${schedulePills}</div>
+
+            </div>
+
+          </div>
+
           <div class="report-line reporting-plan-schedule">
 
             <span class="pill">Дні місяця: <span class="mono">${htmlesc(dayLabelText)}</span></span>
 
             <span class="pill">Дні тижня: <span class="mono">${htmlesc(weekLabelText)}</span></span>
-
-            ${schedulePills}
 
           </div>
 
