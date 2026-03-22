@@ -990,79 +990,160 @@ function getReportPlanOccurrences(monthStr){
 
 }
 
+function reportPlanOccurrenceState(monthStr, scheduledDate, deptIds, taskMap){
+
+  const ids = Array.isArray(deptIds) ? deptIds.filter(Boolean) : [];
+
+  if(!ids.length){
+
+    return {kind:"empty", label:"Відділи не вибрані", closedCount:0, createdCount:0, total:0};
+
+  }
+
+  const tasks = ids.map(deptId=>taskMap.get(`${deptId}__${scheduledDate}`) || null);
+  const total = tasks.length;
+  const createdCount = tasks.filter(Boolean).length;
+  const closedCount = tasks.filter(t=>t?.status === "закрито").length;
+
+  if(closedCount === total){
+
+    return {kind:"done", label:"Закрито", closedCount, createdCount, total};
+
+  }
+
+  if(closedCount > 0){
+
+    return {kind:"partial", label:`Частково виконано ${closedCount}/${total}`, closedCount, createdCount, total};
+
+  }
+
+  if(createdCount > 0){
+
+    const hasBlocker = tasks.some(t=>t && (t.status === "блокер" || t.status === "очікування"));
+    const hasPending = tasks.some(t=>t?.status === "очікує_підтвердження");
+
+    if(hasBlocker){
+
+      return {kind:"blocked", label:"Є блокери", closedCount, createdCount, total};
+
+    }
+
+    if(hasPending){
+
+      return {kind:"pending", label:"Очікує підтвердження", closedCount, createdCount, total};
+
+    }
+
+    return {kind:"progress", label:"В роботі", closedCount, createdCount, total};
+
+  }
+
+  const missingLabel = reportingMissingLabel(monthStr, scheduledDate);
+
+  return {
+    kind: missingLabel === "Не створено" ? "missing" : "planned",
+    label: missingLabel,
+    closedCount,
+    createdCount,
+    total
+  };
+
+}
+
+function reportPlanOccurrenceBadgeHtml(state){
+
+  if(!state) return `<span class="badge">—</span>`;
+
+  if(state.kind === "done") return `<span class="badge b-ok">✅ ${htmlesc(state.label)}</span>`;
+  if(state.kind === "partial") return `<span class="badge b-warn">◐ ${htmlesc(state.label)}</span>`;
+  if(state.kind === "blocked") return `<span class="badge b-warn">⛔ ${htmlesc(state.label)}</span>`;
+  if(state.kind === "pending") return `<span class="badge b-violet">🕒 ${htmlesc(state.label)}</span>`;
+  if(state.kind === "progress") return `<span class="badge b-blue">🔄 ${htmlesc(state.label)}</span>`;
+  if(state.kind === "missing") return `<span class="badge b-warn">⚠️ ${htmlesc(state.label)}</span>`;
+  if(state.kind === "planned") return `<span class="badge">🗓 ${htmlesc(state.label)}</span>`;
+
+  return `<span class="badge">${htmlesc(state.label || "—")}</span>`;
+
+}
+
 function runReportPlans(){
 
   if(!STATE.reportPlans) STATE.reportPlans = [];
 
   const today = kyivDateStr();
-
-  const monthStr = today.slice(0,7);
+  const monthCandidates = Array.from(new Set([today.slice(0,7), addDays(today, 1).slice(0,7)]));
 
 
 
   STATE.reportPlans.forEach(plan=>{
 
-    const scheduleDates = reportPlanScheduleDates(plan, monthStr);
+    monthCandidates.forEach(monthStr=>{
 
-    if(!scheduleDates.length) return;
+      const scheduleDates = reportPlanScheduleDates(plan, monthStr);
 
-    const deptIds = Array.isArray(plan.deptIds) ? plan.deptIds : [];
+      if(!scheduleDates.length) return;
 
-    scheduleDates.forEach(scheduledDate=>{
+      const deptIds = Array.isArray(plan.deptIds) ? plan.deptIds : [];
 
-      if(today < scheduledDate) return;
+      scheduleDates.forEach(scheduledDate=>{
 
-      deptIds.forEach(deptId=>{
+        const triggerDate = addDays(scheduledDate, -1);
 
-        if(!deptId) return;
+        if(today < triggerDate) return;
 
-        const exists = STATE.tasks.some(t=>reportPlanTaskMatches(t, plan.id, monthStr, deptId, scheduledDate));
+        deptIds.forEach(deptId=>{
 
-        if(exists) return;
+          if(!deptId) return;
 
-        const headId = effectiveDeptHeadUserId(deptId);
+          const exists = STATE.tasks.some(t=>reportPlanTaskMatches(t, plan.id, monthStr, deptId, scheduledDate));
 
-        const respId = headId || getDeptResponsibleOptions(deptId)[0]?.id || "u_boss";
+          if(exists) return;
 
-        createTask({
+          const headId = effectiveDeptHeadUserId(deptId);
 
-          id: genTaskCode("I"),
+          const respId = headId || getDeptResponsibleOptions(deptId)[0]?.id || "u_boss";
 
-          type: "internal",
+          createTask({
 
-          title: plan.title,
+            id: genTaskCode("I"),
 
-          description: plan.description || "",
+            type: "internal",
 
-          departmentId: deptId,
+            title: plan.title,
 
-          responsibleUserId: respId,
+            description: plan.description || "",
 
-          complexity: plan.complexity || "середня",
+            departmentId: deptId,
 
-          status: "в_процесі",
+            responsibleUserId: respId,
 
-          startDate: scheduledDate,
+            complexity: plan.complexity || "середня",
 
-          dueDate: scheduledDate,
+            status: "в_процесі",
 
-          nextControlDate: null,
+            startDate: triggerDate,
 
-          controlAlways: false,
+            dueDate: scheduledDate,
 
-          createdBy: plan.createdBy || "u_boss",
+            nextControlDate: null,
 
-          createdAt: nowIsoKyiv(),
+            controlAlways: false,
 
-          updatedAt: nowIsoKyiv(),
+            createdBy: plan.createdBy || "u_boss",
 
-          reportPlanId: plan.id,
+            createdAt: nowIsoKyiv(),
 
-          reportMonth: monthStr,
+            updatedAt: nowIsoKyiv(),
 
-          reportPlanDate: scheduledDate,
+            reportPlanId: plan.id,
 
-        }, plan.createdBy || "u_boss");
+            reportMonth: monthStr,
+
+            reportPlanDate: scheduledDate,
+
+          }, plan.createdBy || "u_boss");
+
+        });
 
       });
 
@@ -3531,14 +3612,8 @@ function openTasksExportDialog(){
 function reportingMissingLabel(monthStr, scheduledDate){
 
   const today = kyivDateStr();
-
-  const currentMonth = today.slice(0,7);
-
-  const pctSafe = (value, total)=> total ? Math.round((Number(value || 0) / total) * 100) : 0;
-
-  const isPastMonth = monthStr < currentMonth;
-
-  const shouldExist = isPastMonth || ((monthStr === currentMonth) && (today >= scheduledDate));
+  const triggerDate = addDays(scheduledDate, -1);
+  const shouldExist = today >= triggerDate;
 
   return shouldExist ? "Не створено" : "Заплановано";
 
@@ -7968,11 +8043,17 @@ function viewReporting(){
 
     const actions = u.readOnly ? "" : `
 
-      <div style="display:flex; gap:6px; flex-wrap:wrap;">
+      <div class="reporting-plan-actions">
 
-        <button class="btn ghost" data-action="openReportPlanEdit" data-arg1="${plan.id}">Редагувати</button>
+        <button class="btn ghost reporting-icon-btn" data-action="openReportPlanEdit" data-arg1="${plan.id}" title="Редагувати">
+          <span class="reporting-btn-ico">✏️</span>
+          <span class="reporting-btn-text">Редагувати</span>
+        </button>
 
-        <button class="btn ghost" data-action="confirmDeleteReportPlan" data-arg1="${plan.id}">Видалити</button>
+        <button class="btn ghost reporting-icon-btn" data-action="confirmDeleteReportPlan" data-arg1="${plan.id}" title="Видалити">
+          <span class="reporting-btn-ico">🗑️</span>
+          <span class="reporting-btn-text">Видалити</span>
+        </button>
 
       </div>
 
@@ -8016,15 +8097,15 @@ function viewReporting(){
 
             <div class="sub reporting-plan-meta">
 
-              <span class="pill">Подій: <span class="mono">${scheduleDates.length}</span></span>
+              <span class="pill"><span class="reporting-pill-ico">🗓</span><span class="reporting-pill-label">Подій</span><span class="mono">${scheduleDates.length}</span></span>
 
-              <span class="pill">Відділів: <span class="mono">${deptIds.length}</span></span>
+              <span class="pill"><span class="reporting-pill-ico">🏢</span><span class="reporting-pill-label">Відділів</span><span class="mono">${deptIds.length}</span></span>
 
-              <span class="pill">Створено: <span class="mono">${createdLabel}</span></span>
+              <span class="pill"><span class="reporting-pill-ico">🛠</span><span class="reporting-pill-label">Створено</span><span class="mono">${createdLabel}</span></span>
 
-              <span class="pill">Закрито: <span class="mono">${closedInMonth}</span></span>
+              <span class="pill"><span class="reporting-pill-ico">✅</span><span class="reporting-pill-label">Закрито</span><span class="mono">${closedInMonth}</span></span>
 
-              ${nextScheduled ? `<span class="pill">Найближча: <span class="mono">${fmtDate(nextScheduled)}</span></span>` : ``}
+              ${nextScheduled ? `<span class="pill"><span class="reporting-pill-ico">📍</span><span class="reporting-pill-label">Найближча</span><span class="mono">${fmtDate(nextScheduled)}</span></span>` : ``}
 
             </div>
 
@@ -8666,9 +8747,9 @@ function viewPlan(){
 
               <div class="cal-badges">
 
-                <span class="pill">Дедл. <span class="mono">${stats.total}</span></span>
+                <span class="pill cal-pill cal-pill-total"><span class="cal-pill-label">Дедл.</span><span class="mono">${stats.total}</span></span>
 
-                ${stats.overdue ? `<span class="badge b-warn">🟠 ${stats.overdue}</span>` : ``}
+                ${stats.overdue ? `<span class="badge b-warn cal-badge"><span class="cal-badge-ico">🟠</span><span class="mono">${stats.overdue}</span></span>` : ``}
 
               </div>
 
@@ -8680,11 +8761,11 @@ function viewPlan(){
 
             <div class="cal-badges">
 
-              <span class="pill">План <span class="mono">${stats.total}</span></span>
+              <span class="pill cal-pill cal-pill-total"><span class="cal-pill-label">План</span><span class="mono">${stats.total}</span></span>
 
-              ${stats.done ? `<span class="badge b-ok">✅ ${stats.done}</span>` : ``}
+              ${stats.done ? `<span class="badge b-ok cal-badge"><span class="cal-badge-ico">✅</span><span class="mono">${stats.done}</span></span>` : ``}
 
-              ${stats.missing ? `<span class="badge b-danger">⚠️ ${stats.missing}</span>` : ``}
+              ${stats.missing ? `<span class="badge b-danger cal-badge"><span class="cal-badge-ico">⚠️</span><span class="mono">${stats.missing}</span></span>` : ``}
 
             </div>
 
@@ -8742,9 +8823,15 @@ function viewPlan(){
 
             <div class="chips">
 
-              <div class="chip ${mode==="reporting"?"active":""}" data-action="setPlanMode" data-arg1="reporting">Звітність</div>
+              <div class="chip plan-mode-chip ${mode==="reporting"?"active":""}" data-action="setPlanMode" data-arg1="reporting">
+                <span class="plan-mode-ico">📑</span>
+                <span class="plan-mode-text">Звітність</span>
+              </div>
 
-              <div class="chip ${mode==="tasks"?"active":""}" data-action="setPlanMode" data-arg1="tasks">Усі задачі</div>
+              <div class="chip plan-mode-chip ${mode==="tasks"?"active":""}" data-action="setPlanMode" data-arg1="tasks">
+                <span class="plan-mode-ico">📋</span>
+                <span class="plan-mode-text">Усі задачі</span>
+              </div>
 
             </div>
 

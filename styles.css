@@ -30,7 +30,7 @@
       max-width: var(--max);
       width: 100%;
       margin: 0 auto;
-      padding-bottom: calc(84px + env(safe-area-inset-bottom));
+      padding-bottom: calc(64px + env(safe-area-inset-bottom));
     }
     .topbar{
       position: sticky;
@@ -1066,7 +1066,7 @@
 
     .fab{
       position: fixed;right: 16px;
-      bottom: calc(86px + env(safe-area-inset-bottom));
+      bottom: calc(66px + env(safe-area-inset-bottom));
       z-index: 30;width: 56px;height: 56px;border-radius: 18px;
       border: 1px solid rgba(110,168,254,.55);
       background: linear-gradient(160deg, rgba(110,168,254,.25), rgba(183,131,255,.18));
@@ -1083,11 +1083,11 @@
       border-top: 1px solid rgba(150,170,205,.50);
       padding-bottom: env(safe-area-inset-bottom);
     }
-    .nav-inner{max-width: var(--max);margin: 0 auto;display:grid;gap:8px;padding: 10px 12px;}
-    .tabs{display:grid;grid-template-columns: repeat(4, 1fr);gap: 10px;}
+    .nav-inner{max-width: var(--max);margin: 0 auto;display:grid;gap:4px;padding: 6px 8px;}
+    .tabs{display:grid;grid-template-columns: repeat(4, 1fr);gap: 4px;}
     .tabs.three{ grid-template-columns: repeat(3, 1fr); }
     .tab{
-      height: 54px;border-radius: 16px;
+      height: 42px;border-radius: 12px;
       border: 1px solid rgba(150,170,205,.55);
       background: rgba(255,255,255,.72);
       display:flex;flex-direction: column;align-items:center;justify-content:center;gap:4px;
@@ -1095,7 +1095,7 @@
       position: relative;
     }
     .tab.active{background: rgba(110,168,254,.16);border-color: rgba(110,168,254,.5);color: #2d5fbd;}
-    .tab .ico{font-size: 19px; line-height: 1;}
+    .tab .ico{font-size: 16px; line-height: 1;}
     .tab .label{display:none;}
 
     .modal{
@@ -1290,6 +1290,33 @@
     }
     .reporting-plan-meta{
       margin-top:8px;
+    }
+    .reporting-plan-actions{
+      display:flex;
+      gap:6px;
+      flex-wrap:wrap;
+    }
+    .reporting-icon-btn{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+    }
+    .reporting-btn-ico,
+    .reporting-pill-ico{
+      font-size:13px;
+      line-height:1;
+    }
+    .reporting-plan-meta .pill{
+      gap:6px;
+    }
+    .plan-mode-chip{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+    }
+    .plan-mode-ico{
+      font-size:14px;
+      line-height:1;
     }
     .reporting-plan-details{
       margin-top:10px;
@@ -1659,6 +1686,28 @@
     }
 
     @media (max-width: 640px){
+      .app{
+        padding-bottom: calc(58px + env(safe-area-inset-bottom));
+      }
+      .fab{
+        width:52px;
+        height:52px;
+        border-radius:16px;
+        bottom: calc(60px + env(safe-area-inset-bottom));
+      }
+      .nav-inner{
+        padding:5px 6px;
+      }
+      .tabs{
+        gap:4px;
+      }
+      .tab{
+        height:40px;
+        border-radius:11px;
+      }
+      .tab .ico{
+        font-size:15px;
+      }
       .task-toolbar-sticky{
         position: sticky;
         top: 0;
@@ -1668,7 +1717,11 @@
         background: linear-gradient(180deg, rgba(250,252,255,.98), rgba(250,252,255,.88));
         border-bottom: 1px solid rgba(150,170,205,.35);
       }
+      .logo{display:none;}
+      .titleblock .h,
       .titleblock .s{display:none;}
+      .brand{gap:0;min-width:auto;}
+      .titleblock{gap:0;}
       .topbar-meta{gap:6px;}
       .header-pill{font-size:10px;padding:0 8px;min-height:24px;}
       .header-role-pill,
@@ -1701,7 +1754,33 @@
         gap:10px;
       }
       .reporting-month-field{
-        padding:10px;
+        padding:8px 10px;
+        max-width:190px;
+      }
+      .reporting-month-field input{
+        padding:10px 10px;
+        font-size:13px;
+      }
+      .reporting-plan-actions{
+        width:100%;
+        justify-content:flex-end;
+      }
+      .reporting-icon-btn{
+        min-width:38px;
+        padding:0 10px;
+      }
+      .reporting-btn-text,
+      .reporting-pill-label{
+        display:none;
+      }
+      .reporting-plan-meta{
+        flex-wrap:nowrap;
+        overflow:auto;
+        gap:6px;
+        padding-bottom:2px;
+      }
+      .reporting-plan-meta .pill{
+        flex:0 0 auto;
       }
     }
     @media (max-width: 640px){
@@ -1848,6 +1927,49 @@
         border-color: rgba(255,204,102,.55);
       }
       .dept-report-btn .dr-full{display:none;}
+      .row2{
+        grid-template-columns:minmax(0,1fr);
+      }
+      .row2 .field{
+        min-width:0;
+      }
+      #planMonthInput{
+        max-width:180px;
+        padding:10px 10px;
+        font-size:13px;
+      }
+      .plan-mode-chip{
+        min-width:46px;
+        justify-content:center;
+        padding:0 12px;
+      }
+      .plan-mode-text{display:none;}
+      .cal-cell{
+        min-height:52px;
+        padding:4px 4px;
+        border-radius:8px;
+      }
+      .cal-day{
+        font-size:11px;
+      }
+      .cal-badges{
+        flex-direction:row;
+        flex-wrap:wrap;
+        gap:3px;
+        margin-top:4px;
+      }
+      .cal-pill-label,
+      .cal-badge-ico{
+        display:none;
+      }
+      .cal-badges .pill,
+      .cal-badges .badge{
+        min-height:18px;
+        padding:1px 5px;
+        font-size:9px;
+        line-height:1;
+        border-radius:999px;
+      }
     }
     @media (max-width: 640px){
       body.compact-tasks .task-line .name{
