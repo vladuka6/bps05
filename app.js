@@ -18,6 +18,8 @@ const SYNC_DEBOUNCE_MS = 2500;
 
 const DEVICE_ID_KEY = "planner_device_id";
 
+const EVAL_TOAST_DATE_KEY = "planner_eval_toast_date";
+
 let _syncTimer = null;
 
 let _syncInFlight = false;
@@ -346,6 +348,8 @@ function migrateState(st){
 
     taskUpdates: Array.isArray(st.taskUpdates) ? st.taskUpdates : [],
 
+    taskEvaluations: Array.isArray(st.taskEvaluations) ? st.taskEvaluations : [],
+
     dailyReports: Array.isArray(st.dailyReports) ? st.dailyReports : [],
 
     deptSummaries: Array.isArray(st.deptSummaries) ? st.deptSummaries : [],
@@ -405,6 +409,11 @@ function migrateState(st){
   if(next.version < 5){
 
     next.version = 5;
+
+  }
+  if(next.version < 6){
+
+    next.version = 6;
 
   }
 
@@ -1211,7 +1220,7 @@ function seed(){
 
   const st = {
 
-    version: 5,
+    version: 6,
 
     session: { userId: null },
 
@@ -1260,6 +1269,8 @@ function seed(){
     deletedTaskIds: [],
 
     taskUpdates: [],
+
+    taskEvaluations: [],
 
     dailyReports: [],
 
@@ -2058,6 +2069,106 @@ function getCloseDateForTask(task){
   if(task.status==="закрито") return toDateOnly(task.updatedAt);
 
   return null;
+
+}
+
+const TASK_EVAL_CRITERIA = [
+
+  {key:"labor", label:"Трудомісткість"},
+
+  {key:"importance", label:"Важливість"},
+
+  {key:"urgency", label:"Терміновість"},
+
+  {key:"result", label:"Результат"},
+
+];
+
+function getTaskEvaluation(taskId){
+
+  if(!taskId || !Array.isArray(STATE.taskEvaluations)) return null;
+
+  return STATE.taskEvaluations.find(x=>x && x.taskId===taskId) || null;
+
+}
+
+function evalTotalScore(evaluation){
+
+  if(!evaluation) return 0;
+
+  return TASK_EVAL_CRITERIA.reduce((sum, item)=>sum + Number(evaluation[item.key] || 0), 0);
+
+}
+
+function isTaskAwaitingEvaluation(task){
+
+  return !!task && task.status==="закрито" && !isAnnouncement(task) && !getTaskEvaluation(task.id);
+
+}
+
+function evaluationStatusLabel(task){
+
+  if(!task || task.status!=="закрито") return "Не закрито";
+
+  return getTaskEvaluation(task.id) ? "Оцінено" : "Не оцінено";
+
+}
+
+function analyticsEvalPeriodRange(periodKey){
+
+  const today = kyivDateStr();
+
+  if(periodKey === "week"){
+
+    return {from: addDays(today, -6), to: today, label:"Останні 7 днів"};
+
+  }
+
+  if(periodKey === "quarter"){
+
+    return {from: addDays(today, -89), to: today, label:"Останні 90 днів"};
+
+  }
+
+  if(periodKey === "all"){
+
+    return {from:null, to:null, label:"За весь час"};
+
+  }
+
+  const monthStart = `${today.slice(0,7)}-01`;
+
+  return {from: monthStart, to: today, label:"Поточний місяць"};
+
+}
+
+function buildEvalSlices(rows, colors){
+
+  const safeRows = (rows || []).filter(x=>Number(x?.value || 0) > 0);
+
+  if(!safeRows.length){
+
+    return {gradient:"conic-gradient(#dfe6f6 0 360deg)", legendRows:[]};
+
+  }
+
+  const total = safeRows.reduce((sum, item)=>sum + Number(item.value || 0), 0) || 1;
+  let offset = 0;
+  const gradientParts = [];
+  const legendRows = [];
+
+  safeRows.forEach((item, index)=>{
+
+    const value = Number(item.value || 0);
+    const sweep = (value / total) * 360;
+    const color = (colors && colors[index % colors.length]) || "#5f8ef5";
+    gradientParts.push(`${color} ${offset}deg ${offset + sweep}deg`);
+    legendRows.push({...item, color, percent: Math.round((value / total) * 100)});
+    offset += sweep;
+
+  });
+
+  return {gradient:`conic-gradient(${gradientParts.join(", ")})`, legendRows};
 
 }
 
@@ -4105,6 +4216,26 @@ function showToast(message, type="info"){
 
 }
 
+function remindPendingEvaluations(){
+
+  const u = currentSessionUser();
+
+  if(!u || u.role!=="boss") return;
+
+  const pendingCount = STATE.tasks.filter(t=>isTaskAwaitingEvaluation(t)).length;
+
+  if(!pendingCount) return;
+
+  const today = kyivDateStr();
+  const lastShown = safeGet(EVAL_TOAST_DATE_KEY);
+
+  if(lastShown === today) return;
+
+  safeSet(EVAL_TOAST_DATE_KEY, today);
+  showToast(`Є ${pendingCount} закритих задач без оцінки. Перевір вкладку “Аналітика”.`, "info");
+
+}
+
 
 
 /* ===========================
@@ -4212,6 +4343,16 @@ let UI = {
   deptOpen: {},
 
   analyticsShowDetails: false,
+
+  analyticsEvalPeriod: "month",
+
+  analyticsEvalDeptFilter: "all",
+
+  analyticsEvalUserFilter: "all",
+
+  analyticsEvalStatusFilter: "pending",
+
+  analyticsEvalTypeFilter: "all",
 
   reportFilter: "сьогодні",
 
@@ -10091,6 +10232,12 @@ function deleteTaskNow(taskId){
 
   STATE.taskUpdates = STATE.taskUpdates.filter(x=>!duplicateIds.has(x.taskId));
 
+  if(Array.isArray(STATE.taskEvaluations)){
+
+    STATE.taskEvaluations = STATE.taskEvaluations.filter(x=>!duplicateIds.has(x.taskId));
+
+  }
+
   if(Array.isArray(DB_TASKS_CACHE)){
 
     DB_TASKS_CACHE = DB_TASKS_CACHE.filter(x=>!duplicateIds.has(x.id));
@@ -15619,6 +15766,171 @@ function openAbout(){
 
 /* ===========================
 
+   TASK EVALUATION
+
+=========================== */
+
+function setAnalyticsEvalPeriod(period){
+
+  UI.analyticsEvalPeriod = ["week","month","quarter","all"].includes(period) ? period : "month";
+
+  render();
+
+}
+
+function setAnalyticsEvalDeptFilterFromInput(){
+
+  const el = document.getElementById("analyticsDeptFilter");
+
+  UI.analyticsEvalDeptFilter = el?.value || "all";
+
+  render();
+
+}
+
+function setAnalyticsEvalUserFilterFromInput(){
+
+  const el = document.getElementById("analyticsUserFilter");
+
+  UI.analyticsEvalUserFilter = el?.value || "all";
+
+  render();
+
+}
+
+function setAnalyticsEvalStatusFilterFromInput(){
+
+  const el = document.getElementById("analyticsStatusFilter");
+
+  UI.analyticsEvalStatusFilter = el?.value || "pending";
+
+  render();
+
+}
+
+function setAnalyticsEvalTypeFilterFromInput(){
+
+  const el = document.getElementById("analyticsTypeFilter");
+
+  UI.analyticsEvalTypeFilter = el?.value || "all";
+
+  render();
+
+}
+
+function openTaskEvaluation(taskId){
+
+  const u = currentSessionUser();
+  const task = STATE.tasks.find(t=>t.id===taskId);
+
+  if(!u || u.role!=="boss" || !task) return;
+
+  const evaluation = getTaskEvaluation(taskId) || {};
+  const dept = task.departmentId ? getDeptById(task.departmentId)?.name || "Відділ" : "Особисто";
+  const closeDate = getCloseDateForTask(task);
+
+  const fields = TASK_EVAL_CRITERIA.map(item=>`
+
+    <div class="field">
+      <label>${item.label}</label>
+      <select id="eval_${item.key}">
+        ${[1,2,3,4,5].map(score=>`<option value="${score}" ${Number(evaluation[item.key] || 0)===score ? "selected" : ""}>${score}</option>`).join("")}
+      </select>
+    </div>
+
+  `).join("");
+
+  showSheet(`Оцінка задачі`, `
+
+    <div class="hint">
+      <b>${htmlesc(task.title || "Без назви")}</b><br/>
+      ${htmlesc(dept)}${closeDate ? ` • закрито ${fmtDate(closeDate)}` : ""}
+    </div>
+    <div class="sep"></div>
+    <div class="eval-form-grid">
+      ${fields}
+    </div>
+    <div class="field" style="margin-top:10px;">
+      <label>Коментар (опційно)</label>
+      <textarea id="eval_note" placeholder="Коротка примітка до оцінки">${htmlesc(evaluation.note || "")}</textarea>
+    </div>
+    <div class="actions" style="margin-top:14px;">
+      <button class="btn primary" data-action="saveTaskEvaluationNow" data-arg1="${task.id}">Зберегти оцінку</button>
+      <button class="btn ghost" data-action="hideSheet">Скасувати</button>
+    </div>
+
+  `);
+
+}
+
+function saveTaskEvaluationNow(taskId){
+
+  const u = currentSessionUser();
+  const task = STATE.tasks.find(t=>t.id===taskId);
+
+  if(!u || u.role!=="boss" || !task || task.status!=="закрито"){
+
+    showToast("Оцінювати можна лише закриті задачі.", "warn");
+
+    return;
+
+  }
+
+  const payload = {
+    id: `eval_${taskId}`,
+    taskId,
+    evaluatedAt: nowIsoKyiv(),
+    evaluatedBy: u.id,
+    note: (document.getElementById("eval_note")?.value || "").trim(),
+  };
+
+  let hasError = false;
+
+  TASK_EVAL_CRITERIA.forEach(item=>{
+
+    const value = Number(document.getElementById(`eval_${item.key}`)?.value || 0);
+
+    if(value < 1 || value > 5) hasError = true;
+
+    payload[item.key] = value;
+
+  });
+
+  if(hasError){
+
+    showToast("Постав оцінки від 1 до 5 по кожному критерію.", "warn");
+
+    return;
+
+  }
+
+  payload.total = evalTotalScore(payload);
+
+  if(!Array.isArray(STATE.taskEvaluations)) STATE.taskEvaluations = [];
+
+  const existingIdx = STATE.taskEvaluations.findIndex(x=>x && x.taskId===taskId);
+
+  if(existingIdx >= 0){
+
+    STATE.taskEvaluations[existingIdx] = {...STATE.taskEvaluations[existingIdx], ...payload};
+
+  } else {
+
+    STATE.taskEvaluations.push(payload);
+
+  }
+
+  saveState(STATE);
+  hideSheet();
+  showToast("Оцінку збережено", "ok");
+  render();
+
+}
+
+
+
+/* ===========================
+
    ANALYTICS VIEW (demo)
 
 =========================== */
@@ -15627,862 +15939,367 @@ function viewAnalytics(){
 
   const u = currentSessionUser();
 
-  if(!u || u.role!=="boss"){ UI.tab = ROUTES.CONTROL; return viewControl(); }
+  if(!u || u.role!=="boss"){
+    UI.tab = ROUTES.CONTROL;
+    return viewControl();
+  }
 
   UI.tab = ROUTES.ANALYTICS;
 
-  const tasksAll = u.readOnly ? getVisibleTasksForUser(u) : STATE.tasks.slice();
+  const tasksAll = STATE.tasks.filter(t=>!isAnnouncement(t));
+  const period = analyticsEvalPeriodRange(UI.analyticsEvalPeriod);
 
-
-
-  const today = kyivDateStr();
-
-  const days = Array.from({length:7}, (_,i)=>addDays(today, -(6-i)));
-
-  const closeDateForTask = (task)=>{
-
-    const updates = STATE.taskUpdates
-
-      .filter(u=>u.taskId===task.id && u.status==="закрито")
-
-      .sort((a,b)=>b.at.localeCompare(a.at));
-
-    if(updates[0]) return toDateOnly(updates[0].at);
-
-    if(task.status==="закрито") return toDateOnly(task.updatedAt);
-
-    return null;
-
-  };
-
-  const weekClosed = days.map(d=>{
-
-    const count = tasksAll.filter(t=>closeDateForTask(t)===d).length;
-
-    return {date:d, count};
-
+  const closedTasks = tasksAll.filter(t=>{
+    if(t.status!=="закрито") return false;
+    const closeDate = getCloseDateForTask(t);
+    if(!closeDate) return false;
+    if(period.from && closeDate < period.from) return false;
+    if(period.to && closeDate > period.to) return false;
+    return true;
   });
 
-  const maxClosed = Math.max(1, ...weekClosed.map(x=>x.count));
+  const deptOptions = STATE.departments.filter(d=>closedTasks.some(t=>t.departmentId===d.id));
+  const userIds = Array.from(new Set(closedTasks.map(t=>t.responsibleUserId).filter(Boolean)));
+  const userOptions = userIds.map(getUserById).filter(Boolean);
 
+  const filteredClosed = closedTasks.filter(t=>{
+    if(UI.analyticsEvalDeptFilter !== "all" && (t.departmentId || "") !== UI.analyticsEvalDeptFilter) return false;
+    if(UI.analyticsEvalUserFilter !== "all" && (t.responsibleUserId || "") !== UI.analyticsEvalUserFilter) return false;
+    if(UI.analyticsEvalTypeFilter !== "all" && (t.type || "") !== UI.analyticsEvalTypeFilter) return false;
 
+    const evaluation = getTaskEvaluation(t.id);
 
-  const closedDurations = tasksAll
+    if(UI.analyticsEvalStatusFilter === "pending" && evaluation) return false;
+    if(UI.analyticsEvalStatusFilter === "evaluated" && !evaluation) return false;
 
-    .map(t=>{
+    return true;
+  }).map(task=>( {
+    task,
+    evaluation: getTaskEvaluation(task.id),
+    closeDate: getCloseDateForTask(task),
+  }));
 
-      const closeDate = closeDateForTask(t);
+  const evaluatedRows = filteredClosed.filter(x=>x.evaluation);
+  const pendingRows = filteredClosed.filter(x=>!x.evaluation);
+  const totalScore = evaluatedRows.reduce((sum, row)=>sum + evalTotalScore(row.evaluation), 0);
+  const avgScore = evaluatedRows.length ? (totalScore / evaluatedRows.length).toFixed(1) : "—";
 
-      const startDate = toDateOnly(t.createdAt) || t.startDate;
-
-      if(!closeDate || !startDate) return null;
-
-      const daysToClose = dateDiffDays(startDate, closeDate);
-
-      if(daysToClose < 0) return null;
-
-      return {task:t, daysToClose};
-
-    })
-
-    .filter(Boolean);
-
-  const avgClose = closedDurations.length
-
-    ? (closedDurations.reduce((s,x)=>s+x.daysToClose, 0) / closedDurations.length).toFixed(1)
-
-    : "—";
-
-
-
-  const topProblems = tasksAll
-
-    .filter(t=>t.status!=="закрито" && t.status!=="скасовано")
-
-    .map(t=>{
-
-      const blockerUpdates = STATE.taskUpdates.filter(u=>
-
-        u.taskId===t.id
-
-        && (u.status==="блокер" || u.status==="очікування")
-
-        && isBlockerReasonNote(u.note)
-
-      );
-
-      return {task:t, count:blockerUpdates.length, last:blockerUpdates.sort((a,b)=>b.at.localeCompare(a.at))[0]};
-
-    })
-
-    .filter(x=>x.count>0)
-
-    .sort((a,b)=>b.count-a.count)
-
-    .slice(0,5);
-
-
-
-  const deptLoad = STATE.departments.map(d=>{
-
-    const deptTasks = tasksAll.filter(t=>t.departmentId===d.id);
-
-    const active = deptTasks.filter(t=>t.status!=="закрито" && t.status!=="скасовано").length;
-
-    const blockers = deptTasks.filter(t=>t.status==="блокер" || t.status==="очікування").length;
-
-    const overdue = deptTasks.filter(t=>isOverdue(t)).length;
-
-    return {dept:d, active, blockers, overdue};
-
+  const criteriaRows = TASK_EVAL_CRITERIA.map(item=>{
+    const avg = evaluatedRows.length
+      ? (evaluatedRows.reduce((sum, row)=>sum + Number(row.evaluation[item.key] || 0), 0) / evaluatedRows.length)
+      : 0;
+    return {...item, avg, value: Math.round(avg * 20)};
   });
 
-  const maxActive = Math.max(1, ...deptLoad.map(x=>x.active));
-
-
-
-  const activeDeptTasks = tasksAll.filter(t=>t.departmentId && t.status!=="закрито" && t.status!=="скасовано");
-
-  const recentClosed = tasksAll.filter(t=>t.departmentId && t.status==="закрито" && closeDateForTask(t) && closeDateForTask(t) >= days[0] && closeDateForTask(t) <= days[days.length-1]);
-
-  const complexityKeys = COMPLEXITY_KEYS;
-
-  const complexityCounts = complexityKeys.map(k=>({
-
-    key:k,
-
-    label: complexityLabel(k),
-
-    count: activeDeptTasks.filter(t=>taskComplexity(t)===k).length
-
-  }));
-
-  const complexityOther = activeDeptTasks.filter(t=>!complexityKeys.includes(taskComplexity(t))).length;
-
-  if(complexityOther>0){
-
-    complexityCounts.push({key:"other", label:"Без складності", count: complexityOther});
-
-  }
-
-  const maxComplexity = Math.max(1, ...complexityCounts.map(x=>x.count));
-
-  const complexityClosed = complexityKeys.map(k=>({
-
-    key:k,
-
-    label: complexityLabel(k),
-
-    count: recentClosed.filter(t=>taskComplexity(t)===k).length
-
-  }));
-
-  const complexityClosedOther = recentClosed.filter(t=>!complexityKeys.includes(taskComplexity(t))).length;
-
-  if(complexityClosedOther>0){
-
-    complexityClosed.push({key:"other", label:"Без складності", count: complexityClosedOther});
-
-  }
-
-  const maxComplexityClosed = Math.max(1, ...complexityClosed.map(x=>x.count));
-
-
-
-  const complexityBreakdown = (list)=>{
-
-    const rows = complexityKeys.map(k=>({
-
-      key:k,
-
-      label: complexityLabel(k),
-
-      count: list.filter(t=>taskComplexity(t)===k).length
-
-    }));
-
-    const other = list.filter(t=>!complexityKeys.includes(taskComplexity(t))).length;
-
-    if(other>0){
-
-      rows.push({key:"other", label:"Без складності", count: other});
-
-    }
-
-    const max = Math.max(1, ...rows.map(x=>x.count));
-
-    return {rows, max, total: list.length};
-
-  };
-
-
-
-  const activeDeadline = activeDeptTasks.filter(t=>!!t.dueDate);
-
-  const activeCtrlDate = activeDeptTasks.filter(t=>!t.dueDate && !!t.nextControlDate && !t.controlAlways);
-
-  const activeCtrlAlways = activeDeptTasks.filter(t=>!t.dueDate && !!t.controlAlways);
-
-  const closedDeadline = recentClosed.filter(t=>!!t.dueDate);
-
-  const closedCtrlDate = recentClosed.filter(t=>!t.dueDate && !!t.nextControlDate && !t.controlAlways);
-
-  const closedCtrlAlways = recentClosed.filter(t=>!t.dueDate && !!t.controlAlways);
-
-
-
-  const cxActiveDeadline = complexityBreakdown(activeDeadline);
-
-  const cxActiveCtrlDate = complexityBreakdown(activeCtrlDate);
-
-  const cxActiveCtrlAlways = complexityBreakdown(activeCtrlAlways);
-
-  const cxClosedDeadline = complexityBreakdown(closedDeadline);
-
-  const cxClosedCtrlDate = complexityBreakdown(closedCtrlDate);
-
-  const cxClosedCtrlAlways = complexityBreakdown(closedCtrlAlways);
-
-
-
-  const closedTotal = weekClosed.reduce((s,x)=>s+x.count,0);
-
-  const topProblemsShort = topProblems.length
-
-    ? topProblems.slice(0,3).map(x=>{
-
-        const dept = x.task.departmentId ? getDeptById(x.task.departmentId)?.name : "Особисто";
-
-        const note = x.last?.note ? normalizeBlockerNote(x.last.note) : "";
-
-        return `• ${htmlesc(x.task.title)} (${htmlesc(dept || "")}) • ${x.count}${note ? ` — ${htmlesc(shorten(note, 50))}` : ""}`;
-
-      }).join("<br/>")
-
-    : "Немає активних блокерів.";
-
-  const deptLoadTop = deptLoad.slice().sort((a,b)=>b.active-a.active).slice(0,3)
-
-    .map(x=>`• ${htmlesc(x.dept.name)} — ${x.active} (⛔ ${x.blockers}, 🟠 ${x.overdue})`).join("<br/>");
-
-  const complexitySummary = complexityCounts.map(x=>`${htmlesc(x.label)}: ${x.count}`).join(" • ");
-
-  const blockersTotal = deptLoad.reduce((s,x)=>s+x.blockers,0);
-
-  const overdueTotal = deptLoad.reduce((s,x)=>s+x.overdue,0);
-
-
-
-  const weekRangeLabel = `${fmtDate(days[0])} — ${fmtDate(days[days.length-1])}`;
-
-  const weekSpark = weekClosed.map(x=>`
-
-    <div class="spark-item">
-
-      <div class="spark-bar" style="height:${Math.max(6, Math.round((x.count/maxClosed)*100))}%"></div>
-
-      <div class="spark-label mono">${fmtDate(x.date).slice(5)}</div>
-
-    </div>
-
-  `).join("");
-
-  const deptLoadTopRows = deptLoad.slice().sort((a,b)=>b.active-a.active).slice(0,3).map(x=>`
-
-    <div class="mini-row">
-
-      <div class="mini-name">${htmlesc(x.dept.name)}</div>
-
-      <div class="mini-val mono">${x.active}</div>
-
-      <div class="mini-sub">⛔ ${x.blockers} • 🟠 ${x.overdue}</div>
-
-    </div>
-
-  `).join("") || `<div class="mini-empty">Немає даних.</div>`;
-
-  const topProblemsRows = topProblems.length
-
-    ? topProblems.slice(0,3).map(x=>{
-
-        const dept = x.task.departmentId ? getDeptById(x.task.departmentId)?.name : "Особисто";
-
-        const note = x.last?.note ? normalizeBlockerNote(x.last.note) : "";
-
-        return `
-
-          <div class="mini-row">
-
-            <div class="mini-name">${htmlesc(x.task.title)}</div>
-
-            <div class="mini-val mono">${x.count}</div>
-
-            <div class="mini-sub">${htmlesc(dept || "")}${note ? ` • ${htmlesc(shorten(note, 44))}` : ""}</div>
-
-          </div>
-
-        `;
-
-      }).join("")
-
-    : `<div class="mini-empty">Немає активних блокерів.</div>`;
-
-  const complexityTags = complexityCounts.length
-
-    ? complexityCounts.map(x=>`<span class="ana-tag">${htmlesc(x.label)} <b>${x.count}</b></span>`).join("")
-
-    : `<span class="ana-tag">Немає активних</span>`;
-
-
-
-  const tiles = `
-
-    <div class="analytics-tiles">
-
-      <div class="analytics-hero">
-
-        <div class="hero-card">
-
-          <div class="hero-eyebrow">Аналітика • 7 днів</div>
-
-          <div class="hero-title">Пульс виконання</div>
-
-          <div class="hero-sub">Період: <span class="mono">${weekRangeLabel}</span></div>
-
-          <div class="hero-metrics">
-
-            <div class="hero-metric">
-
-              <div class="label">Закрито</div>
-
-              <div class="value mono">${closedTotal}</div>
-
-            </div>
-
-            <div class="hero-metric">
-
-              <div class="label">Середній час</div>
-
-              <div class="value mono">${avgClose} дн.</div>
-
-            </div>
-
-            <div class="hero-metric">
-
-              <div class="label">Активні</div>
-
-              <div class="value mono">${activeDeptTasks.length}</div>
-
-            </div>
-
-          </div>
-
-          <div class="hero-spark">${weekSpark}</div>
-
-        </div>
-
-        <div class="hero-stack">
-
-          <div class="signal-card">
-
-            <div class="signal-title">Блокери / прострочені</div>
-
-            <div class="signal-value mono">⛔ ${blockersTotal}</div>
-
-            <div class="signal-sub">🟠 ${overdueTotal} активні</div>
-
-          </div>
-
-          <div class="signal-card">
-
-            <div class="signal-title">Контроль і дедлайни</div>
-
-            <div class="signal-value mono">⏱ ${activeDeadline.length}</div>
-
-            <div class="signal-sub">🗓 ${activeCtrlDate.length} • 🎯 ${activeCtrlAlways.length}</div>
-
-          </div>
-
-        </div>
-
+  const deptScoreRows = STATE.departments.map(dept=>{
+    const rows = evaluatedRows.filter(x=>x.task.departmentId===dept.id);
+    const score = rows.reduce((sum, row)=>sum + evalTotalScore(row.evaluation), 0);
+    const avg = rows.length ? (score / rows.length) : 0;
+    return {dept, count: rows.length, score, avg};
+  }).filter(x=>x.count > 0).sort((a,b)=>b.score-a.score);
+
+  const pendingDeptRows = STATE.departments.map(dept=>{
+    const rows = pendingRows.filter(x=>x.task.departmentId===dept.id);
+    return {dept, count: rows.length};
+  }).filter(x=>x.count > 0).sort((a,b)=>b.count-a.count);
+
+  const userScoreRows = userOptions.map(user=>{
+    const rows = evaluatedRows.filter(x=>(x.task.responsibleUserId || "")===user.id);
+    const score = rows.reduce((sum, row)=>sum + evalTotalScore(row.evaluation), 0);
+    const avg = rows.length ? (score / rows.length) : 0;
+    return {user, count: rows.length, score, avg};
+  }).filter(x=>x.count > 0).sort((a,b)=>b.score-a.score);
+
+  const recentEvaluatedRows = evaluatedRows.slice().sort((a,b)=>(b.evaluation.evaluatedAt || "").localeCompare(a.evaluation.evaluatedAt || "")).slice(0,8);
+
+  const statusDonut = buildEvalSlices([
+    {label:"Оцінено", value:evaluatedRows.length},
+    {label:"Не оцінено", value:pendingRows.length},
+  ], ["#5f8ef5", "#ffcc66"]);
+
+  const deptDonut = buildEvalSlices(
+    deptScoreRows.slice(0,5).map(row=>({label: deptShortLabel(row.dept), value: row.score})),
+    ["#5f8ef5", "#6fbf73", "#ff9f43", "#b783ff", "#ff6b8b"]
+  );
+
+  const maxDeptScore = Math.max(1, ...deptScoreRows.map(x=>x.score), 1);
+  const maxCriteria = Math.max(1, ...criteriaRows.map(x=>x.value), 1);
+  const maxUserScore = Math.max(1, ...userScoreRows.map(x=>x.score), 1);
+  const topDept = deptScoreRows[0] || null;
+  const topPendingDept = pendingDeptRows[0] || null;
+
+  const filterBar = `
+    <div class="eval-toolbar">
+      <div class="eval-period-chips">
+        <button class="chip ${UI.analyticsEvalPeriod==="week" ? "active" : ""}" data-action="setAnalyticsEvalPeriod" data-arg1="week">7 днів</button>
+        <button class="chip ${UI.analyticsEvalPeriod==="month" ? "active" : ""}" data-action="setAnalyticsEvalPeriod" data-arg1="month">Місяць</button>
+        <button class="chip ${UI.analyticsEvalPeriod==="quarter" ? "active" : ""}" data-action="setAnalyticsEvalPeriod" data-arg1="quarter">90 днів</button>
+        <button class="chip ${UI.analyticsEvalPeriod==="all" ? "active" : ""}" data-action="setAnalyticsEvalPeriod" data-arg1="all">Усе</button>
       </div>
-
-
-
-      <div class="analytics-mosaic">
-
-        <div class="metric-card wide">
-
-          <div class="metric-head">
-
-            <div class="metric-title">Топ проблем (коротко)</div>
-
-            <div class="metric-pill">${topProblems.length}</div>
-
-          </div>
-
-          <div class="metric-body">${topProblemsRows}</div>
-
+      <div class="eval-filter-grid">
+        <div class="field">
+          <label>Відділ</label>
+          <select id="analyticsDeptFilter" data-change="setAnalyticsEvalDeptFilterFromInput">
+            <option value="all">Усі відділи</option>
+            ${deptOptions.map(d=>`<option value="${d.id}" ${UI.analyticsEvalDeptFilter===d.id ? "selected" : ""}>${htmlesc(d.name)}</option>`).join("")}
+          </select>
         </div>
-
-
-
-        <div class="metric-card">
-
-          <div class="metric-head">
-
-            <div class="metric-title">Навантаження (топ‑3)</div>
-
-            <div class="metric-pill">${deptLoad.reduce((s,x)=>s+x.active,0)}</div>
-
-          </div>
-
-          <div class="metric-body">${deptLoadTopRows}</div>
-
+        <div class="field">
+          <label>Виконавець</label>
+          <select id="analyticsUserFilter" data-change="setAnalyticsEvalUserFilterFromInput">
+            <option value="all">Усі виконавці</option>
+            ${userOptions.map(user=>`<option value="${user.id}" ${UI.analyticsEvalUserFilter===user.id ? "selected" : ""}>${htmlesc(user.name)}</option>`).join("")}
+          </select>
         </div>
-
-
-
-        <div class="metric-card">
-
-          <div class="metric-head">
-
-            <div class="metric-title">Складність активних</div>
-
-            <div class="metric-pill">${activeDeptTasks.length}</div>
-
-          </div>
-
-          <div class="metric-tags">${complexityTags}</div>
-
-          <div class="metric-foot">${complexitySummary || "Немає активних."}</div>
-
+        <div class="field">
+          <label>Статус оцінки</label>
+          <select id="analyticsStatusFilter" data-change="setAnalyticsEvalStatusFilterFromInput">
+            <option value="pending" ${UI.analyticsEvalStatusFilter==="pending" ? "selected" : ""}>Не оцінені</option>
+            <option value="evaluated" ${UI.analyticsEvalStatusFilter==="evaluated" ? "selected" : ""}>Оцінені</option>
+            <option value="all" ${UI.analyticsEvalStatusFilter==="all" ? "selected" : ""}>Усі</option>
+          </select>
         </div>
-
-
-
-        <div class="metric-card">
-
-          <div class="metric-head">
-
-            <div class="metric-title">Динаміка закриття</div>
-
-            <div class="metric-pill">${weekClosed.reduce((s,x)=>s+x.count,0)}</div>
-
-          </div>
-
-          <div class="metric-body">
-
-            <div class="analytics-bars">
-
-              ${weekClosed.map(x=>`
-
-                <div class="analytics-bar-row">
-
-                  <div class="analytics-label mono">${fmtDate(x.date).slice(0,5)}</div>
-
-                  <div class="analytics-bar-wrap"><div class="analytics-bar" style="width:${Math.round((x.count/maxClosed)*100)}%"></div></div>
-
-                  <div class="analytics-value mono">${x.count}</div>
-
-                </div>
-
-              `).join("")}
-
-            </div>
-
-          </div>
-
+        <div class="field">
+          <label>Тип задачі</label>
+          <select id="analyticsTypeFilter" data-change="setAnalyticsEvalTypeFilterFromInput">
+            <option value="all">Усі типи</option>
+            ${["managerial","internal","personal"].map(type=>`<option value="${type}" ${UI.analyticsEvalTypeFilter===type ? "selected" : ""}>${htmlesc(taskTypeLabel(type))}</option>`).join("")}
+          </select>
         </div>
-
       </div>
-
     </div>
-
   `;
 
+  const kpis = `
+    <div class="report-grid eval-kpi-grid">
+      <div class="report-tile"><div class="k">Закрито задач</div><div class="v">${filteredClosed.length}</div><div class="s">${htmlesc(period.label)}</div></div>
+      <div class="report-tile"><div class="k">Оцінено</div><div class="v">${evaluatedRows.length}</div><div class="s">${filteredClosed.length ? `${Math.round((evaluatedRows.length/filteredClosed.length)*100)}%` : "—"}</div></div>
+      <div class="report-tile"><div class="k">Не оцінено</div><div class="v">${pendingRows.length}</div><div class="s">чекають оцінки</div></div>
+      <div class="report-tile"><div class="k">Середній бал</div><div class="v">${avgScore}</div><div class="s">із 20 можливих</div></div>
+      <div class="report-tile"><div class="k">Сума балів</div><div class="v">${totalScore}</div><div class="s">по оцінених задачах</div></div>
+    </div>
+  `;
 
+  const hero = `
+    <div class="eval-hero">
+      <div class="eval-hero-card">
+        <div class="eval-hero-eyebrow">Оцінювання після закриття</div>
+        <div class="eval-hero-title">Керівницький дашборд якості виконання</div>
+        <div class="eval-hero-sub">
+          Період: <span class="mono">${htmlesc(period.label)}</span>
+          ${topDept ? ` • Лідер: <b>${htmlesc(topDept.dept.name)}</b>` : ``}
+        </div>
+        <div class="eval-hero-metrics">
+          <div class="eval-hero-metric">
+            <div class="k">Закрито</div>
+            <div class="v mono">${filteredClosed.length}</div>
+          </div>
+          <div class="eval-hero-metric">
+            <div class="k">Середній бал</div>
+            <div class="v mono">${avgScore}</div>
+          </div>
+          <div class="eval-hero-metric">
+            <div class="k">Не оцінено</div>
+            <div class="v mono">${pendingRows.length}</div>
+          </div>
+        </div>
+      </div>
+      <div class="eval-hero-side">
+        <div class="eval-signal-card">
+          <div class="k">Лідер відділів</div>
+          <div class="v">${topDept ? htmlesc(topDept.dept.name) : "—"}</div>
+          <div class="s">${topDept ? `${topDept.score} балів • ${topDept.count} задач` : "Поки немає оцінених задач"}</div>
+        </div>
+        <div class="eval-signal-card warn">
+          <div class="k">Потребують уваги</div>
+          <div class="v">${topPendingDept ? htmlesc(topPendingDept.dept.name) : "—"}</div>
+          <div class="s">${topPendingDept ? `${topPendingDept.count} неоцінених задач` : "Усі закриті задачі оцінені"}</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const donutCards = `
+    <div class="eval-donut-grid">
+      <div class="item analytics-block eval-donut-card" style="cursor:default;">
+        <div class="row"><div class="name">Статус оцінювання</div><span class="badge b-blue mono">${filteredClosed.length}</span></div>
+        <div class="eval-donut-wrap">
+          <div class="eval-donut" style="background:${statusDonut.gradient};"></div>
+          <div class="eval-legend">
+            ${statusDonut.legendRows.map(row=>`<div class="eval-legend-item"><span class="eval-legend-dot" style="background:${row.color}"></span><span>${htmlesc(row.label)}</span><b class="mono">${row.value}</b><span class="mono">${row.percent}%</span></div>`).join("")}
+          </div>
+        </div>
+      </div>
+      <div class="item analytics-block eval-donut-card" style="cursor:default;">
+        <div class="row"><div class="name">Внесок відділів</div><span class="badge b-violet mono">${deptScoreRows.length}</span></div>
+        <div class="eval-donut-wrap">
+          <div class="eval-donut" style="background:${deptDonut.gradient};"></div>
+          <div class="eval-legend">
+            ${deptDonut.legendRows.length ? deptDonut.legendRows.map(row=>`<div class="eval-legend-item"><span class="eval-legend-dot" style="background:${row.color}"></span><span>${htmlesc(row.label)}</span><b class="mono">${row.value}</b><span class="mono">${row.percent}%</span></div>`).join("") : `<div class="hint">Поки немає оцінених задач.</div>`}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const criteriaBars = `
+    <div class="item analytics-block" style="cursor:default;">
+      <div class="row"><div class="name">Середній бал по критеріях</div><span class="badge b-ok mono">${evaluatedRows.length}</span></div>
+      <div class="hint">Кожен критерій оцінюється від 1 до 5 після закриття задачі.</div>
+      <div class="eval-bars">
+        ${criteriaRows.map(row=>`
+          <div class="eval-bar-row">
+            <div class="eval-label">${htmlesc(row.label)}</div>
+            <div class="eval-bar-wrap"><div class="eval-bar" style="width:${Math.round((row.value / maxCriteria) * 100)}%"></div></div>
+            <div class="eval-value mono">${row.avg ? row.avg.toFixed(1) : "0.0"}</div>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+  `;
+
+  const deptBars = `
+    <div class="item analytics-block" style="cursor:default;">
+      <div class="row"><div class="name">Бали по відділах</div><span class="badge b-blue mono">${deptScoreRows.length}</span></div>
+      <div class="eval-bars">
+        ${deptScoreRows.length ? deptScoreRows.map(row=>`
+          <div class="eval-bar-row">
+            <div class="eval-label">${htmlesc(row.dept.name)}</div>
+            <div class="eval-bar-wrap"><div class="eval-bar alt" style="width:${Math.round((row.score / maxDeptScore) * 100)}%"></div></div>
+            <div class="eval-value mono">${row.score}</div>
+          </div>
+        `).join("") : `<div class="hint">Ще немає оцінених задач.</div>`}
+      </div>
+    </div>
+  `;
+
+  const deptRanking = `
+    <div class="item analytics-block eval-ranking-card" style="cursor:default;">
+      <div class="row"><div class="name">Загальний рейтинг відділів</div><span class="badge b-blue mono">${deptScoreRows.length}</span></div>
+      <div class="eval-ranking-list">
+        ${deptScoreRows.length ? deptScoreRows.map((row, index)=>`
+          <div class="eval-ranking-item ${index < 3 ? "top" : ""}">
+            <div class="eval-ranking-pos">${index + 1}</div>
+            <div class="eval-ranking-main">
+              <div class="eval-ranking-name">${htmlesc(row.dept.name)}</div>
+              <div class="eval-ranking-sub">${row.count} задач • середній ${row.avg.toFixed(1)}</div>
+            </div>
+            <div class="eval-ranking-score mono">${row.score}</div>
+          </div>
+        `).join("") : `<div class="hint">Ще немає оцінених задач.</div>`}
+      </div>
+    </div>
+  `;
+
+  const pendingList = `
+    <div class="item analytics-block" style="cursor:default;">
+      <div class="row"><div class="name">Потребують оцінювання</div><span class="badge b-warn mono">${pendingRows.length}</span></div>
+      <div class="eval-task-list">
+        ${pendingRows.length ? pendingRows.slice(0,12).map(row=>{
+          const dept = row.task.departmentId ? getDeptById(row.task.departmentId) : null;
+          const user = row.task.responsibleUserId ? getUserById(row.task.responsibleUserId) : null;
+          return `
+            <div class="eval-task-item">
+              <div class="eval-task-main">
+                <div class="eval-task-title">${htmlesc(row.task.title || "Без назви")}</div>
+                <div class="eval-task-meta">
+                  ${dept ? deptBadgeHtml(dept) : `<span class="pill">Особисто</span>`}
+                  <span class="pill">${htmlesc(user?.name || "Без виконавця")}</span>
+                  <span class="pill mono">${row.closeDate ? fmtDate(row.closeDate) : "—"}</span>
+                </div>
+              </div>
+              <div class="eval-task-actions">
+                <button class="btn ghost btn-mini" data-action="openTask" data-arg1="${row.task.id}">Відкрити</button>
+                <button class="btn primary btn-mini" data-action="openTaskEvaluation" data-arg1="${row.task.id}">Оцінити</button>
+              </div>
+            </div>
+          `;
+        }).join("") : `<div class="hint">Немає закритих задач, які очікують оцінки.</div>`}
+      </div>
+    </div>
+  `;
+
+  const recentList = `
+    <div class="item analytics-block" style="cursor:default;">
+      <div class="row"><div class="name">Останні оцінені задачі</div><span class="badge b-ok mono">${recentEvaluatedRows.length}</span></div>
+      <div class="eval-task-list">
+        ${recentEvaluatedRows.length ? recentEvaluatedRows.map(row=>{
+          const dept = row.task.departmentId ? getDeptById(row.task.departmentId) : null;
+          const score = evalTotalScore(row.evaluation);
+          return `
+            <div class="eval-task-item compact">
+              <div class="eval-task-main">
+                <div class="eval-task-title">${htmlesc(row.task.title || "Без назви")}</div>
+                <div class="eval-task-meta">
+                  ${dept ? deptBadgeHtml(dept) : `<span class="pill">Особисто</span>`}
+                  <span class="pill mono">${fmtDate(toDateOnly(row.evaluation.evaluatedAt) || row.closeDate || "")}</span>
+                  <span class="badge b-ok mono">${score}/20</span>
+                </div>
+              </div>
+              <div class="eval-task-actions">
+                <button class="btn ghost btn-mini" data-action="openTaskEvaluation" data-arg1="${row.task.id}">Редагувати</button>
+              </div>
+            </div>
+          `;
+        }).join("") : `<div class="hint">Ще немає оцінених задач у вибраному зрізі.</div>`}
+      </div>
+    </div>
+  `;
+
+  const peopleBlock = `
+    <div class="item analytics-block" style="cursor:default;">
+      <div class="row"><div class="name">Бали по виконавцях</div><span class="badge b-violet mono">${userScoreRows.length}</span></div>
+      <div class="eval-bars">
+        ${userScoreRows.length ? userScoreRows.slice(0,10).map(row=>`
+          <div class="eval-bar-row">
+            <div class="eval-label">${htmlesc(row.user.name)}</div>
+            <div class="eval-bar-wrap"><div class="eval-bar" style="width:${Math.round((row.score / maxUserScore) * 100)}%"></div></div>
+            <div class="eval-value mono">${row.score}</div>
+          </div>
+        `).join("") : `<div class="hint">Недостатньо даних.</div>`}
+      </div>
+    </div>
+  `;
 
   const body = `
-
     <div class="card">
-
       <div class="card-h">
-
-        <div class="t">Аналітика</div>
-
+        <div class="t">Аналітика оцінювання</div>
         <div class="card-actions">
-
-          <span class="badge b-blue">Останні 7 днів</span>
-
+          <span class="badge b-blue">${htmlesc(period.label)}</span>
           <button class="btn ghost btn-mini analytics-toggle" data-action="toggleAnalyticsDetails">
-
             ${UI.analyticsShowDetails ? "Сховати деталі" : "Показати деталі"}
-
           </button>
-
         </div>
-
       </div>
-
       <div class="card-b">
-
-        ${tiles}
-
+        ${hero}
+        ${filterBar}
+        ${kpis}
+        ${donutCards}
         <div class="analytics-grid">
-
-        <div class="item analytics-block" style="cursor:default;">
-
-          <div class="row"><div class="name">Графік закриття задач</div><span class="badge b-ok mono">${weekClosed.reduce((s,x)=>s+x.count,0)}</span></div>
-
-          <div class="hint">Скільки задач закрито по днях.</div>
-
-          <div class="analytics-bars">
-
-            ${weekClosed.map(x=>`
-
-              <div class="analytics-bar-row">
-
-                <div class="analytics-label mono">${fmtDate(x.date).slice(0,5)}</div>
-
-                <div class="analytics-bar-wrap"><div class="analytics-bar" style="width:${Math.round((x.count/maxClosed)*100)}%"></div></div>
-
-                <div class="analytics-value mono">${x.count}</div>
-
-              </div>
-
-            `).join("")}
-
-          </div>
-
+          ${criteriaBars}
+          ${deptRanking}
+          ${deptBars}
+          ${pendingList}
+          ${recentList}
+          ${UI.analyticsShowDetails ? peopleBlock : ``}
         </div>
-
-
-
-        <div class="item analytics-block" style="cursor:default;">
-
-          <div class="row"><div class="name">Середній час закриття</div><span class="badge b-violet mono">${avgClose}</span></div>
-
-          <div class="hint">Середня тривалість від створення до закриття (у днях).</div>
-
-        </div>
-
-
-
-        <div class="item analytics-block" style="cursor:default;">
-
-          <div class="row"><div class="name">Топ проблем</div><span class="badge b-warn mono">${topProblems.length}</span></div>
-
-          <div class="hint">
-
-            ${
-
-              topProblems.length
-
-                ? topProblems.map(x=>{
-
-                    const dept = x.task.departmentId ? getDeptById(x.task.departmentId)?.name : "Особисто";
-
-                    const note = x.last?.note ? ` — ${htmlesc(normalizeBlockerNote(x.last.note)).slice(0,80)}` : "";
-
-                    return `• <b>${htmlesc(x.task.title)}</b> (${htmlesc(dept || "")}) • ${x.count}${note}`;
-
-                  }).join("<br/>")
-
-                : "Немає активних блокерів."
-
-            }
-
-          </div>
-
-        </div>
-
-
-
-        <div class="item analytics-block" style="cursor:default;">
-
-          <div class="row"><div class="name">Навантаження по відділах</div><span class="badge b-blue mono">${deptLoad.reduce((s,x)=>s+x.active,0)}</span></div>
-
-          <div class="analytics-bars">
-
-            ${deptLoad.map(x=>`
-
-              <div class="analytics-bar-row">
-
-                <div class="analytics-label">${htmlesc(x.dept.name)}</div>
-
-                <div class="analytics-bar-wrap"><div class="analytics-bar" style="width:${Math.round((x.active/maxActive)*100)}%"></div></div>
-
-                <div class="analytics-value mono">${x.active}</div>
-
-              </div>
-
-              <div class="hint" style="margin-top:2px;">⛔ ${x.blockers} • 🟠 ${x.overdue}</div>
-
-            `).join("")}
-
-          </div>
-
-        </div>
-
-
-
-        <div class="item analytics-block" style="cursor:default;">
-
-          <div class="row"><div class="name">Складність задач</div><span class="badge b-blue mono">${activeDeptTasks.length}</span></div>
-
-          <div class="hint">Активні задачі по складності.</div>
-
-          <div class="analytics-bars">
-
-            ${complexityCounts.map(x=>`
-
-              <div class="analytics-bar-row">
-
-                <div class="analytics-label">${htmlesc(x.label)}</div>
-
-                <div class="analytics-bar-wrap"><div class="analytics-bar" style="width:${Math.round((x.count/maxComplexity)*100)}%"></div></div>
-
-                <div class="analytics-value mono">${x.count}</div>
-
-              </div>
-
-            `).join("")}
-
-          </div>
-
-        </div>
-
-
-
-        <div class="item analytics-block" style="cursor:default;">
-
-          <div class="row"><div class="name">Активні з дедлайном — складність</div><span class="badge b-blue mono">${cxActiveDeadline.total}</span></div>
-
-          <div class="hint">Активні задачі з дедлайном.</div>
-
-          <div class="analytics-bars">
-
-            ${cxActiveDeadline.rows.map(x=>`
-
-              <div class="analytics-bar-row">
-
-                <div class="analytics-label">${htmlesc(x.label)}</div>
-
-                <div class="analytics-bar-wrap"><div class="analytics-bar" style="width:${Math.round((x.count/cxActiveDeadline.max)*100)}%"></div></div>
-
-                <div class="analytics-value mono">${x.count}</div>
-
-              </div>
-
-            `).join("")}
-
-          </div>
-
-        </div>
-
-
-
-        <div class="item analytics-block" style="cursor:default;">
-
-          <div class="row"><div class="name">Активні з датою контролю — складність</div><span class="badge b-blue mono">${cxActiveCtrlDate.total}</span></div>
-
-          <div class="hint">Активні задачі з контрольними датами.</div>
-
-          <div class="analytics-bars">
-
-            ${cxActiveCtrlDate.rows.map(x=>`
-
-              <div class="analytics-bar-row">
-
-                <div class="analytics-label">${htmlesc(x.label)}</div>
-
-                <div class="analytics-bar-wrap"><div class="analytics-bar" style="width:${Math.round((x.count/cxActiveCtrlDate.max)*100)}%"></div></div>
-
-                <div class="analytics-value mono">${x.count}</div>
-
-              </div>
-
-            `).join("")}
-
-          </div>
-
-        </div>
-
-
-
-        <div class="item analytics-block" style="cursor:default;">
-
-          <div class="row"><div class="name">Активні на постійному контролі — складність</div><span class="badge b-blue mono">${cxActiveCtrlAlways.total}</span></div>
-
-          <div class="hint">Активні задачі на постійному контролі.</div>
-
-          <div class="analytics-bars">
-
-            ${cxActiveCtrlAlways.rows.map(x=>`
-
-              <div class="analytics-bar-row">
-
-                <div class="analytics-label">${htmlesc(x.label)}</div>
-
-                <div class="analytics-bar-wrap"><div class="analytics-bar" style="width:${Math.round((x.count/cxActiveCtrlAlways.max)*100)}%"></div></div>
-
-                <div class="analytics-value mono">${x.count}</div>
-
-              </div>
-
-            `).join("")}
-
-          </div>
-
-        </div>
-
-
-
-        <div class="item analytics-block" style="cursor:default;">
-
-          <div class="row"><div class="name">Складність закритих (7 днів)</div><span class="badge b-ok mono">${recentClosed.length}</span></div>
-
-          <div class="hint">Закриті задачі за останні 7 днів.</div>
-
-          <div class="analytics-bars">
-
-            ${complexityClosed.map(x=>`
-
-              <div class="analytics-bar-row">
-
-                <div class="analytics-label">${htmlesc(x.label)}</div>
-
-                <div class="analytics-bar-wrap"><div class="analytics-bar" style="width:${Math.round((x.count/maxComplexityClosed)*100)}%"></div></div>
-
-                <div class="analytics-value mono">${x.count}</div>
-
-              </div>
-
-            `).join("")}
-
-          </div>
-
-        </div>
-
-
-
-        <div class="item analytics-block" style="cursor:default;">
-
-          <div class="row"><div class="name">Закриті з дедлайном — складність (7 днів)</div><span class="badge b-ok mono">${cxClosedDeadline.total}</span></div>
-
-          <div class="hint">Закриті задачі з дедлайном за останні 7 днів.</div>
-
-          <div class="analytics-bars">
-
-            ${cxClosedDeadline.rows.map(x=>`
-
-              <div class="analytics-bar-row">
-
-                <div class="analytics-label">${htmlesc(x.label)}</div>
-
-                <div class="analytics-bar-wrap"><div class="analytics-bar" style="width:${Math.round((x.count/cxClosedDeadline.max)*100)}%"></div></div>
-
-                <div class="analytics-value mono">${x.count}</div>
-
-              </div>
-
-            `).join("")}
-
-          </div>
-
-        </div>
-
-
-
-        <div class="item analytics-block" style="cursor:default;">
-
-          <div class="row"><div class="name">Закриті з датою контролю — складність (7 днів)</div><span class="badge b-ok mono">${cxClosedCtrlDate.total}</span></div>
-
-          <div class="hint">Закриті задачі з контрольними датами за останні 7 днів.</div>
-
-          <div class="analytics-bars">
-
-            ${cxClosedCtrlDate.rows.map(x=>`
-
-              <div class="analytics-bar-row">
-
-                <div class="analytics-label">${htmlesc(x.label)}</div>
-
-                <div class="analytics-bar-wrap"><div class="analytics-bar" style="width:${Math.round((x.count/cxClosedCtrlDate.max)*100)}%"></div></div>
-
-                <div class="analytics-value mono">${x.count}</div>
-
-              </div>
-
-            `).join("")}
-
-          </div>
-
-        </div>
-
-
-
-        <div class="item analytics-block" style="cursor:default;">
-
-          <div class="row"><div class="name">Закриті на постійному контролі — складність (7 днів)</div><span class="badge b-ok mono">${cxClosedCtrlAlways.total}</span></div>
-
-          <div class="hint">Закриті задачі на постійному контролі за останні 7 днів.</div>
-
-          <div class="analytics-bars">
-
-            ${cxClosedCtrlAlways.rows.map(x=>`
-
-              <div class="analytics-bar-row">
-
-                <div class="analytics-label">${htmlesc(x.label)}</div>
-
-                <div class="analytics-bar-wrap"><div class="analytics-bar" style="width:${Math.round((x.count/cxClosedCtrlAlways.max)*100)}%"></div></div>
-
-                <div class="analytics-value mono">${x.count}</div>
-
-              </div>
-
-            `).join("")}
-
-          </div>
-
-        </div>
-
-        </div>
-
       </div>
-
     </div>
-
   `;
 
-
-
   const tabs = [
-
     {key:ROUTES.CONTROL, label:"Контроль", ico:"🧭"},
-
     {key:ROUTES.TASKS, label:"Задачі", ico:"📋"},
-
     {key:ROUTES.WEEKLY, label:"Тиждень", ico:"🗓"},
-
     {key:ROUTES.ANALYTICS, label:"Аналітика", ico:"📈"},
-
     {key:ROUTES.REPORTING, label:"Звітність", ico:"📑"},
-
     {key:ROUTES.PLAN, label:"План", ico:"📅"},
-
   ];
 
-
-
   appShell({title:"Аналітика", subtitle:"Керівник", bodyHtml: body, showFab:false, fabAction:null, tabs});
-
 }
-
-
-
 /* ===========================
 
    TASK LIST SHORTCUT
@@ -16825,6 +16642,12 @@ const ACTIONS = {
 
   deleteWeeklyTaskNow,
 
+  openTaskEvaluation,
+
+  saveTaskEvaluationNow,
+
+  setAnalyticsEvalPeriod,
+
   toggleTaskDensity,
 
   toggleTheme,
@@ -16846,6 +16669,14 @@ const CHANGE_ACTIONS = {
   setReportingMonthFromInput,
 
   setPlanMonthFromInput,
+
+  setAnalyticsEvalDeptFilterFromInput,
+
+  setAnalyticsEvalUserFilterFromInput,
+
+  setAnalyticsEvalStatusFilterFromInput,
+
+  setAnalyticsEvalTypeFilterFromInput,
 
   setWeeklyPeriodFromSelect,
 
@@ -16913,6 +16744,8 @@ const READONLY_BLOCKED_ACTIONS = new Set([
 
   "openEditTask",
 
+  "openTaskEvaluation",
+
   "openMeetingRepeat",
 
   "openReportForm",
@@ -16928,6 +16761,8 @@ const READONLY_BLOCKED_ACTIONS = new Set([
   "deleteReportPlanNow",
 
   "saveAnnouncementEdits",
+
+  "saveTaskEvaluationNow",
 
   "saveDeptNoteNow",
 
@@ -17370,6 +17205,8 @@ function render(){
   runRecurringTemplates();
 
   runReportPlans();
+
+  remindPendingEvaluations();
 
 
 
