@@ -724,6 +724,15 @@
     .announcement-list{display:flex;flex-direction:column;gap:10px;}
     .section-title{font-weight:900;font-size:16px;color:var(--text);text-align:center;margin:6px 0 2px;}
     .ref-section-title{text-align:left;margin:2px 2px 10px;font-size:14px;color:var(--text-soft);letter-spacing:.01em;}
+    .ref-toolbar{display:grid;grid-template-columns:220px minmax(0,1fr);gap:10px;align-items:end;}
+    .ref-list{display:grid;gap:10px;}
+    .ref-note{border:1px solid rgba(150,170,205,.24);border-radius:14px;padding:12px;background:rgba(255,255,255,.78);display:flex;flex-direction:column;gap:8px;}
+    .ref-note-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+    .ref-note-head{display:flex;flex-direction:column;gap:6px;min-width:0;}
+    .ref-note-title{font-weight:900;font-size:14px;color:var(--text);line-height:1.35;overflow-wrap:anywhere;}
+    .ref-note-meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+    .ref-note-body{font-size:13px;line-height:1.55;color:var(--text);white-space:pre-wrap;overflow-wrap:anywhere;}
+    .ref-note-actions{flex-shrink:0;}
     .weekly-list{gap:6px;margin-top: 6px;}
     .weekly-list .weekly-item{padding:8px 10px;}
     .weekly-controls{
@@ -1015,6 +1024,10 @@
       .task-meta-grid{grid-template-columns:1fr;}
     }
     @media (max-width: 640px){
+      .ref-toolbar{grid-template-columns:1fr;}
+      .ref-note-top{flex-direction:column;align-items:stretch;}
+      .ref-note-actions{width:100%;justify-content:flex-start;}
+
       .dept-toggle-grid{grid-template-columns: repeat(2, minmax(0,1fr));}
     }
 
@@ -1156,7 +1169,8 @@
       outline: none;
       font-size: 14px;
     }
-    textarea{min-height: 96px; resize: vertical;}
+    textarea{min-height: 96px; resize: vertical;}
+
     textarea.task-desc-input{min-height: 220px;}
     .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
     .hint{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.4}
@@ -3285,7 +3299,8 @@
       border-color: rgba(110,168,254,.28);
     }
     body.theme-dark .ref-hero-card,
-    body.theme-dark .ref-card{
+    body.theme-dark .ref-card,
+    body.theme-dark .ref-note{
       border-color: rgba(35,42,58,.74);
     }
     body.theme-dark .ref-hero-card{

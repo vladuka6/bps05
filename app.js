@@ -295,15 +295,89 @@ function normalizeReferenceNotes(source){
 
   };
 
+  const sectionsToText = (sections)=>[
+    sections.orders ? `?????? / ??????????: ${sections.orders}` : "",
+    sections.contacts ? `???????? / ??????: ${sections.contacts}` : "",
+    sections.staff ? `?????? ?????????? / ?????????: ${sections.staff}` : "",
+    sections.other ? `????: ${sections.other}` : "",
+  ].filter(Boolean).join("\n");
+
+  const normalizeEntry = (value, index=0)=>{
+
+    if(typeof value === "string"){
+      return {
+        id: uid("ref"),
+        deptId: "",
+        title: "",
+        text: value.trim(),
+        createdAt: nowIsoKyiv(),
+        updatedAt: nowIsoKyiv(),
+      };
+    }
+
+    const item = (value && typeof value === "object") ? value : {};
+
+    return {
+      id: typeof item.id === "string" && item.id ? item.id : uid(`ref_${index}`),
+      deptId: typeof item.deptId === "string" ? item.deptId : "",
+      title: typeof item.title === "string" ? item.title.trim() : "",
+      text: typeof item.text === "string" ? item.text.trim() : "",
+      createdAt: typeof item.createdAt === "string" && item.createdAt ? item.createdAt : nowIsoKyiv(),
+      updatedAt: typeof item.updatedAt === "string" && item.updatedAt ? item.updatedAt : nowIsoKyiv(),
+    };
+
+  };
+
   const byDept = {};
 
   Object.keys(byDeptRaw).forEach(key=>{
     byDept[key] = normalizeSections(byDeptRaw[key]);
   });
 
+  let entries = Array.isArray(data.entries)
+    ? data.entries.map((item, index)=>normalizeEntry(item, index)).filter(item=>item.text)
+    : [];
+
+  if(!entries.length){
+
+    const legacyEntries = [];
+    const general = normalizeSections(data.general);
+    const generalText = sectionsToText(general);
+
+    if(generalText){
+      legacyEntries.push({
+        id: "ref_general_legacy",
+        deptId: "",
+        title: "????????",
+        text: generalText,
+        createdAt: nowIsoKyiv(),
+        updatedAt: nowIsoKyiv(),
+      });
+    }
+
+    Object.keys(byDept).forEach((deptId, index)=>{
+      const deptText = sectionsToText(byDept[deptId]);
+      if(!deptText) return;
+      legacyEntries.push({
+        id: `ref_${deptId}_legacy_${index}`,
+        deptId,
+        title: "",
+        text: deptText,
+        createdAt: nowIsoKyiv(),
+        updatedAt: nowIsoKyiv(),
+      });
+    });
+
+    entries = legacyEntries;
+
+  }
+
+  entries.sort((a,b)=> String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || "")));
+
   return {
     general: normalizeSections(data.general),
     byDept,
+    entries,
   };
 
 }
@@ -1345,6 +1419,7 @@ function seed(){
     referenceNotes: {
       general: {orders:"", contacts:"", staff:"", other:""},
       byDept: {},
+      entries: [],
     },
 
     evaluationStartDate: DEFAULT_EVALUATION_START_DATE,
@@ -4531,6 +4606,8 @@ let UI = {
 
   refSearch: "",
 
+  refDeptFilter: "all",
+
   reportFilter: "сьогодні",
 
   reportsControlDate: null, // NEW
@@ -5255,155 +5332,227 @@ function saveReferenceDeptNow(deptId){
 
 }
 
+function getReferenceEntryDeptLabel(deptId){
+
+  return deptId ? (getDeptById(deptId)?.name || "??????") : "????????";
+
+}
+
+function setReferenceDeptFilterFromInput(){
+
+  UI.refDeptFilter = document.getElementById("referenceDeptFilter")?.value || "all";
+
+  render();
+
+}
+
+function openReferenceEntry(entryId=""){
+
+  const u = currentSessionUser();
+  const readOnly = !!u?.readOnly;
+  const notes = normalizeReferenceNotes(STATE.referenceNotes);
+  const entry = (notes.entries || []).find(x=>x && x.id===entryId) || null;
+  const deptOptions = [`<option value="">????????</option>`, ...STATE.departments.map(dept=>`<option value="${dept.id}" ${(entry?.deptId || "")===dept.id ? "selected" : ""}>${htmlesc(dept.name)}</option>`)].join("");
+
+  showSheet(readOnly ? "???????? ??????" : (entry ? "?????????? ?????" : "????? ?????"), `
+
+    <div class="field">
+      <label>??????</label>
+      <select id="referenceEntryDept" ${readOnly ? "disabled" : ""}>
+        ${deptOptions}
+      </select>
+    </div>
+    <div class="field">
+      <label>????? ??????</label>
+      <input id="referenceEntryTitle" type="text" value="${htmlesc(entry?.title || "")}" placeholder="??????? ????? ??????" ${readOnly ? "readonly" : ""} />
+    </div>
+    <div class="field">
+      <label>?????</label>
+      <textarea id="referenceEntryText" class="task-desc-input" placeholder="?????? ??????? ??, ?? ????? ??????? ??? ?????." ${readOnly ? "readonly" : ""}>${htmlesc(entry?.text || "")}</textarea>
+    </div>
+    ${entry?.updatedAt ? `<div class="hint">????????: <span class="mono">${fmtDate(toDateOnly(entry.updatedAt) || "")}</span></div>` : ""}
+    <div class="actions" style="margin-top:14px;">
+      ${readOnly ? "" : `<button class="btn primary" data-action="saveReferenceEntryNow" data-arg1="${entry?.id || ""}">????????</button>`}
+      ${(!readOnly && entry) ? `<button class="btn danger" data-action="deleteReferenceEntryNow" data-arg1="${entry.id}">????????</button>` : ""}
+      <button class="btn ghost" data-action="hideSheet">${readOnly ? "???????" : "?????????"}</button>
+    </div>
+
+  `);
+
+}
+
+function saveReferenceEntryNow(entryId=""){
+
+  const deptId = document.getElementById("referenceEntryDept")?.value || "";
+  const title = (document.getElementById("referenceEntryTitle")?.value || "").trim();
+  const text = (document.getElementById("referenceEntryText")?.value || "").trim();
+
+  if(!text){
+    showToast("????? ????? ??????", "warn");
+    return;
+  }
+
+  STATE.referenceNotes = normalizeReferenceNotes(STATE.referenceNotes);
+  const entries = Array.isArray(STATE.referenceNotes.entries) ? STATE.referenceNotes.entries.slice() : [];
+  const now = nowIsoKyiv();
+  const existingIdx = entryId ? entries.findIndex(x=>x && x.id===entryId) : -1;
+
+  if(existingIdx >= 0){
+    entries[existingIdx] = {
+      ...entries[existingIdx],
+      deptId,
+      title,
+      text,
+      updatedAt: now,
+    };
+  } else {
+    entries.unshift({
+      id: uid("ref"),
+      deptId,
+      title,
+      text,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  STATE.referenceNotes.entries = entries;
+  saveState(STATE);
+  hideSheet();
+  showToast("????? ?????????", "ok");
+  render();
+
+}
+
+function deleteReferenceEntryNow(entryId=""){
+
+  if(!entryId) return;
+
+  STATE.referenceNotes = normalizeReferenceNotes(STATE.referenceNotes);
+  STATE.referenceNotes.entries = (STATE.referenceNotes.entries || []).filter(x=>x && x.id!==entryId);
+  saveState(STATE);
+  hideSheet();
+  showToast("????? ????????", "ok");
+  render();
+
+}
+
 function viewControl(){
 
   if(!ensureLoggedIn()) return viewLogin();
 
   const u = currentSessionUser();
   const notes = normalizeReferenceNotes(STATE.referenceNotes);
+  const refSearch = String(UI.refSearch || "").trim().toLowerCase();
+  const deptFilter = UI.refDeptFilter || "all";
 
   UI.tab = ROUTES.CONTROL;
-  const refSearch = String(UI.refSearch || "").trim().toLowerCase();
-  const filledCount = STATE.departments.filter(d=>referenceSectionsFilledCount(notes.byDept?.[d.id]) > 0).length;
-  const generalFilled = referenceSectionsFilledCount(notes.general) > 0;
-  const generalPreview = referenceSectionsToText(notes.general);
-  const generalMatches = !refSearch || `загальне ${generalPreview}`.toLowerCase().includes(refSearch);
 
-  const visibleDepts = STATE.departments.filter(dept=>{
+  const deptOptions = [`<option value="all">??? ??????</option>`, `<option value="general">????????</option>`, ...STATE.departments.map(dept=>`<option value="${dept.id}" ${deptFilter===dept.id ? "selected" : ""}>${htmlesc(dept.name)}</option>`)].join("");
+
+  const entries = (notes.entries || []).filter(entry=>{
+    if(!entry || !entry.text) return false;
+    if(deptFilter === "general" && entry.deptId) return false;
+    if(deptFilter !== "all" && deptFilter !== "general" && entry.deptId !== deptFilter) return false;
     if(!refSearch) return true;
-    const text = referenceSectionsToText(notes.byDept?.[dept.id]);
-    return `${dept.name} ${text}`.toLowerCase().includes(refSearch);
+    const haystack = `${entry.title || ""} ${entry.text || ""} ${getReferenceEntryDeptLabel(entry.deptId)}`.toLowerCase();
+    return haystack.includes(refSearch);
   });
 
-  const deptCards = visibleDepts.map(dept=>{
-    const text = notes.byDept?.[dept.id] || {};
-    const filled = referenceSectionsFilledCount(text) > 0;
+  const entryCards = entries.map((entry, idx)=>{
+    const title = entry.title || `????? ${idx + 1}`;
+    const updated = fmtDate(toDateOnly(entry.updatedAt || entry.createdAt || "") || "");
     return `
-      <div class="ref-card">
-        <div class="ref-card-top">
-          ${deptBadgeHtml(dept)}
-          <span class="badge ${filled ? "b-ok" : "b-warn"}">${filled ? `${referenceSectionsFilledCount(text)}/4` : "Порожньо"}</span>
+      <div class="ref-note">
+        <div class="ref-note-top">
+          <div class="ref-note-head">
+            <div class="ref-note-title">${htmlesc(title)}</div>
+            <div class="ref-note-meta">
+              <span class="pill">${htmlesc(getReferenceEntryDeptLabel(entry.deptId))}</span>
+              ${updated ? `<span class="pill mono">${updated}</span>` : ""}
+            </div>
+          </div>
+          <div class="actions ref-note-actions">
+            <button class="btn ghost btn-mini" data-action="openReferenceEntry" data-arg1="${entry.id}">${u.readOnly ? "????????" : "??????????"}</button>
+          </div>
         </div>
-        <div class="ref-card-body">
-          <div class="ref-preview">${htmlesc(referenceNotePreview(referenceSectionsToText(text)))}</div>
-        </div>
-        <div class="actions ref-card-actions">
-          <button class="btn ghost btn-mini" data-action="openReferenceDept" data-arg1="${dept.id}">${u.readOnly ? "Відкрити" : "Редагувати"}</button>
-        </div>
+        <div class="ref-note-body">${htmlesc(referenceNotePreview(entry.text, "??? ??????"))}</div>
       </div>
     `;
   }).join("");
 
   const body = `
 
-    <div class="ref-hero">
-      <div class="ref-hero-card">
-        <div class="ref-hero-eyebrow">Довідка керівника</div>
-        <div class="ref-hero-title">Цікаве — короткі нотатки, правила і опорна інформація</div>
-        <div class="ref-hero-sub">Тут можна тримати під рукою все, що не хочеться щоразу шукати: накази, штатні пропозиції, особливості по відділах, контакти, внутрішні примітки.</div>
-        <div class="ref-hero-metrics">
-          <div class="ref-hero-metric"><div class="k">Загальне</div><div class="v mono">${generalFilled ? `${referenceSectionsFilledCount(notes.general)}/4` : "—"}</div></div>
-          <div class="ref-hero-metric"><div class="k">Відділи</div><div class="v mono">${filledCount}/${STATE.departments.length}</div></div>
-          <div class="ref-hero-metric"><div class="k">Доступ</div><div class="v mono">${u.readOnly ? "читання" : "редагування"}</div></div>
-        </div>
-      </div>
-    </div>
+    <div class="section-title ref-section-title">??????? ?????????</div>
 
     <div class="card">
       <div class="card-h">
-        <div class="t">Пошук по довідці</div>
+        <div class="t">???????</div>
+        ${u.readOnly ? "" : `<button class="btn primary btn-mini" data-action="openReferenceEntry">+ ????? ?????</button>`}
       </div>
       <div class="card-b">
-        <div class="field">
-          <label>Пошук по загальному блоку і по відділах</label>
-          <input id="referenceSearch" type="search" placeholder="Наприклад: наказ, НРК, контакт, штат, допуск..." value="${htmlesc(UI.refSearch || "")}" data-change="setReferenceSearchFromInput" />
+        <div class="ref-toolbar">
+          <div class="field">
+            <label>??????</label>
+            <select id="referenceDeptFilter" data-change="setReferenceDeptFilterFromInput">
+              ${deptOptions}
+            </select>
+          </div>
+          <div class="field">
+            <label>?????</label>
+            <input id="referenceSearch" type="search" placeholder="?????????: ?????, ???, ???????, ????..." value="${htmlesc(UI.refSearch || "")}" data-change="setReferenceSearchFromInput" />
+          </div>
         </div>
       </div>
     </div>
 
-    ${generalMatches ? `
     <div class="card">
       <div class="card-h">
-        <div class="t">Загальна довідка</div>
-        <span class="badge ${generalFilled ? "b-ok" : "b-warn"}">${generalFilled ? `${referenceSectionsFilledCount(notes.general)}/4` : "Порожньо"}</span>
+        <div class="t">?????? ???????</div>
+        <span class="badge b-blue">${entries.length}</span>
       </div>
       <div class="card-b">
-        <div class="ref-preview ref-general-preview">${htmlesc(referenceNotePreview(generalPreview, "Тут можна тримати загальні речі: ключові накази, контакти, нагадування, робочі правила."))}</div>
-        <div class="actions" style="margin-top:12px;">
-          <button class="btn primary" data-action="openReferenceGeneral">${u.readOnly ? "Відкрити" : "Редагувати загальне"}</button>
-        </div>
-      </div>
-    </div>
-    ` : ``}
-
-    <div class="card">
-      <div class="card-h">
-        <div class="t">По відділах</div>
-        <span class="badge b-blue">${visibleDepts.length} / ${STATE.departments.length}</span>
-      </div>
-      <div class="card-b">
-        <div class="ref-grid">
-          ${deptCards || `<div class="hint">За цим пошуком нічого не знайдено.</div>`}
+        <div class="ref-list">
+          ${entryCards || `<div class="hint">???? ????? ??????? ??? ????? ???????. ????? ??????? ? ???????? ?? ?? ??????? ??? ???? ?? ????????.</div>`}
         </div>
       </div>
     </div>
 
     <div class="card">
       <div class="card-h">
-        <div class="t">Швидкі дії</div>
+        <div class="t">?????? ???</div>
       </div>
       <div class="card-b">
         <div class="actions control-actions">
-          <button class="btn ghost" data-action="openAbout">ℹ️ Про прототип</button>
-          <button class="btn danger" data-action="logout">🚪 Вийти</button>
+          <button class="btn ghost" data-action="openAbout">?? ??? ????????</button>
+          <button class="btn danger" data-action="logout">?? ?????</button>
         </div>
       </div>
     </div>
 
   `;
 
-
-
   const tabs = (u.role==="boss")
-
     ? [
-
-      {key:ROUTES.CONTROL, label:"Цікаве", ico:"📚"},
-
-      {key:ROUTES.TASKS, label:"Задачі", ico:"📋"},
-
-      {key:ROUTES.WEEKLY, label:"Тиждень", ico:"🗓"},
-
-      {key:ROUTES.ANALYTICS, label:"Аналітика", ico:"📈"},
-
-      {key:ROUTES.REPORTING, label:"Звітність", ico:"📑"},
-
-      {key:ROUTES.PLAN, label:"План", ico:"📅"},
-
+      {key:ROUTES.CONTROL, label:"??????", ico:"??"},
+      {key:ROUTES.TASKS, label:"??????", ico:"??"},
+      {key:ROUTES.WEEKLY, label:"???????", ico:"??"},
+      {key:ROUTES.ANALYTICS, label:"?????????", ico:"??"},
+      {key:ROUTES.REPORTING, label:"?????????", ico:"??"},
+      {key:ROUTES.PLAN, label:"????", ico:"??"},
     ]
-
     : [
-
-      {key:ROUTES.CONTROL, label:"Цікаве", ico:"📚"},
-
-      {key:ROUTES.TASKS, label:"Задачі", ico:"📋"},
-
+      {key:ROUTES.CONTROL, label:"??????", ico:"??"},
+      {key:ROUTES.TASKS, label:"??????", ico:"??"},
     ];
 
   appShell({
-
-    title: "Цікаве",
-
+    title: "??????",
     subtitle: roleSubtitle(u),
-
     bodyHtml: body,
-
     showFab: false,
-
     fabAction: null,
-
     tabs
-
   });
 
 }
@@ -16968,9 +17117,15 @@ const ACTIONS = {
 
   openReferenceDept,
 
+  openReferenceEntry,
+
   saveReferenceGeneralNow,
 
   saveReferenceDeptNow,
+
+  saveReferenceEntryNow,
+
+  deleteReferenceEntryNow,
 
   setAnalyticsEvalPeriod,
 
@@ -17009,6 +17164,8 @@ const CHANGE_ACTIONS = {
   setEvaluationStartDateFromInput,
 
   setReferenceSearchFromInput,
+
+  setReferenceDeptFilterFromInput,
 
   setWeeklyPeriodFromSelect,
 
@@ -17097,6 +17254,10 @@ const READONLY_BLOCKED_ACTIONS = new Set([
   "saveReferenceDeptNow",
 
   "saveReferenceGeneralNow",
+
+  "saveReferenceEntryNow",
+
+  "deleteReferenceEntryNow",
 
   "saveTaskEvaluationNow",
 
