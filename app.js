@@ -2084,6 +2084,71 @@ const TASK_EVAL_CRITERIA = [
 
 ];
 
+const TASK_EVAL_HINTS = {
+
+  labor: "1 — швидка проста дія; 3 — нормальний робочий обсяг; 5 — багато координації, матеріалів або тривала робота.",
+
+  importance: "1 — локальне питання; 3 — важливо для відділу; 5 — суттєво для керівництва, кількох відділів або ключового процесу.",
+
+  urgency: "1 — був запас часу; 3 — треба було вкластися в строк; 5 — дуже терміново, нарада / перевірка / сьогодні на сьогодні.",
+
+  result: "1 — мінімальний або проміжний ефект; 3 — повний очікуваний результат; 5 — сильний результат із відчутним впливом."
+
+};
+
+const TASK_EVAL_PRESETS = [
+
+  {
+    key:"letter",
+    label:"Лист / уточнення / записка",
+    scores:{labor:2, importance:3, urgency:3, result:3},
+    hint:"Для листів, коротких уточнень, службових записок."
+  },
+
+  {
+    key:"analysis",
+    label:"Таблиця / довідка / слайди",
+    scores:{labor:4, importance:4, urgency:3, result:4},
+    hint:"Для порівняльних таблиць, довідок, слайдів, аналітичних матеріалів."
+  },
+
+  {
+    key:"external",
+    label:"Зовнішня взаємодія / зустріч",
+    scores:{labor:4, importance:5, urgency:3, result:4},
+    hint:"Для виробників, компаній, НГУ, зовнішніх органів і зустрічей."
+  },
+
+  {
+    key:"permits",
+    label:"Допуск / декларація / оформлення",
+    scores:{labor:3, importance:4, urgency:3, result:4},
+    hint:"Для допусків, перепусток, декларацій, оформлення документів."
+  },
+
+  {
+    key:"event",
+    label:"Організація участі / навчання / заходу",
+    scores:{labor:5, importance:4, urgency:4, result:4},
+    hint:"Для навчань, демонстрацій, організації участі, супроводу заходів."
+  },
+
+  {
+    key:"support",
+    label:"АРМ / доступ / токен / налаштування",
+    scores:{labor:2, importance:3, urgency:2, result:3},
+    hint:"Для налаштування робочого місця, доступів, токенів, АРМ."
+  },
+
+  {
+    key:"assets",
+    label:"Майно / закупівлі / договір / контроль",
+    scores:{labor:4, importance:4, urgency:3, result:4},
+    hint:"Для майна, закупівель, договорів, контрольних задач по забезпеченню."
+  }
+
+];
+
 function getTaskEvaluation(taskId){
 
   if(!taskId || !Array.isArray(STATE.taskEvaluations)) return null;
@@ -15818,6 +15883,27 @@ function setAnalyticsEvalTypeFilterFromInput(){
 
 }
 
+function applyTaskEvaluationPresetFromInput(){
+
+  const select = document.getElementById("eval_preset");
+  const presetKey = select?.value || "";
+  const preset = TASK_EVAL_PRESETS.find(x=>x.key===presetKey);
+
+  if(!preset){
+    showToast("Оберіть шаблон оцінки.", "warn");
+    return;
+  }
+
+  TASK_EVAL_CRITERIA.forEach(item=>{
+    const el = document.getElementById(`eval_${item.key}`);
+    if(!el) return;
+    el.value = String(Number(preset.scores[item.key] || 3));
+  });
+
+  showToast(`Підставлено шаблон: ${preset.label}`, "ok");
+
+}
+
 function openTaskEvaluation(taskId){
 
   const u = currentSessionUser();
@@ -15828,6 +15914,7 @@ function openTaskEvaluation(taskId){
   const evaluation = getTaskEvaluation(taskId) || {};
   const dept = task.departmentId ? getDeptById(task.departmentId)?.name || "Відділ" : "Особисто";
   const closeDate = getCloseDateForTask(task);
+  const presetOptions = TASK_EVAL_PRESETS.map(item=>`<option value="${item.key}">${htmlesc(item.label)}</option>`).join("");
 
   const fields = TASK_EVAL_CRITERIA.map(item=>`
 
@@ -15836,6 +15923,7 @@ function openTaskEvaluation(taskId){
       <select id="eval_${item.key}">
         ${[1,2,3,4,5].map(score=>`<option value="${score}" ${Number(evaluation[item.key] || 0)===score ? "selected" : ""}>${score}</option>`).join("")}
       </select>
+      <div class="hint" style="margin-top:6px;">${TASK_EVAL_HINTS[item.key] || ""}</div>
     </div>
 
   `).join("");
@@ -15847,6 +15935,18 @@ function openTaskEvaluation(taskId){
       ${htmlesc(dept)}${closeDate ? ` • закрито ${fmtDate(closeDate)}` : ""}
     </div>
     <div class="sep"></div>
+    <div class="field">
+      <label>Швидкий шаблон оцінки</label>
+      <div class="row2">
+        <select id="eval_preset">
+          <option value="">Оберіть тип задачі…</option>
+          ${presetOptions}
+        </select>
+        <button class="btn ghost" data-action="applyTaskEvaluationPresetFromInput">Підставити</button>
+      </div>
+      <div class="hint" style="margin-top:6px;">Шаблон лише підставляє стартові бали. Після цього ти можеш спокійно скоригувати оцінку вручну.</div>
+    </div>
+    <div class="sep"></div>
     <div class="eval-form-grid">
       ${fields}
     </div>
@@ -15854,12 +15954,147 @@ function openTaskEvaluation(taskId){
       <label>Коментар (опційно)</label>
       <textarea id="eval_note" placeholder="Коротка примітка до оцінки">${htmlesc(evaluation.note || "")}</textarea>
     </div>
+    <div class="item" style="cursor:default; margin-top:10px;">
+      <div class="name">Міні-шпаргалка 1 / 3 / 5</div>
+      <div class="hint">
+        <b>1</b> — локально, швидко, без значного впливу.<br/>
+        <b>3</b> — нормальний робочий рівень, повноцінна службова задача.<br/>
+        <b>5</b> — дійсно вагома задача: велика, термінова, важлива або з сильним результатом.
+      </div>
+    </div>
     <div class="actions" style="margin-top:14px;">
+      <button class="btn ghost" data-action="openTaskEvaluationHelp">Довідка</button>
       <button class="btn primary" data-action="saveTaskEvaluationNow" data-arg1="${task.id}">Зберегти оцінку</button>
       <button class="btn ghost" data-action="hideSheet">Скасувати</button>
     </div>
 
   `);
+
+}
+
+function openTaskEvaluationHelp(){
+
+  showSheet("Довідка: як оцінювати задачі", `
+
+    <div class="item" style="cursor:default;">
+      <div class="name">Для чого ця оцінка</div>
+      <div class="hint">
+        Оцінка потрібна не для “враження”, а для більш чесної аналітики по відділах і задачах.
+        Ми оцінюємо <b>вже закриту</b> задачу спокійно, після виконання, коли видно реальний обсяг роботи, важливість і результат.
+      </div>
+    </div>
+
+    <div class="item" style="cursor:default;">
+      <div class="name">Головний принцип</div>
+      <div class="hint">
+        Не оцінюй задачу “по симпатії” або “бо довго обговорювали на нараді”.
+        Оцінюй лише по факту: скільки було роботи, наскільки вона була важлива, наскільки горіла по часу і який дала результат.
+      </div>
+    </div>
+
+    <div class="item" style="cursor:default;">
+      <div class="name">1. Трудомісткість</div>
+      <div class="hint">
+        Це про <b>реальний обсяг зусиль</b>, а не про важливість.<br/><br/>
+        <b>1 бал</b> — коротка проста дія: уточнення, дзвінок, пересилання, короткий документ, швидке погодження.<br/>
+        <b>3 бали</b> — помірний обсяг: треба було зібрати дані, узгодити, підготувати матеріал, зробити кілька кроків.<br/>
+        <b>5 балів</b> — значний обсяг: багато координації, кілька виконавців, складна підготовка, тривала робота або великий пакет матеріалів.
+      </div>
+    </div>
+
+    <div class="item" style="cursor:default;">
+      <div class="name">2. Важливість</div>
+      <div class="hint">
+        Це про <b>значення задачі для підрозділу або керівництва</b>.<br/><br/>
+        <b>1 бал</b> — локальне, рутинне, без суттєвого впливу.<br/>
+        <b>3 бали</b> — важливо для роботи відділу, впливає на процес або строки, але без критичних наслідків.<br/>
+        <b>5 балів</b> — стратегічно важливо, впливає на кілька відділів, керівництво, перевірки, випробування, безпеку або репутацію.
+      </div>
+    </div>
+
+    <div class="item" style="cursor:default;">
+      <div class="name">3. Терміновість</div>
+      <div class="hint">
+        Це про <b>тиск по часу</b>.<br/><br/>
+        <b>1 бал</b> — спокійний режим, був нормальний запас часу.<br/>
+        <b>3 бали</b> — задачу треба було зробити в строк, без великого запасу, але без авралу.<br/>
+        <b>5 балів</b> — дуже терміново: сьогодні на сьогодні, жорсткий дедлайн, нарада, перевірка, негайне рішення.
+      </div>
+    </div>
+
+    <div class="item" style="cursor:default;">
+      <div class="name">4. Результат</div>
+      <div class="hint">
+        Це про <b>користь і завершеність результату</b>.<br/><br/>
+        <b>1 бал</b> — мінімальний результат: часткове закриття питання, базова відповідь, проміжний крок.<br/>
+        <b>3 бали</b> — повний нормальний результат: задачу закрито, очікуваний результат отримано.<br/>
+        <b>5 балів</b> — сильний результат: повністю закрито проблему, є відчутний ефект, економія часу, зняття ризику або якісне управлінське рішення.
+      </div>
+    </div>
+
+    <div class="item" style="cursor:default;">
+      <div class="name">Як оцінювати без помилки</div>
+      <div class="hint">
+        1. Спочатку подумай, скільки реально було роботи — це <b>трудомісткість</b>.<br/>
+        2. Потім окремо подумай, наскільки ця задача була важлива — це <b>важливість</b>.<br/>
+        3. Окремо оцінюй, чи був часовий тиск — це <b>терміновість</b>.<br/>
+        4. І лише потім оцінюй, який фактичний ефект дала задача — це <b>результат</b>.<br/><br/>
+        Якщо сумніваєшся між двома балами — став нижчий, якщо немає явних підстав для вищого.
+      </div>
+    </div>
+
+    <div class="item" style="cursor:default;">
+      <div class="name">Приклад 1</div>
+      <div class="hint">
+        <b>Коротке погодження листа або уточнення інформації</b><br/>
+        Трудомісткість: 1<br/>
+        Важливість: 2<br/>
+        Терміновість: 2<br/>
+        Результат: 2<br/><br/>
+        Логіка: зроблено швидко, задача не дуже велика, але мала практичну користь.
+      </div>
+    </div>
+
+    <div class="item" style="cursor:default;">
+      <div class="name">Приклад 2</div>
+      <div class="hint">
+        <b>Підготовка порівняльних таблиць по кількох напрямках для наради</b><br/>
+        Трудомісткість: 4<br/>
+        Важливість: 4<br/>
+        Терміновість: 4<br/>
+        Результат: 4<br/><br/>
+        Логіка: багато підготовки, важливо для прийняття рішення, дедлайн жорсткий, результат повноцінний.
+      </div>
+    </div>
+
+    <div class="item" style="cursor:default;">
+      <div class="name">Приклад 3</div>
+      <div class="hint">
+        <b>Організація або супровід випробувань / перевірки з кількома відділами</b><br/>
+        Трудомісткість: 5<br/>
+        Важливість: 5<br/>
+        Терміновість: 4 або 5<br/>
+        Результат: 4 або 5<br/><br/>
+        Логіка: висока координація, значимість для керівництва, серйозний вплив на роботу і результат.
+      </div>
+    </div>
+
+    <div class="item" style="cursor:default;">
+      <div class="name">Коротка пам’ятка для керівника</div>
+      <div class="hint">
+        <b>1–2</b> — невелика або локальна задача.<br/>
+        <b>3</b> — нормальний робочий рівень.<br/>
+        <b>4</b> — сильна, важлива або трудомістка задача.<br/>
+        <b>5</b> — реально вагома задача з великим впливом, складністю або терміновістю.
+      </div>
+    </div>
+
+    <div class="sep"></div>
+    <div class="actions">
+      <button class="btn primary" data-action="hideSheet">Зрозуміло</button>
+    </div>
+
+  `, { stack:true });
 
 }
 
@@ -16643,6 +16878,10 @@ const ACTIONS = {
   deleteWeeklyTaskNow,
 
   openTaskEvaluation,
+
+  applyTaskEvaluationPresetFromInput,
+
+  openTaskEvaluationHelp,
 
   saveTaskEvaluationNow,
 
