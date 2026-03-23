@@ -5346,6 +5346,14 @@ function setReferenceDeptFilterFromInput(){
 
 }
 
+function setReferenceDeptFilter(filter="all"){
+
+  UI.refDeptFilter = filter || "all";
+
+  render();
+
+}
+
 function openReferenceEntry(entryId=""){
 
   const u = currentSessionUser();
@@ -5366,10 +5374,18 @@ function openReferenceEntry(entryId=""){
       <label>Назва запису</label>
       <input id="referenceEntryTitle" type="text" value="${htmlesc(entry?.title || "")}" placeholder="Коротка назва запису" ${readOnly ? "readonly" : ""} />
     </div>
-    <div class="field">
-      <label>Текст</label>
-      <textarea id="referenceEntryText" class="task-desc-input" placeholder="Запиши коротко те, що хочеш тримати під рукою." ${readOnly ? "readonly" : ""}>${htmlesc(entry?.text || "")}</textarea>
-    </div>
+    ${readOnly ? `
+      <div class="field">
+        <label>Текст</label>
+        <div class="task-desc-input ref-entry-preview rich-text">${entry?.text ? richText(entry.text) : "—"}</div>
+      </div>
+    ` : `
+      <div class="field">
+        <label>Текст</label>
+        ${formatToolbar("referenceEntryText", "inline")}
+        <textarea id="referenceEntryText" class="task-desc-input" placeholder="Запиши коротко те, що хочеш тримати під рукою." ${readOnly ? "readonly" : ""}>${htmlesc(entry?.text || "")}</textarea>
+      </div>
+    `}
     ${entry?.updatedAt ? `<div class="hint">Оновлено: <span class="mono">${fmtDate(toDateOnly(entry.updatedAt) || "")}</span></div>` : ""}
     <div class="actions" style="margin-top:14px;">
       ${readOnly ? "" : `<button class="btn primary" data-action="saveReferenceEntryNow" data-arg1="${entry?.id || ""}">Зберегти</button>`}
@@ -5448,7 +5464,17 @@ function viewControl(){
 
   UI.tab = ROUTES.CONTROL;
 
-  const deptOptions = [`<option value="all">Усі записи</option>`, `<option value="general">Загальне</option>`, ...STATE.departments.map(dept=>`<option value="${dept.id}" ${deptFilter===dept.id ? "selected" : ""}>${htmlesc(dept.name)}</option>`)].join("");
+  const filterButtons = [
+    {key:"all", label:"Усі"},
+    {key:"general", label:"Загальні"},
+    ...STATE.departments.map(dept=>({key:dept.id, label:dept.name.replace(/^Відділ\\s+/,"").trim()}))
+  ].map(item=>`
+    <button
+      class="btn btn-mini ref-filter-btn ${deptFilter===item.key ? "primary" : "ghost"}"
+      data-action="setReferenceDeptFilter"
+      data-arg1="${item.key}"
+    >${htmlesc(item.label)}</button>
+  `).join("");
 
   const entries = (notes.entries || []).filter(entry=>{
     if(!entry || !entry.text) return false;
@@ -5461,22 +5487,10 @@ function viewControl(){
 
   const entryCards = entries.map((entry, idx)=>{
     const title = entry.title || `Запис ${idx + 1}`;
-    const updated = fmtDate(toDateOnly(entry.updatedAt || entry.createdAt || "") || "");
     return `
       <div class="ref-note">
-        <div class="ref-note-top">
-          <div class="ref-note-head">
-            <div class="ref-note-title">${htmlesc(title)}</div>
-            <div class="ref-note-meta">
-              <span class="pill">${htmlesc(getReferenceEntryDeptLabel(entry.deptId))}</span>
-              ${updated ? `<span class="pill mono">${updated}</span>` : ""}
-            </div>
-          </div>
-          <div class="actions ref-note-actions">
-            <button class="btn ghost btn-mini" data-action="openReferenceEntry" data-arg1="${entry.id}">${u.readOnly ? "Відкрити" : "Редагувати"}</button>
-          </div>
-        </div>
-        <div class="ref-note-body">${htmlesc(referenceNotePreview(entry.text, "Без тексту"))}</div>
+        <button class="ref-note-link" data-action="openReferenceEntry" data-arg1="${entry.id}">${htmlesc(title)}</button>
+        <div class="ref-note-body rich-text">${entry.text ? richText(entry.text) : "Без тексту"}</div>
       </div>
     `;
   }).join("");
@@ -5487,45 +5501,20 @@ function viewControl(){
 
     <div class="card">
       <div class="card-h">
-        <div class="t">Нотатки</div>
-        ${u.readOnly ? "" : `<button class="btn primary btn-mini" data-action="openReferenceEntry">+ Новий запис</button>`}
-      </div>
-      <div class="card-b">
-        <div class="ref-toolbar">
-          <div class="field">
-            <label>Відділ</label>
-            <select id="referenceDeptFilter" data-change="setReferenceDeptFilterFromInput">
-              ${deptOptions}
-            </select>
-          </div>
-          <div class="field">
-            <label>Пошук</label>
-            <input id="referenceSearch" type="search" placeholder="Наприклад: наказ, НРК, контакт, штат..." value="${htmlesc(UI.refSearch || "")}" data-change="setReferenceSearchFromInput" />
-          </div>
+        <div class="t">Список записів</div>
+        <div class="actions">
+          <span class="badge b-blue">${entries.length}</span>
+          ${u.readOnly ? "" : `<button class="btn primary btn-mini" data-action="openReferenceEntry">+ Новий запис</button>`}
         </div>
       </div>
-    </div>
-
-    <div class="card">
-      <div class="card-h">
-        <div class="t">Список записів</div>
-        <span class="badge b-blue">${entries.length}</span>
-      </div>
       <div class="card-b">
+        <div class="ref-filterbar">${filterButtons}</div>
+        <div class="field" style="margin-top:12px;">
+          <label>Пошук</label>
+          <input id="referenceSearch" type="search" placeholder="Наприклад: наказ, НРК, контакт, штат..." value="${htmlesc(UI.refSearch || "")}" data-change="setReferenceSearchFromInput" />
+        </div>
         <div class="ref-list">
           ${entryCards || `<div class="hint">Поки немає записів для цього фільтра. Додай нотатку і прив’яжи її до відділу або лиши як загальну.</div>`}
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-h">
-        <div class="t">Швидкі дії</div>
-      </div>
-      <div class="card-b">
-        <div class="actions control-actions">
-          <button class="btn ghost" data-action="openAbout">ℹ️ Про прототип</button>
-          <button class="btn danger" data-action="logout">🚪 Вийти</button>
         </div>
       </div>
     </div>
@@ -17162,6 +17151,8 @@ const CHANGE_ACTIONS = {
   setAnalyticsEvalPresetFilterFromInput,
 
   setEvaluationStartDateFromInput,
+
+  setReferenceDeptFilter,
 
   setReferenceSearchFromInput,
 
