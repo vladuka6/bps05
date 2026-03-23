@@ -296,10 +296,10 @@ function normalizeReferenceNotes(source){
   };
 
   const sectionsToText = (sections)=>[
-    sections.orders ? `?????? / ??????????: ${sections.orders}` : "",
-    sections.contacts ? `???????? / ??????: ${sections.contacts}` : "",
-    sections.staff ? `?????? ?????????? / ?????????: ${sections.staff}` : "",
-    sections.other ? `????: ${sections.other}` : "",
+    sections.orders ? `Накази / нормативка: ${sections.orders}` : "",
+    sections.contacts ? `Контакти / канали: ${sections.contacts}` : "",
+    sections.staff ? `Штатні пропозиції / структура: ${sections.staff}` : "",
+    sections.other ? `Інше: ${sections.other}` : "",
   ].filter(Boolean).join("\n");
 
   const normalizeEntry = (value, index=0)=>{
@@ -348,7 +348,7 @@ function normalizeReferenceNotes(source){
       legacyEntries.push({
         id: "ref_general_legacy",
         deptId: "",
-        title: "????????",
+        title: "Загальне",
         text: generalText,
         createdAt: nowIsoKyiv(),
         updatedAt: nowIsoKyiv(),
@@ -5334,7 +5334,7 @@ function saveReferenceDeptNow(deptId){
 
 function getReferenceEntryDeptLabel(deptId){
 
-  return deptId ? (getDeptById(deptId)?.name || "??????") : "????????";
+  return deptId ? (getDeptById(deptId)?.name || "Відділ") : "Загальне";
 
 }
 
@@ -5352,29 +5352,29 @@ function openReferenceEntry(entryId=""){
   const readOnly = !!u?.readOnly;
   const notes = normalizeReferenceNotes(STATE.referenceNotes);
   const entry = (notes.entries || []).find(x=>x && x.id===entryId) || null;
-  const deptOptions = [`<option value="">????????</option>`, ...STATE.departments.map(dept=>`<option value="${dept.id}" ${(entry?.deptId || "")===dept.id ? "selected" : ""}>${htmlesc(dept.name)}</option>`)].join("");
+  const deptOptions = [`<option value="">Загальне</option>`, ...STATE.departments.map(dept=>`<option value="${dept.id}" ${(entry?.deptId || "")===dept.id ? "selected" : ""}>${htmlesc(dept.name)}</option>`)].join("");
 
-  showSheet(readOnly ? "???????? ??????" : (entry ? "?????????? ?????" : "????? ?????"), `
+  showSheet(readOnly ? "Перегляд запису" : (entry ? "Редагувати запис" : "Новий запис"), `
 
     <div class="field">
-      <label>??????</label>
+      <label>Відділ</label>
       <select id="referenceEntryDept" ${readOnly ? "disabled" : ""}>
         ${deptOptions}
       </select>
     </div>
     <div class="field">
-      <label>????? ??????</label>
-      <input id="referenceEntryTitle" type="text" value="${htmlesc(entry?.title || "")}" placeholder="??????? ????? ??????" ${readOnly ? "readonly" : ""} />
+      <label>Назва запису</label>
+      <input id="referenceEntryTitle" type="text" value="${htmlesc(entry?.title || "")}" placeholder="Коротка назва запису" ${readOnly ? "readonly" : ""} />
     </div>
     <div class="field">
-      <label>?????</label>
-      <textarea id="referenceEntryText" class="task-desc-input" placeholder="?????? ??????? ??, ?? ????? ??????? ??? ?????." ${readOnly ? "readonly" : ""}>${htmlesc(entry?.text || "")}</textarea>
+      <label>Текст</label>
+      <textarea id="referenceEntryText" class="task-desc-input" placeholder="Запиши коротко те, що хочеш тримати під рукою." ${readOnly ? "readonly" : ""}>${htmlesc(entry?.text || "")}</textarea>
     </div>
-    ${entry?.updatedAt ? `<div class="hint">????????: <span class="mono">${fmtDate(toDateOnly(entry.updatedAt) || "")}</span></div>` : ""}
+    ${entry?.updatedAt ? `<div class="hint">Оновлено: <span class="mono">${fmtDate(toDateOnly(entry.updatedAt) || "")}</span></div>` : ""}
     <div class="actions" style="margin-top:14px;">
-      ${readOnly ? "" : `<button class="btn primary" data-action="saveReferenceEntryNow" data-arg1="${entry?.id || ""}">????????</button>`}
-      ${(!readOnly && entry) ? `<button class="btn danger" data-action="deleteReferenceEntryNow" data-arg1="${entry.id}">????????</button>` : ""}
-      <button class="btn ghost" data-action="hideSheet">${readOnly ? "???????" : "?????????"}</button>
+      ${readOnly ? "" : `<button class="btn primary" data-action="saveReferenceEntryNow" data-arg1="${entry?.id || ""}">Зберегти</button>`}
+      ${(!readOnly && entry) ? `<button class="btn danger" data-action="deleteReferenceEntryNow" data-arg1="${entry.id}">Видалити</button>` : ""}
+      <button class="btn ghost" data-action="hideSheet">${readOnly ? "Закрити" : "Скасувати"}</button>
     </div>
 
   `);
@@ -5388,7 +5388,7 @@ function saveReferenceEntryNow(entryId=""){
   const text = (document.getElementById("referenceEntryText")?.value || "").trim();
 
   if(!text){
-    showToast("????? ????? ??????", "warn");
+    showToast("Додай текст запису", "warn");
     return;
   }
 
@@ -5419,7 +5419,7 @@ function saveReferenceEntryNow(entryId=""){
   STATE.referenceNotes.entries = entries;
   saveState(STATE);
   hideSheet();
-  showToast("????? ?????????", "ok");
+  showToast("Запис збережено", "ok");
   render();
 
 }
@@ -5432,7 +5432,7 @@ function deleteReferenceEntryNow(entryId=""){
   STATE.referenceNotes.entries = (STATE.referenceNotes.entries || []).filter(x=>x && x.id!==entryId);
   saveState(STATE);
   hideSheet();
-  showToast("????? ????????", "ok");
+  showToast("Запис видалено", "ok");
   render();
 
 }
@@ -5448,7 +5448,7 @@ function viewControl(){
 
   UI.tab = ROUTES.CONTROL;
 
-  const deptOptions = [`<option value="all">??? ??????</option>`, `<option value="general">????????</option>`, ...STATE.departments.map(dept=>`<option value="${dept.id}" ${deptFilter===dept.id ? "selected" : ""}>${htmlesc(dept.name)}</option>`)].join("");
+  const deptOptions = [`<option value="all">Усі записи</option>`, `<option value="general">Загальне</option>`, ...STATE.departments.map(dept=>`<option value="${dept.id}" ${deptFilter===dept.id ? "selected" : ""}>${htmlesc(dept.name)}</option>`)].join("");
 
   const entries = (notes.entries || []).filter(entry=>{
     if(!entry || !entry.text) return false;
@@ -5460,7 +5460,7 @@ function viewControl(){
   });
 
   const entryCards = entries.map((entry, idx)=>{
-    const title = entry.title || `????? ${idx + 1}`;
+    const title = entry.title || `Запис ${idx + 1}`;
     const updated = fmtDate(toDateOnly(entry.updatedAt || entry.createdAt || "") || "");
     return `
       <div class="ref-note">
@@ -5473,34 +5473,34 @@ function viewControl(){
             </div>
           </div>
           <div class="actions ref-note-actions">
-            <button class="btn ghost btn-mini" data-action="openReferenceEntry" data-arg1="${entry.id}">${u.readOnly ? "????????" : "??????????"}</button>
+            <button class="btn ghost btn-mini" data-action="openReferenceEntry" data-arg1="${entry.id}">${u.readOnly ? "Відкрити" : "Редагувати"}</button>
           </div>
         </div>
-        <div class="ref-note-body">${htmlesc(referenceNotePreview(entry.text, "??? ??????"))}</div>
+        <div class="ref-note-body">${htmlesc(referenceNotePreview(entry.text, "Без тексту"))}</div>
       </div>
     `;
   }).join("");
 
   const body = `
 
-    <div class="section-title ref-section-title">??????? ?????????</div>
+    <div class="section-title ref-section-title">Довідка керівника</div>
 
     <div class="card">
       <div class="card-h">
-        <div class="t">???????</div>
-        ${u.readOnly ? "" : `<button class="btn primary btn-mini" data-action="openReferenceEntry">+ ????? ?????</button>`}
+        <div class="t">Нотатки</div>
+        ${u.readOnly ? "" : `<button class="btn primary btn-mini" data-action="openReferenceEntry">+ Новий запис</button>`}
       </div>
       <div class="card-b">
         <div class="ref-toolbar">
           <div class="field">
-            <label>??????</label>
+            <label>Відділ</label>
             <select id="referenceDeptFilter" data-change="setReferenceDeptFilterFromInput">
               ${deptOptions}
             </select>
           </div>
           <div class="field">
-            <label>?????</label>
-            <input id="referenceSearch" type="search" placeholder="?????????: ?????, ???, ???????, ????..." value="${htmlesc(UI.refSearch || "")}" data-change="setReferenceSearchFromInput" />
+            <label>Пошук</label>
+            <input id="referenceSearch" type="search" placeholder="Наприклад: наказ, НРК, контакт, штат..." value="${htmlesc(UI.refSearch || "")}" data-change="setReferenceSearchFromInput" />
           </div>
         </div>
       </div>
@@ -5508,24 +5508,24 @@ function viewControl(){
 
     <div class="card">
       <div class="card-h">
-        <div class="t">?????? ???????</div>
+        <div class="t">Список записів</div>
         <span class="badge b-blue">${entries.length}</span>
       </div>
       <div class="card-b">
         <div class="ref-list">
-          ${entryCards || `<div class="hint">???? ????? ??????? ??? ????? ???????. ????? ??????? ? ???????? ?? ?? ??????? ??? ???? ?? ????????.</div>`}
+          ${entryCards || `<div class="hint">Поки немає записів для цього фільтра. Додай нотатку і прив’яжи її до відділу або лиши як загальну.</div>`}
         </div>
       </div>
     </div>
 
     <div class="card">
       <div class="card-h">
-        <div class="t">?????? ???</div>
+        <div class="t">Швидкі дії</div>
       </div>
       <div class="card-b">
         <div class="actions control-actions">
-          <button class="btn ghost" data-action="openAbout">?? ??? ????????</button>
-          <button class="btn danger" data-action="logout">?? ?????</button>
+          <button class="btn ghost" data-action="openAbout">ℹ️ Про прототип</button>
+          <button class="btn danger" data-action="logout">🚪 Вийти</button>
         </div>
       </div>
     </div>
@@ -5534,20 +5534,20 @@ function viewControl(){
 
   const tabs = (u.role==="boss")
     ? [
-      {key:ROUTES.CONTROL, label:"??????", ico:"??"},
-      {key:ROUTES.TASKS, label:"??????", ico:"??"},
-      {key:ROUTES.WEEKLY, label:"???????", ico:"??"},
-      {key:ROUTES.ANALYTICS, label:"?????????", ico:"??"},
-      {key:ROUTES.REPORTING, label:"?????????", ico:"??"},
-      {key:ROUTES.PLAN, label:"????", ico:"??"},
+      {key:ROUTES.CONTROL, label:"Цікаве", ico:"📚"},
+      {key:ROUTES.TASKS, label:"Задачі", ico:"📋"},
+      {key:ROUTES.WEEKLY, label:"Тиждень", ico:"🗓"},
+      {key:ROUTES.ANALYTICS, label:"Аналітика", ico:"📈"},
+      {key:ROUTES.REPORTING, label:"Звітність", ico:"📑"},
+      {key:ROUTES.PLAN, label:"План", ico:"📅"},
     ]
     : [
-      {key:ROUTES.CONTROL, label:"??????", ico:"??"},
-      {key:ROUTES.TASKS, label:"??????", ico:"??"},
+      {key:ROUTES.CONTROL, label:"Цікаве", ico:"📚"},
+      {key:ROUTES.TASKS, label:"Задачі", ico:"📋"},
     ];
 
   appShell({
-    title: "??????",
+    title: "Цікаве",
     subtitle: roleSubtitle(u),
     bodyHtml: body,
     showFab: false,
