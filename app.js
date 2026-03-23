@@ -5533,6 +5533,15 @@ function setReferenceDeptFilter(filter="all"){
 
 }
 
+function toggleReferenceEntry(entryId=""){
+
+  if(!entryId) return;
+  if(!UI.refExpandedEntries || typeof UI.refExpandedEntries !== "object") UI.refExpandedEntries = {};
+  UI.refExpandedEntries[entryId] = !UI.refExpandedEntries[entryId];
+  render();
+
+}
+
 function openReferenceEntry(entryId=""){
 
   const u = currentSessionUser();
@@ -5671,6 +5680,7 @@ function viewControl(){
     const title = entry.title || `Запис ${idx + 1}`;
     const numberedTitle = `${idx + 1}. ${title}`;
     const bodyHtml = refSearch ? highlightReferenceText(entry.text || "", refSearch) : richText(entry.text || "");
+    const isExpanded = !!refSearch || !!UI.refExpandedEntries?.[entry.id];
     const entryAttachments = (notes.attachments || []).filter(item=>item && item.url && item.entryId===entry.id);
     const attachmentList = entryAttachments.map((item, fileIdx)=>`
       <div class="ref-attachment-chip-wrap">
@@ -5684,23 +5694,23 @@ function viewControl(){
     return `
       <div class="ref-note">
         <div class="ref-note-titlebar">
-          <details class="ref-note-details" ${refSearch ? "open" : ""}>
-            <summary class="ref-note-toggle" title="${refSearch ? "Згорнути опис" : "Розгорнути опис"}" aria-label="${refSearch ? "Згорнути опис" : "Розгорнути опис"}">
-              <span class="ref-note-caret"></span>
-            </summary>
-            <div class="ref-note-body rich-text">${bodyHtml || "Без тексту"}</div>
-            <div class="ref-attachments-block">
-              <div class="ref-attachments-head">
-                <span>Вкладення</span>
-                ${u.readOnly ? "" : `<button class="btn btn-mini ghost" data-action="openReferenceLink" data-arg1="${entry.id}">+ Додати</button>`}
-              </div>
-              <div class="ref-attachments-list">
-                ${attachmentList || `<div class="hint">Для цього запису вкладень поки немає.</div>`}
-              </div>
-            </div>
-          </details>
+          <button class="ref-note-toggle ${isExpanded ? "is-open" : ""}" data-action="toggleReferenceEntry" data-arg1="${entry.id}" title="${isExpanded ? "Згорнути опис" : "Розгорнути опис"}" aria-label="${isExpanded ? "Згорнути опис" : "Розгорнути опис"}">
+            <span class="ref-note-caret"></span>
+          </button>
           <button class="ref-note-link" data-action="openReferenceEntry" data-arg1="${entry.id}">${refSearch ? highlightReferenceText(numberedTitle, refSearch) : htmlesc(numberedTitle)}</button>
         </div>
+        ${isExpanded ? `
+          <div class="ref-note-body rich-text">${bodyHtml || "Без тексту"}</div>
+          <div class="ref-attachments-block">
+            <div class="ref-attachments-head">
+              <span>Вкладення</span>
+              ${u.readOnly ? "" : `<button class="btn btn-mini ghost" data-action="openReferenceLink" data-arg1="${entry.id}">+ Додати</button>`}
+            </div>
+            <div class="ref-attachments-list">
+              ${attachmentList || `<div class="hint">Для цього запису вкладень поки немає.</div>`}
+            </div>
+          </div>
+        ` : ""}
       </div>
     `;
   }).join("");
@@ -17334,6 +17344,8 @@ const ACTIONS = {
   deleteReferenceLinkNow,
 
   setReferenceDeptFilter,
+
+  toggleReferenceEntry,
 
   setAnalyticsEvalPeriod,
 
