@@ -5621,42 +5621,15 @@ function viewControl(){
     return haystack.includes(refSearch);
   });
 
-  const attachments = (notes.attachments || []).filter(item=>{
-    if(!item || !item.url) return false;
-    if(deptFilter === "general" && item.deptId) return false;
-    if(deptFilter !== "all" && deptFilter !== "general" && item.deptId !== deptFilter) return false;
-    if(!refSearch) return true;
-    const haystack = `${item.title || ""} ${item.note || ""} ${item.url || ""} ${getReferenceEntryDeptLabel(item.deptId)}`.toLowerCase();
-    return haystack.includes(refSearch);
-  });
-
   const entryCards = entries.map((entry, idx)=>{
-    const title = entry.title || `????? ${idx + 1}`;
+    const title = entry.title || `Запис ${idx + 1}`;
     const preview = getReferenceTextPreview(entry.text);
     return `
       <div class="ref-note">
         <button class="ref-note-link" data-action="openReferenceEntry" data-arg1="${entry.id}">${htmlesc(title)}</button>
         <details class="ref-note-details">
-          <summary>${htmlesc(preview.slice(0, 140) || "????")}${preview.length > 140 ? "..." : ""}</summary>
-          <div class="ref-note-body rich-text">${entry.text ? richText(entry.text) : "??? ??????"}</div>
-        </details>
-      </div>
-    `;
-  }).join("");
-
-  const attachmentCards = attachments.map((item, idx)=>{
-    const title = item.title || `????????? ${idx + 1}`;
-    const preview = getReferenceTextPreview(item.note || item.url);
-    return `
-      <div class="ref-note ref-attach-card">
-        <div class="ref-attach-top">
-          <a class="ref-note-link" href="${htmlesc(item.url)}" target="_blank" rel="noopener noreferrer">${htmlesc(title)}</a>
-          ${u.readOnly ? "" : `<button class="btn btn-mini ghost" data-action="openReferenceLink" data-arg1="${item.id}">???????</button>`}
-        </div>
-        <details class="ref-note-details">
-          <summary>${htmlesc(preview.slice(0, 140) || item.url)}${preview.length > 140 ? "..." : ""}</summary>
-          <div class="ref-note-body">${htmlesc(item.note || item.url)}</div>
-          <div class="ref-attach-url"><a href="${htmlesc(item.url)}" target="_blank" rel="noopener noreferrer">${htmlesc(item.url)}</a></div>
+          <summary>${htmlesc(preview.slice(0, 140) || "Опис")}${preview.length > 140 ? "..." : ""}</summary>
+          <div class="ref-note-body rich-text">${entry.text ? richText(entry.text) : "Без тексту"}</div>
         </details>
       </div>
     `;
@@ -5664,41 +5637,25 @@ function viewControl(){
 
   const body = `
 
-    <div class="section-title ref-section-title">??????? ?????????</div>
+    <div class="section-title ref-section-title">Довідка керівника</div>
 
     <div class="card">
       <div class="card-h">
-        <div class="t">?????? ???????</div>
+        <div class="t">Список записів</div>
         <div class="actions">
           <span class="badge b-blue">${entries.length}</span>
-          ${u.readOnly ? "" : `<button class="btn primary btn-mini" data-action="openReferenceEntry">+ ????? ?????</button>`}
+          ${u.readOnly ? "" : `<button class="btn primary btn-mini" data-action="openReferenceEntry">+ Новий запис</button>`}
         </div>
       </div>
       <div class="card-b">
         <div class="ref-controls">
           <div class="ref-filterbar">${filterButtons}</div>
           <div class="field ref-search-inline">
-            <input id="referenceSearch" type="search" placeholder="?????: ?????, ???, ???????, ????..." value="${htmlesc(UI.refSearch || "")}" data-change="setReferenceSearchFromInput" />
+            <input id="referenceSearch" type="search" placeholder="Пошук: наказ, НРК, контакт, штат..." value="${htmlesc(UI.refSearch || "")}" data-change="setReferenceSearchFromInput" />
           </div>
         </div>
         <div class="ref-list">
-          ${entryCards || `<div class="hint">???? ????? ??????? ??? ????? ???????. ????? ??????? ? ???????? ?? ?? ??????? ??? ???? ?? ????????.</div>`}
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-h">
-        <div class="t">?????????</div>
-        <div class="actions">
-          <span class="badge b-blue">${attachments.length}</span>
-          ${u.readOnly ? "" : `<button class="btn primary btn-mini" data-action="openReferenceLink">+ ?????? ?????????</button>`}
-        </div>
-      </div>
-      <div class="card-b">
-        <div class="hint">???? ?? ?? ????????? ?????? ????: ?????????? ????????? ?? ????? ? ?????????. ???????? upload ? Cloudflare R2 ?????????? ????????? ??????.</div>
-        <div class="ref-list">
-          ${attachmentCards || `<div class="hint">???? ????? ???????? ??? ????? ???????.</div>`}
+          ${entryCards || `<div class="hint">Поки немає записів для цього фільтра. Додай нотатку і прив’яжи її до відділу або лиши як загальну.</div>`}
         </div>
       </div>
     </div>
