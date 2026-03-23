@@ -5470,6 +5470,7 @@ function viewControl(){
     ...STATE.departments.map(dept=>({key:dept.id, label:dept.name.replace(/^Відділ\\s+/,"").trim()}))
   ].map(item=>`
     <button
+      type="button"
       class="btn btn-mini ref-filter-btn ${deptFilter===item.key ? "primary" : "ghost"}"
       data-action="setReferenceDeptFilter"
       data-arg1="${item.key}"
@@ -5508,10 +5509,11 @@ function viewControl(){
         </div>
       </div>
       <div class="card-b">
-        <div class="ref-filterbar">${filterButtons}</div>
-        <div class="field" style="margin-top:12px;">
-          <label>Пошук</label>
-          <input id="referenceSearch" type="search" placeholder="Наприклад: наказ, НРК, контакт, штат..." value="${htmlesc(UI.refSearch || "")}" data-change="setReferenceSearchFromInput" />
+        <div class="ref-controls">
+          <div class="ref-filterbar">${filterButtons}</div>
+          <div class="field ref-search-inline">
+            <input id="referenceSearch" type="search" placeholder="Пошук: наказ, НРК, контакт, штат..." value="${htmlesc(UI.refSearch || "")}" data-change="setReferenceSearchFromInput" />
+          </div>
         </div>
         <div class="ref-list">
           ${entryCards || `<div class="hint">Поки немає записів для цього фільтра. Додай нотатку і прив’яжи її до відділу або лиши як загальну.</div>`}
