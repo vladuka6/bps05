@@ -750,10 +750,13 @@
 .ref-attach-url a:hover{text-decoration:underline;}
 .ref-attachments-block{margin-top:10px;padding-top:10px;border-top:1px dashed rgba(150,170,205,.24);display:grid;gap:8px;}
 .ref-attachments-head{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13px;font-weight:800;color:var(--text-soft);}
-.ref-attachments-list{display:grid;gap:8px;}
-.ref-attachment-row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:8px 10px;border:1px solid rgba(150,170,205,.18);border-radius:12px;background:rgba(255,255,255,.62);}
-.ref-attachment-link{font-weight:700;color:var(--blue);text-decoration:none;overflow-wrap:anywhere;}
-.ref-attachment-link:hover{text-decoration:underline;}
+.ref-attachments-list{display:flex;flex-wrap:wrap;gap:8px;}
+.ref-attachment-chip-wrap{display:inline-flex;align-items:center;gap:6px;max-width:100%;}
+.ref-attachment-chip{display:inline-flex;align-items:center;gap:8px;max-width:100%;padding:7px 12px;border:1px solid rgba(150,170,205,.22);border-radius:999px;background:rgba(255,255,255,.72);color:var(--blue);text-decoration:none;box-shadow:0 4px 14px rgba(122,149,191,.08);}
+.ref-attachment-chip:hover{transform:translateY(-1px);text-decoration:none;}
+.ref-attachment-ico{font-size:15px;line-height:1;}
+.ref-attachment-name{font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px;}
+.ref-attachment-edit{padding-inline:10px;}
 .ref-entry-preview{min-height:160px;background:rgba(255,255,255,.72);}
     .weekly-list{gap:6px;margin-top: 6px;}
     .weekly-list .weekly-item{padding:8px 10px;}
@@ -1052,7 +1055,10 @@
   .ref-note-top{flex-direction:column;align-items:stretch;}
   .ref-note-actions{width:100%;justify-content:flex-start;}
   .ref-attach-top{flex-direction:column;align-items:stretch;}
-  .ref-attachments-head,.ref-attachment-row{flex-direction:column;align-items:stretch;}
+  .ref-attachments-head{flex-direction:column;align-items:stretch;}
+  .ref-attachments-list{display:grid;}
+  .ref-attachment-chip-wrap{display:grid;grid-template-columns:minmax(0,1fr) auto;}
+  .ref-attachment-name{max-width:none;}
 
       .dept-toggle-grid{grid-template-columns: repeat(2, minmax(0,1fr));}
     }

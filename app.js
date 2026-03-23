@@ -5370,6 +5370,19 @@ function getReferenceTextPreview(text=""){
 
 }
 
+function getReferenceAttachmentIcon(item){
+
+  const src = `${item?.title || ""} ${item?.url || ""}`.toLowerCase();
+  if(/\.(png|jpe?g|webp|gif|svg)(\?|#|$)/.test(src)) return "🖼";
+  if(/\.(pdf)(\?|#|$)/.test(src)) return "📄";
+  if(/\.(doc|docx|odt|rtf)(\?|#|$)/.test(src)) return "📝";
+  if(/\.(xls|xlsx|csv)(\?|#|$)/.test(src)) return "📊";
+  if(/\.(ppt|pptx)(\?|#|$)/.test(src)) return "📽";
+  if(/\.(zip|rar|7z)(\?|#|$)/.test(src)) return "🗜";
+  return "📎";
+
+}
+
 function openReferenceLink(entryId="", attachmentId=""){
 
   const u = currentSessionUser();
@@ -5640,9 +5653,12 @@ function viewControl(){
     const preview = getReferenceTextPreview(entry.text);
     const entryAttachments = (notes.attachments || []).filter(item=>item && item.url && item.entryId===entry.id);
     const attachmentList = entryAttachments.map((item, fileIdx)=>`
-      <div class="ref-attachment-row">
-        <a class="ref-attachment-link" href="${htmlesc(item.url)}" target="_blank" rel="noopener noreferrer">${htmlesc(item.title || `Вкладення ${fileIdx + 1}`)}</a>
-        ${u.readOnly ? "" : `<button class="btn btn-mini ghost" data-action="openReferenceLink" data-arg1="${entry.id}" data-arg2="${item.id}">Змінити</button>`}
+      <div class="ref-attachment-chip-wrap">
+        <a class="ref-attachment-chip" href="${htmlesc(item.url)}" target="_blank" rel="noopener noreferrer" title="${htmlesc(item.title || `Вкладення ${fileIdx + 1}`)}">
+          <span class="ref-attachment-ico">${getReferenceAttachmentIcon(item)}</span>
+          <span class="ref-attachment-name">${htmlesc(item.title || `Вкладення ${fileIdx + 1}`)}</span>
+        </a>
+        ${u.readOnly ? "" : `<button class="btn btn-mini ghost ref-attachment-edit" data-action="openReferenceLink" data-arg1="${entry.id}" data-arg2="${item.id}" title="Редагувати вкладення">✎</button>`}
       </div>
     `).join("");
     return `
