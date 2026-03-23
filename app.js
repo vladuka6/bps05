@@ -335,6 +335,7 @@ function normalizeReferenceNotes(source){
 
     return {
       id: typeof item.id === "string" && item.id ? item.id : uid(`ref_file_${index}`),
+      entryId: typeof item.entryId === "string" ? item.entryId : "",
       deptId: typeof item.deptId === "string" ? item.deptId : "",
       title: typeof item.title === "string" ? item.title.trim() : "",
       url: typeof item.url === "string" ? item.url.trim() : "",
@@ -5369,39 +5370,38 @@ function getReferenceTextPreview(text=""){
 
 }
 
-function openReferenceLink(entryId=""){
+function openReferenceLink(entryId="", attachmentId=""){
 
   const u = currentSessionUser();
   const readOnly = !!u?.readOnly;
   const notes = normalizeReferenceNotes(STATE.referenceNotes);
-  const entry = (notes.attachments || []).find(x=>x && x.id===entryId) || null;
-  const deptOptions = [`<option value="">????????</option>`, ...STATE.departments.map(dept=>`<option value="${dept.id}" ${(entry?.deptId || "")===dept.id ? "selected" : ""}>${htmlesc(dept.name)}</option>`)].join("");
+  const parentEntry = (notes.entries || []).find(x=>x && x.id===entryId) || null;
+  const attachment = attachmentId ? (notes.attachments || []).find(x=>x && x.id===attachmentId) || null : null;
 
-  showSheet(readOnly ? "???????? ?????????" : (entry ? "?????????? ?????????" : "???? ?????????"), `
+  if(!parentEntry) {
+    showToast("???????? ??????? ???????? ?????", "warn");
+    return;
+  }
 
-    <div class="hint">???? ?? ?? ????????? ?????? ????: ??? ?????????? ????????? ?? ???? ??? ????????. ???????? upload ? Cloudflare R2 ?????????? ??????.</div>
+  showSheet(readOnly ? "???????? ?????????" : (attachment ? "?????????? ?????????" : "???? ?????????"), `
+
+    <div class="hint">?????: <b>${htmlesc(parentEntry.title || "??? ?????")}</b></div>
     <div class="sep"></div>
     <div class="field">
-      <label>??????</label>
-      <select id="referenceLinkDept" ${readOnly ? "disabled" : ""}>
-        ${deptOptions}
-      </select>
-    </div>
-    <div class="field">
       <label>????? ?????????</label>
-      <input id="referenceLinkTitle" type="text" value="${htmlesc(entry?.title || "")}" placeholder="?????????: ????? ?..., PDF ?? ???" ${readOnly ? "readonly" : ""} />
+      <input id="referenceLinkTitle" type="text" value="${htmlesc(attachment?.title || "")}" placeholder="?????????: ????? ?..., PDF, ???????" ${readOnly ? "readonly" : ""} />
     </div>
     <div class="field">
       <label>?????????</label>
-      <input id="referenceLinkUrl" type="url" value="${htmlesc(entry?.url || "")}" placeholder="https://..." ${readOnly ? "readonly" : ""} />
+      <input id="referenceLinkUrl" type="url" value="${htmlesc(attachment?.url || "")}" placeholder="https://..." ${readOnly ? "readonly" : ""} />
     </div>
     <div class="field">
       <label>???????? ????</label>
-      <textarea id="referenceLinkNote" class="task-desc-input" placeholder="?? ?? ?? ???? ? ??? ???? ??? ????????" ${readOnly ? "readonly" : ""}>${htmlesc(entry?.note || "")}</textarea>
+      <textarea id="referenceLinkNote" class="task-desc-input" placeholder="?? ?? ?? ???? ? ??? ???? ??? ????????" ${readOnly ? "readonly" : ""}>${htmlesc(attachment?.note || "")}</textarea>
     </div>
     <div class="actions" style="margin-top:14px;">
-      ${readOnly ? "" : `<button class="btn primary" data-action="saveReferenceLinkNow" data-arg1="${entry?.id || ""}">????????</button>`}
-      ${(!readOnly && entry) ? `<button class="btn danger" data-action="deleteReferenceLinkNow" data-arg1="${entry.id}">????????</button>` : ""}
+      ${readOnly ? "" : `<button class="btn primary" data-action="saveReferenceLinkNow" data-arg1="${entryId}" data-arg2="${attachment?.id || ""}">????????</button>`}
+      ${(!readOnly && attachment) ? `<button class="btn danger" data-action="deleteReferenceLinkNow" data-arg1="${entryId}" data-arg2="${attachment.id}">????????</button>` : ""}
       <button class="btn ghost" data-action="hideSheet">${readOnly ? "???????" : "?????????"}</button>
     </div>
 
@@ -5409,12 +5409,17 @@ function openReferenceLink(entryId=""){
 
 }
 
-function saveReferenceLinkNow(entryId=""){
 
-  const deptId = document.getElementById("referenceLinkDept")?.value || "";
+function saveReferenceLinkNow(entryId="", attachmentId=""){
+
   const title = (document.getElementById("referenceLinkTitle")?.value || "").trim();
   const url = (document.getElementById("referenceLinkUrl")?.value || "").trim();
   const note = (document.getElementById("referenceLinkNote")?.value || "").trim();
+
+  if(!entryId){
+    showToast("?? ???????? ????? ??? ?????????", "warn");
+    return;
+  }
 
   if(!title){
     showToast("????? ????? ?????????", "warn");
@@ -5427,14 +5432,20 @@ function saveReferenceLinkNow(entryId=""){
   }
 
   STATE.referenceNotes = normalizeReferenceNotes(STATE.referenceNotes);
+  const parentEntry = (STATE.referenceNotes.entries || []).find(x=>x && x.id===entryId) || null;
+  if(!parentEntry){
+    showToast("?? ???????? ????? ??? ?????????", "warn");
+    return;
+  }
   const items = Array.isArray(STATE.referenceNotes.attachments) ? STATE.referenceNotes.attachments.slice() : [];
   const now = nowIsoKyiv();
-  const existingIdx = entryId ? items.findIndex(x=>x && x.id===entryId) : -1;
+  const existingIdx = attachmentId ? items.findIndex(x=>x && x.id===attachmentId) : -1;
 
   if(existingIdx >= 0){
     items[existingIdx] = {
       ...items[existingIdx],
-      deptId,
+      entryId,
+      deptId: parentEntry.deptId || "",
       title,
       url,
       note,
@@ -5443,7 +5454,8 @@ function saveReferenceLinkNow(entryId=""){
   } else {
     items.unshift({
       id: uid("ref_file"),
-      deptId,
+      entryId,
+      deptId: parentEntry.deptId || "",
       title,
       url,
       note,
@@ -5460,18 +5472,20 @@ function saveReferenceLinkNow(entryId=""){
 
 }
 
-function deleteReferenceLinkNow(entryId=""){
 
-  if(!entryId) return;
+function deleteReferenceLinkNow(entryId="", attachmentId=""){
+
+  if(!attachmentId) return;
 
   STATE.referenceNotes = normalizeReferenceNotes(STATE.referenceNotes);
-  STATE.referenceNotes.attachments = (STATE.referenceNotes.attachments || []).filter(x=>x && x.id!==entryId);
+  STATE.referenceNotes.attachments = (STATE.referenceNotes.attachments || []).filter(x=>x && x.id!==attachmentId);
   saveState(STATE);
   hideSheet();
   showToast("????????? ????????", "ok");
   render();
 
 }
+
 
 function setReferenceDeptFilterFromInput(){
 
@@ -5622,14 +5636,30 @@ function viewControl(){
   });
 
   const entryCards = entries.map((entry, idx)=>{
-    const title = entry.title || `Запис ${idx + 1}`;
+    const title = entry.title || `????? ${idx + 1}`;
     const preview = getReferenceTextPreview(entry.text);
+    const entryAttachments = (notes.attachments || []).filter(item=>item && item.url && item.entryId===entry.id);
+    const attachmentList = entryAttachments.map((item, fileIdx)=>`
+      <div class="ref-attachment-row">
+        <a class="ref-attachment-link" href="${htmlesc(item.url)}" target="_blank" rel="noopener noreferrer">${htmlesc(item.title || `????????? ${fileIdx + 1}`)}</a>
+        ${u.readOnly ? "" : `<button class="btn btn-mini ghost" data-action="openReferenceLink" data-arg1="${entry.id}" data-arg2="${item.id}">???????</button>`}
+      </div>
+    `).join("");
     return `
       <div class="ref-note">
         <button class="ref-note-link" data-action="openReferenceEntry" data-arg1="${entry.id}">${htmlesc(title)}</button>
         <details class="ref-note-details">
-          <summary>${htmlesc(preview.slice(0, 140) || "Опис")}${preview.length > 140 ? "..." : ""}</summary>
-          <div class="ref-note-body rich-text">${entry.text ? richText(entry.text) : "Без тексту"}</div>
+          <summary>${htmlesc(preview.slice(0, 140) || "????")}${preview.length > 140 ? "..." : ""}</summary>
+          <div class="ref-note-body rich-text">${entry.text ? richText(entry.text) : "??? ??????"}</div>
+          <div class="ref-attachments-block">
+            <div class="ref-attachments-head">
+              <span>?????????</span>
+              ${u.readOnly ? "" : `<button class="btn btn-mini ghost" data-action="openReferenceLink" data-arg1="${entry.id}">+ ??????</button>`}
+            </div>
+            <div class="ref-attachments-list">
+              ${attachmentList || `<div class="hint">??? ????? ?????? ???????? ???? ?????.</div>`}
+            </div>
+          </div>
         </details>
       </div>
     `;
@@ -5637,25 +5667,25 @@ function viewControl(){
 
   const body = `
 
-    <div class="section-title ref-section-title">Довідка керівника</div>
+    <div class="section-title ref-section-title">??????? ?????????</div>
 
     <div class="card">
       <div class="card-h">
-        <div class="t">Список записів</div>
+        <div class="t">?????? ???????</div>
         <div class="actions">
           <span class="badge b-blue">${entries.length}</span>
-          ${u.readOnly ? "" : `<button class="btn primary btn-mini" data-action="openReferenceEntry">+ Новий запис</button>`}
+          ${u.readOnly ? "" : `<button class="btn primary btn-mini" data-action="openReferenceEntry">+ ????? ?????</button>`}
         </div>
       </div>
       <div class="card-b">
         <div class="ref-controls">
           <div class="ref-filterbar">${filterButtons}</div>
           <div class="field ref-search-inline">
-            <input id="referenceSearch" type="search" placeholder="Пошук: наказ, НРК, контакт, штат..." value="${htmlesc(UI.refSearch || "")}" data-change="setReferenceSearchFromInput" />
+            <input id="referenceSearch" type="search" placeholder="?????: ?????, ???, ???????, ????..." value="${htmlesc(UI.refSearch || "")}" data-change="setReferenceSearchFromInput" />
           </div>
         </div>
         <div class="ref-list">
-          ${entryCards || `<div class="hint">Поки немає записів для цього фільтра. Додай нотатку і прив’яжи її до відділу або лиши як загальну.</div>`}
+          ${entryCards || `<div class="hint">???? ????? ??????? ??? ????? ???????. ????? ??????? ? ???????? ?? ?? ??????? ??? ???? ?? ????????.</div>`}
         </div>
       </div>
     </div>
