@@ -5370,6 +5370,23 @@ function getReferenceTextPreview(text=""){
 
 }
 
+function escapeRegExp(text=""){
+
+  return String(text || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+}
+
+function highlightReferenceText(text="", query=""){
+
+  const source = String(text || "");
+  const needle = String(query || "").trim();
+  if(!needle) return htmlesc(source);
+
+  const parts = source.split(new RegExp(`(${escapeRegExp(needle)})`, "ig"));
+  return parts.map((part, idx)=> idx % 2 ? `<mark class="ref-hit">${htmlesc(part)}</mark>` : htmlesc(part)).join("");
+
+}
+
 function getReferenceAttachmentIcon(item){
 
   const src = `${item?.title || ""} ${item?.url || ""}`.toLowerCase();
@@ -5641,16 +5658,19 @@ function viewControl(){
 
   const entries = (notes.entries || []).filter(entry=>{
     if(!entry || !entry.text) return false;
-    if(deptFilter === "general" && entry.deptId) return false;
-    if(deptFilter !== "all" && deptFilter !== "general" && entry.deptId !== deptFilter) return false;
-    if(!refSearch) return true;
+    if(!refSearch){
+      if(deptFilter === "general" && entry.deptId) return false;
+      if(deptFilter !== "all" && deptFilter !== "general" && entry.deptId !== deptFilter) return false;
+      return true;
+    }
     const haystack = `${entry.title || ""} ${entry.text || ""} ${getReferenceEntryDeptLabel(entry.deptId)}`.toLowerCase();
     return haystack.includes(refSearch);
   });
 
   const entryCards = entries.map((entry, idx)=>{
     const title = entry.title || `Запис ${idx + 1}`;
-    const preview = getReferenceTextPreview(entry.text);
+    const numberedTitle = `${idx + 1}. ${title}`;
+    const bodyHtml = refSearch ? highlightReferenceText(entry.text || "", refSearch) : richText(entry.text || "");
     const entryAttachments = (notes.attachments || []).filter(item=>item && item.url && item.entryId===entry.id);
     const attachmentList = entryAttachments.map((item, fileIdx)=>`
       <div class="ref-attachment-chip-wrap">
@@ -5663,20 +5683,24 @@ function viewControl(){
     `).join("");
     return `
       <div class="ref-note">
-        <button class="ref-note-link" data-action="openReferenceEntry" data-arg1="${entry.id}">${htmlesc(title)}</button>
-        <details class="ref-note-details">
-          <summary>${htmlesc(preview.slice(0, 140) || "Опис")}${preview.length > 140 ? "..." : ""}</summary>
-          <div class="ref-note-body rich-text">${entry.text ? richText(entry.text) : "Без тексту"}</div>
-          <div class="ref-attachments-block">
-            <div class="ref-attachments-head">
-              <span>Вкладення</span>
-              ${u.readOnly ? "" : `<button class="btn btn-mini ghost" data-action="openReferenceLink" data-arg1="${entry.id}">+ Додати</button>`}
+        <div class="ref-note-titlebar">
+          <details class="ref-note-details" ${refSearch ? "open" : ""}>
+            <summary class="ref-note-toggle" title="${refSearch ? "Згорнути опис" : "Розгорнути опис"}" aria-label="${refSearch ? "Згорнути опис" : "Розгорнути опис"}">
+              <span class="ref-note-caret"></span>
+            </summary>
+            <div class="ref-note-body rich-text">${bodyHtml || "Без тексту"}</div>
+            <div class="ref-attachments-block">
+              <div class="ref-attachments-head">
+                <span>Вкладення</span>
+                ${u.readOnly ? "" : `<button class="btn btn-mini ghost" data-action="openReferenceLink" data-arg1="${entry.id}">+ Додати</button>`}
+              </div>
+              <div class="ref-attachments-list">
+                ${attachmentList || `<div class="hint">Для цього запису вкладень поки немає.</div>`}
+              </div>
             </div>
-            <div class="ref-attachments-list">
-              ${attachmentList || `<div class="hint">Для цього запису вкладень поки немає.</div>`}
-            </div>
-          </div>
-        </details>
+          </details>
+          <button class="ref-note-link" data-action="openReferenceEntry" data-arg1="${entry.id}">${refSearch ? highlightReferenceText(numberedTitle, refSearch) : htmlesc(numberedTitle)}</button>
+        </div>
       </div>
     `;
   }).join("");
