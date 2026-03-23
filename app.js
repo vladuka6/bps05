@@ -328,6 +328,23 @@ function normalizeReferenceNotes(source){
 
   };
 
+
+  const normalizeAttachment = (value, index=0)=>{
+
+    const item = (value && typeof value === "object") ? value : {};
+
+    return {
+      id: typeof item.id === "string" && item.id ? item.id : uid(`ref_file_${index}`),
+      deptId: typeof item.deptId === "string" ? item.deptId : "",
+      title: typeof item.title === "string" ? item.title.trim() : "",
+      url: typeof item.url === "string" ? item.url.trim() : "",
+      note: typeof item.note === "string" ? item.note.trim() : "",
+      createdAt: typeof item.createdAt === "string" && item.createdAt ? item.createdAt : nowIsoKyiv(),
+      updatedAt: typeof item.updatedAt === "string" && item.updatedAt ? item.updatedAt : nowIsoKyiv(),
+    };
+
+  };
+
   const byDept = {};
 
   Object.keys(byDeptRaw).forEach(key=>{
@@ -372,12 +389,18 @@ function normalizeReferenceNotes(source){
 
   }
 
+  const attachments = Array.isArray(data.attachments)
+    ? data.attachments.map((item, index)=>normalizeAttachment(item, index)).filter(item=>item.url)
+    : [];
+
   entries.sort((a,b)=> String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || "")));
+  attachments.sort((a,b)=> String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || "")));
 
   return {
     general: normalizeSections(data.general),
     byDept,
     entries,
+    attachments,
   };
 
 }
@@ -1420,6 +1443,7 @@ function seed(){
       general: {orders:"", contacts:"", staff:"", other:""},
       byDept: {},
       entries: [],
+      attachments: [],
     },
 
     evaluationStartDate: DEFAULT_EVALUATION_START_DATE,
@@ -5338,6 +5362,117 @@ function getReferenceEntryDeptLabel(deptId){
 
 }
 
+
+function getReferenceTextPreview(text=""){
+
+  return String(text || "").replace(/\s+/g, " ").trim();
+
+}
+
+function openReferenceLink(entryId=""){
+
+  const u = currentSessionUser();
+  const readOnly = !!u?.readOnly;
+  const notes = normalizeReferenceNotes(STATE.referenceNotes);
+  const entry = (notes.attachments || []).find(x=>x && x.id===entryId) || null;
+  const deptOptions = [`<option value="">????????</option>`, ...STATE.departments.map(dept=>`<option value="${dept.id}" ${(entry?.deptId || "")===dept.id ? "selected" : ""}>${htmlesc(dept.name)}</option>`)].join("");
+
+  showSheet(readOnly ? "???????? ?????????" : (entry ? "?????????? ?????????" : "???? ?????????"), `
+
+    <div class="hint">???? ?? ?? ????????? ?????? ????: ??? ?????????? ????????? ?? ???? ??? ????????. ???????? upload ? Cloudflare R2 ?????????? ??????.</div>
+    <div class="sep"></div>
+    <div class="field">
+      <label>??????</label>
+      <select id="referenceLinkDept" ${readOnly ? "disabled" : ""}>
+        ${deptOptions}
+      </select>
+    </div>
+    <div class="field">
+      <label>????? ?????????</label>
+      <input id="referenceLinkTitle" type="text" value="${htmlesc(entry?.title || "")}" placeholder="?????????: ????? ?..., PDF ?? ???" ${readOnly ? "readonly" : ""} />
+    </div>
+    <div class="field">
+      <label>?????????</label>
+      <input id="referenceLinkUrl" type="url" value="${htmlesc(entry?.url || "")}" placeholder="https://..." ${readOnly ? "readonly" : ""} />
+    </div>
+    <div class="field">
+      <label>???????? ????</label>
+      <textarea id="referenceLinkNote" class="task-desc-input" placeholder="?? ?? ?? ???? ? ??? ???? ??? ????????" ${readOnly ? "readonly" : ""}>${htmlesc(entry?.note || "")}</textarea>
+    </div>
+    <div class="actions" style="margin-top:14px;">
+      ${readOnly ? "" : `<button class="btn primary" data-action="saveReferenceLinkNow" data-arg1="${entry?.id || ""}">????????</button>`}
+      ${(!readOnly && entry) ? `<button class="btn danger" data-action="deleteReferenceLinkNow" data-arg1="${entry.id}">????????</button>` : ""}
+      <button class="btn ghost" data-action="hideSheet">${readOnly ? "???????" : "?????????"}</button>
+    </div>
+
+  `);
+
+}
+
+function saveReferenceLinkNow(entryId=""){
+
+  const deptId = document.getElementById("referenceLinkDept")?.value || "";
+  const title = (document.getElementById("referenceLinkTitle")?.value || "").trim();
+  const url = (document.getElementById("referenceLinkUrl")?.value || "").trim();
+  const note = (document.getElementById("referenceLinkNote")?.value || "").trim();
+
+  if(!title){
+    showToast("????? ????? ?????????", "warn");
+    return;
+  }
+
+  if(!url){
+    showToast("????? ????????? ?? ????", "warn");
+    return;
+  }
+
+  STATE.referenceNotes = normalizeReferenceNotes(STATE.referenceNotes);
+  const items = Array.isArray(STATE.referenceNotes.attachments) ? STATE.referenceNotes.attachments.slice() : [];
+  const now = nowIsoKyiv();
+  const existingIdx = entryId ? items.findIndex(x=>x && x.id===entryId) : -1;
+
+  if(existingIdx >= 0){
+    items[existingIdx] = {
+      ...items[existingIdx],
+      deptId,
+      title,
+      url,
+      note,
+      updatedAt: now,
+    };
+  } else {
+    items.unshift({
+      id: uid("ref_file"),
+      deptId,
+      title,
+      url,
+      note,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  STATE.referenceNotes.attachments = items;
+  saveState(STATE);
+  hideSheet();
+  showToast("????????? ?????????", "ok");
+  render();
+
+}
+
+function deleteReferenceLinkNow(entryId=""){
+
+  if(!entryId) return;
+
+  STATE.referenceNotes = normalizeReferenceNotes(STATE.referenceNotes);
+  STATE.referenceNotes.attachments = (STATE.referenceNotes.attachments || []).filter(x=>x && x.id!==entryId);
+  saveState(STATE);
+  hideSheet();
+  showToast("????????? ????????", "ok");
+  render();
+
+}
+
 function setReferenceDeptFilterFromInput(){
 
   UI.refDeptFilter = document.getElementById("referenceDeptFilter")?.value || "all";
@@ -5486,37 +5621,84 @@ function viewControl(){
     return haystack.includes(refSearch);
   });
 
+  const attachments = (notes.attachments || []).filter(item=>{
+    if(!item || !item.url) return false;
+    if(deptFilter === "general" && item.deptId) return false;
+    if(deptFilter !== "all" && deptFilter !== "general" && item.deptId !== deptFilter) return false;
+    if(!refSearch) return true;
+    const haystack = `${item.title || ""} ${item.note || ""} ${item.url || ""} ${getReferenceEntryDeptLabel(item.deptId)}`.toLowerCase();
+    return haystack.includes(refSearch);
+  });
+
   const entryCards = entries.map((entry, idx)=>{
-    const title = entry.title || `Запис ${idx + 1}`;
+    const title = entry.title || `????? ${idx + 1}`;
+    const preview = getReferenceTextPreview(entry.text);
     return `
       <div class="ref-note">
         <button class="ref-note-link" data-action="openReferenceEntry" data-arg1="${entry.id}">${htmlesc(title)}</button>
-        <div class="ref-note-body rich-text">${entry.text ? richText(entry.text) : "Без тексту"}</div>
+        <details class="ref-note-details">
+          <summary>${htmlesc(preview.slice(0, 140) || "????")}${preview.length > 140 ? "..." : ""}</summary>
+          <div class="ref-note-body rich-text">${entry.text ? richText(entry.text) : "??? ??????"}</div>
+        </details>
+      </div>
+    `;
+  }).join("");
+
+  const attachmentCards = attachments.map((item, idx)=>{
+    const title = item.title || `????????? ${idx + 1}`;
+    const preview = getReferenceTextPreview(item.note || item.url);
+    return `
+      <div class="ref-note ref-attach-card">
+        <div class="ref-attach-top">
+          <a class="ref-note-link" href="${htmlesc(item.url)}" target="_blank" rel="noopener noreferrer">${htmlesc(title)}</a>
+          ${u.readOnly ? "" : `<button class="btn btn-mini ghost" data-action="openReferenceLink" data-arg1="${item.id}">???????</button>`}
+        </div>
+        <details class="ref-note-details">
+          <summary>${htmlesc(preview.slice(0, 140) || item.url)}${preview.length > 140 ? "..." : ""}</summary>
+          <div class="ref-note-body">${htmlesc(item.note || item.url)}</div>
+          <div class="ref-attach-url"><a href="${htmlesc(item.url)}" target="_blank" rel="noopener noreferrer">${htmlesc(item.url)}</a></div>
+        </details>
       </div>
     `;
   }).join("");
 
   const body = `
 
-    <div class="section-title ref-section-title">Довідка керівника</div>
+    <div class="section-title ref-section-title">??????? ?????????</div>
 
     <div class="card">
       <div class="card-h">
-        <div class="t">Список записів</div>
+        <div class="t">?????? ???????</div>
         <div class="actions">
           <span class="badge b-blue">${entries.length}</span>
-          ${u.readOnly ? "" : `<button class="btn primary btn-mini" data-action="openReferenceEntry">+ Новий запис</button>`}
+          ${u.readOnly ? "" : `<button class="btn primary btn-mini" data-action="openReferenceEntry">+ ????? ?????</button>`}
         </div>
       </div>
       <div class="card-b">
         <div class="ref-controls">
           <div class="ref-filterbar">${filterButtons}</div>
           <div class="field ref-search-inline">
-            <input id="referenceSearch" type="search" placeholder="Пошук: наказ, НРК, контакт, штат..." value="${htmlesc(UI.refSearch || "")}" data-change="setReferenceSearchFromInput" />
+            <input id="referenceSearch" type="search" placeholder="?????: ?????, ???, ???????, ????..." value="${htmlesc(UI.refSearch || "")}" data-change="setReferenceSearchFromInput" />
           </div>
         </div>
         <div class="ref-list">
-          ${entryCards || `<div class="hint">Поки немає записів для цього фільтра. Додай нотатку і прив’яжи її до відділу або лиши як загальну.</div>`}
+          ${entryCards || `<div class="hint">???? ????? ??????? ??? ????? ???????. ????? ??????? ? ???????? ?? ?? ??????? ??? ???? ?? ????????.</div>`}
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">
+        <div class="t">?????????</div>
+        <div class="actions">
+          <span class="badge b-blue">${attachments.length}</span>
+          ${u.readOnly ? "" : `<button class="btn primary btn-mini" data-action="openReferenceLink">+ ?????? ?????????</button>`}
+        </div>
+      </div>
+      <div class="card-b">
+        <div class="hint">???? ?? ?? ????????? ?????? ????: ?????????? ????????? ?? ????? ? ?????????. ???????? upload ? Cloudflare R2 ?????????? ????????? ??????.</div>
+        <div class="ref-list">
+          ${attachmentCards || `<div class="hint">???? ????? ???????? ??? ????? ???????.</div>`}
         </div>
       </div>
     </div>
@@ -17110,13 +17292,19 @@ const ACTIONS = {
 
   openReferenceEntry,
 
+  openReferenceLink,
+
   saveReferenceGeneralNow,
 
   saveReferenceDeptNow,
 
   saveReferenceEntryNow,
 
+  saveReferenceLinkNow,
+
   deleteReferenceEntryNow,
+
+  deleteReferenceLinkNow,
 
   setReferenceDeptFilter,
 
