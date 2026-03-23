@@ -5379,30 +5379,30 @@ function openReferenceLink(entryId="", attachmentId=""){
   const attachment = attachmentId ? (notes.attachments || []).find(x=>x && x.id===attachmentId) || null : null;
 
   if(!parentEntry) {
-    showToast("???????? ??????? ???????? ?????", "warn");
+    showToast("Спочатку відкрий існуючий запис", "warn");
     return;
   }
 
-  showSheet(readOnly ? "???????? ?????????" : (attachment ? "?????????? ?????????" : "???? ?????????"), `
+  showSheet(readOnly ? "Перегляд вкладення" : (attachment ? "Редагувати вкладення" : "Нове вкладення"), `
 
-    <div class="hint">?????: <b>${htmlesc(parentEntry.title || "??? ?????")}</b></div>
+    <div class="hint">Запис: <b>${htmlesc(parentEntry.title || "Без назви")}</b></div>
     <div class="sep"></div>
     <div class="field">
-      <label>????? ?????????</label>
-      <input id="referenceLinkTitle" type="text" value="${htmlesc(attachment?.title || "")}" placeholder="?????????: ????? ?..., PDF, ???????" ${readOnly ? "readonly" : ""} />
+      <label>Назва вкладення</label>
+      <input id="referenceLinkTitle" type="text" value="${htmlesc(attachment?.title || "")}" placeholder="Наприклад: Наказ №..., PDF, таблиця" ${readOnly ? "readonly" : ""} />
     </div>
     <div class="field">
-      <label>?????????</label>
+      <label>Посилання</label>
       <input id="referenceLinkUrl" type="url" value="${htmlesc(attachment?.url || "")}" placeholder="https://..." ${readOnly ? "readonly" : ""} />
     </div>
     <div class="field">
-      <label>???????? ????</label>
-      <textarea id="referenceLinkNote" class="task-desc-input" placeholder="?? ?? ?? ???? ? ??? ???? ??? ????????" ${readOnly ? "readonly" : ""}>${htmlesc(attachment?.note || "")}</textarea>
+      <label>Короткий опис</label>
+      <textarea id="referenceLinkNote" class="task-desc-input" placeholder="Що це за файл і для чого він потрібен" ${readOnly ? "readonly" : ""}>${htmlesc(attachment?.note || "")}</textarea>
     </div>
     <div class="actions" style="margin-top:14px;">
-      ${readOnly ? "" : `<button class="btn primary" data-action="saveReferenceLinkNow" data-arg1="${entryId}" data-arg2="${attachment?.id || ""}">????????</button>`}
-      ${(!readOnly && attachment) ? `<button class="btn danger" data-action="deleteReferenceLinkNow" data-arg1="${entryId}" data-arg2="${attachment.id}">????????</button>` : ""}
-      <button class="btn ghost" data-action="hideSheet">${readOnly ? "???????" : "?????????"}</button>
+      ${readOnly ? "" : `<button class="btn primary" data-action="saveReferenceLinkNow" data-arg1="${entryId}" data-arg2="${attachment?.id || ""}">Зберегти</button>`}
+      ${(!readOnly && attachment) ? `<button class="btn danger" data-action="deleteReferenceLinkNow" data-arg1="${entryId}" data-arg2="${attachment.id}">Видалити</button>` : ""}
+      <button class="btn ghost" data-action="hideSheet">${readOnly ? "Закрити" : "Скасувати"}</button>
     </div>
 
   `);
@@ -5417,24 +5417,24 @@ function saveReferenceLinkNow(entryId="", attachmentId=""){
   const note = (document.getElementById("referenceLinkNote")?.value || "").trim();
 
   if(!entryId){
-    showToast("?? ???????? ????? ??? ?????????", "warn");
+    showToast("Не знайдено запис для вкладення", "warn");
     return;
   }
 
   if(!title){
-    showToast("????? ????? ?????????", "warn");
+    showToast("Додай назву вкладення", "warn");
     return;
   }
 
   if(!url){
-    showToast("????? ????????? ?? ????", "warn");
+    showToast("Додай посилання на файл", "warn");
     return;
   }
 
   STATE.referenceNotes = normalizeReferenceNotes(STATE.referenceNotes);
   const parentEntry = (STATE.referenceNotes.entries || []).find(x=>x && x.id===entryId) || null;
   if(!parentEntry){
-    showToast("?? ???????? ????? ??? ?????????", "warn");
+    showToast("Не знайдено запис для вкладення", "warn");
     return;
   }
   const items = Array.isArray(STATE.referenceNotes.attachments) ? STATE.referenceNotes.attachments.slice() : [];
@@ -5467,7 +5467,7 @@ function saveReferenceLinkNow(entryId="", attachmentId=""){
   STATE.referenceNotes.attachments = items;
   saveState(STATE);
   hideSheet();
-  showToast("????????? ?????????", "ok");
+  showToast("Вкладення збережено", "ok");
   render();
 
 }
@@ -5481,7 +5481,7 @@ function deleteReferenceLinkNow(entryId="", attachmentId=""){
   STATE.referenceNotes.attachments = (STATE.referenceNotes.attachments || []).filter(x=>x && x.id!==attachmentId);
   saveState(STATE);
   hideSheet();
-  showToast("????????? ????????", "ok");
+  showToast("Вкладення видалено", "ok");
   render();
 
 }
@@ -5636,28 +5636,28 @@ function viewControl(){
   });
 
   const entryCards = entries.map((entry, idx)=>{
-    const title = entry.title || `????? ${idx + 1}`;
+    const title = entry.title || `Запис ${idx + 1}`;
     const preview = getReferenceTextPreview(entry.text);
     const entryAttachments = (notes.attachments || []).filter(item=>item && item.url && item.entryId===entry.id);
     const attachmentList = entryAttachments.map((item, fileIdx)=>`
       <div class="ref-attachment-row">
-        <a class="ref-attachment-link" href="${htmlesc(item.url)}" target="_blank" rel="noopener noreferrer">${htmlesc(item.title || `????????? ${fileIdx + 1}`)}</a>
-        ${u.readOnly ? "" : `<button class="btn btn-mini ghost" data-action="openReferenceLink" data-arg1="${entry.id}" data-arg2="${item.id}">???????</button>`}
+        <a class="ref-attachment-link" href="${htmlesc(item.url)}" target="_blank" rel="noopener noreferrer">${htmlesc(item.title || `Вкладення ${fileIdx + 1}`)}</a>
+        ${u.readOnly ? "" : `<button class="btn btn-mini ghost" data-action="openReferenceLink" data-arg1="${entry.id}" data-arg2="${item.id}">Змінити</button>`}
       </div>
     `).join("");
     return `
       <div class="ref-note">
         <button class="ref-note-link" data-action="openReferenceEntry" data-arg1="${entry.id}">${htmlesc(title)}</button>
         <details class="ref-note-details">
-          <summary>${htmlesc(preview.slice(0, 140) || "????")}${preview.length > 140 ? "..." : ""}</summary>
-          <div class="ref-note-body rich-text">${entry.text ? richText(entry.text) : "??? ??????"}</div>
+          <summary>${htmlesc(preview.slice(0, 140) || "Опис")}${preview.length > 140 ? "..." : ""}</summary>
+          <div class="ref-note-body rich-text">${entry.text ? richText(entry.text) : "Без тексту"}</div>
           <div class="ref-attachments-block">
             <div class="ref-attachments-head">
-              <span>?????????</span>
-              ${u.readOnly ? "" : `<button class="btn btn-mini ghost" data-action="openReferenceLink" data-arg1="${entry.id}">+ ??????</button>`}
+              <span>Вкладення</span>
+              ${u.readOnly ? "" : `<button class="btn btn-mini ghost" data-action="openReferenceLink" data-arg1="${entry.id}">+ Додати</button>`}
             </div>
             <div class="ref-attachments-list">
-              ${attachmentList || `<div class="hint">??? ????? ?????? ???????? ???? ?????.</div>`}
+              ${attachmentList || `<div class="hint">Для цього запису вкладень поки немає.</div>`}
             </div>
           </div>
         </details>
@@ -5667,25 +5667,25 @@ function viewControl(){
 
   const body = `
 
-    <div class="section-title ref-section-title">??????? ?????????</div>
+    <div class="section-title ref-section-title">Довідка керівника</div>
 
     <div class="card">
       <div class="card-h">
-        <div class="t">?????? ???????</div>
+        <div class="t">Список записів</div>
         <div class="actions">
           <span class="badge b-blue">${entries.length}</span>
-          ${u.readOnly ? "" : `<button class="btn primary btn-mini" data-action="openReferenceEntry">+ ????? ?????</button>`}
+          ${u.readOnly ? "" : `<button class="btn primary btn-mini" data-action="openReferenceEntry">+ Новий запис</button>`}
         </div>
       </div>
       <div class="card-b">
         <div class="ref-controls">
           <div class="ref-filterbar">${filterButtons}</div>
           <div class="field ref-search-inline">
-            <input id="referenceSearch" type="search" placeholder="?????: ?????, ???, ???????, ????..." value="${htmlesc(UI.refSearch || "")}" data-change="setReferenceSearchFromInput" />
+            <input id="referenceSearch" type="search" placeholder="Пошук: наказ, НРК, контакт, штат..." value="${htmlesc(UI.refSearch || "")}" data-change="setReferenceSearchFromInput" />
           </div>
         </div>
         <div class="ref-list">
-          ${entryCards || `<div class="hint">???? ????? ??????? ??? ????? ???????. ????? ??????? ? ???????? ?? ?? ??????? ??? ???? ?? ????????.</div>`}
+          ${entryCards || `<div class="hint">Поки немає записів для цього фільтра. Додай нотатку і прив’яжи її до відділу або лиши як загальну.</div>`}
         </div>
       </div>
     </div>
