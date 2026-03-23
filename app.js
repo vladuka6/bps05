@@ -17118,6 +17118,8 @@ const ACTIONS = {
 
   deleteReferenceEntryNow,
 
+  setReferenceDeptFilter,
+
   setAnalyticsEvalPeriod,
 
   toggleTaskDensity,
@@ -17153,8 +17155,6 @@ const CHANGE_ACTIONS = {
   setAnalyticsEvalPresetFilterFromInput,
 
   setEvaluationStartDateFromInput,
-
-  setReferenceDeptFilter,
 
   setReferenceSearchFromInput,
 
