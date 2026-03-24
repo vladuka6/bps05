@@ -16934,7 +16934,7 @@ function viewAnalytics(){
   `;
 
   const body = `
-    <div class="card">
+    <div class="card analytics-card">
       <div class="card-h">
         <div class="t">Аналітика оцінювання</div>
         <div class="card-actions">

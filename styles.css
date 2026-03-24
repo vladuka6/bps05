@@ -2357,6 +2357,19 @@
       .eval-donut{width:112px;height:112px;}
     }
     @media (max-width: 640px){
+      .analytics-card .card-h{
+        flex-direction:column;
+        align-items:stretch;
+        gap:8px;
+        padding:12px;
+      }
+      .analytics-card .card-actions{
+        justify-content:space-between;
+        gap:6px;
+      }
+      .analytics-card .card-b{
+        padding:10px;
+      }
       .eval-hero-card{
         padding:14px;
         border-radius:16px;
@@ -2366,7 +2379,8 @@
         display:none;
       }
       .eval-hero-title{
-        font-size:17px;
+        font-size:clamp(15px, 5vw, 17px);
+        line-height:1.18;
       }
       .eval-hero-metrics{
         grid-template-columns: repeat(2, minmax(0,1fr));
@@ -2393,11 +2407,11 @@
         justify-items:center;
       }
       .eval-donut{
-        width:88px;
-        height:88px;
+        width:min(88px, 30vw);
+        height:min(88px, 30vw);
       }
       .eval-donut::after{
-        inset:16px;
+        inset:max(14px, 5vw);
       }
       .eval-legend-item{
         grid-template-columns: 10px minmax(0,1fr) auto;
@@ -2414,6 +2428,14 @@
       }
       .analytics-block{
         padding:10px;
+      }
+      .analytics-block .row{
+        gap:8px;
+        align-items:flex-start;
+      }
+      .analytics-block .row .name{
+        min-width:0;
+        overflow-wrap:anywhere;
       }
       .eval-bar-row{
         grid-template-columns: minmax(0,1fr) 40px;
@@ -2435,6 +2457,9 @@
       }
       .eval-task-actions{
         justify-content:flex-start;
+      }
+      .eval-task-actions .btn{
+        flex:1 1 auto;
       }
       .eval-form-grid{
         grid-template-columns:1fr;
@@ -2480,6 +2505,81 @@
         font-size:11px;
         line-height:1.25;
         overflow-wrap:anywhere;
+      }
+    }
+    @media (max-width: 420px){
+      .analytics-card .card-b{
+        padding:8px;
+      }
+      .eval-toolbar{
+        gap:8px;
+        margin-bottom:10px;
+      }
+      .eval-period-chips{
+        gap:6px;
+      }
+      .eval-period-chips .chip{
+        padding:8px 10px;
+        font-size:11px;
+      }
+      .eval-hero{
+        gap:10px;
+        margin-bottom:10px;
+      }
+      .eval-hero-card,
+      .eval-signal-card,
+      .eval-donut-card,
+      .analytics-block{
+        border-radius:14px;
+      }
+      .report-grid{
+        grid-template-columns:repeat(2, minmax(0,1fr));
+      }
+      .report-tile{
+        padding:7px 8px;
+      }
+      .report-tile .v{
+        font-size:14px;
+      }
+      .eval-donut{
+        width:min(82px, 28vw);
+        height:min(82px, 28vw);
+      }
+      .eval-legend{
+        width:100%;
+      }
+      .eval-legend-item{
+        gap:6px;
+        font-size:11px;
+      }
+      .eval-ranking-item{
+        grid-template-columns:24px minmax(0,1fr) auto;
+        gap:7px;
+        padding:8px;
+      }
+      .eval-ranking-pos{
+        width:24px;
+        height:24px;
+        font-size:11px;
+      }
+      .eval-ranking-score{
+        font-size:14px;
+      }
+      .eval-task-item,
+      .eval-task-item.compact{
+        padding:8px 9px;
+      }
+      .eval-task-title{
+        font-size:12px;
+      }
+      .eval-task-actions{
+        display:grid;
+        grid-template-columns:repeat(2, minmax(0,1fr));
+      }
+      .eval-task-actions .btn{
+        width:100%;
+        min-width:0;
+        padding-inline:8px;
       }
     }
     .analytics-bars{margin-top:10px;display:flex;flex-direction:column;gap:8px;}
@@ -2550,17 +2650,19 @@
     }
     .eval-hero-title{
       margin-top:4px;
-      font-size:22px;
+      font-size:clamp(18px, 2.2vw, 22px);
       line-height:1.12;
       font-weight:1000;
       color:var(--text);
       max-width:520px;
+      overflow-wrap:anywhere;
     }
     .eval-hero-sub{
       margin-top:6px;
       font-size:12px;
       color:var(--muted);
       line-height:1.35;
+      overflow-wrap:anywhere;
     }
     .eval-hero-metrics{
       display:grid;
@@ -2582,7 +2684,7 @@
     }
     .eval-hero-metric .v{
       margin-top:4px;
-      font-size:22px;
+      font-size:clamp(18px, 2.6vw, 22px);
       font-weight:1000;
       color:var(--text);
       line-height:1;
@@ -2612,10 +2714,11 @@
       font-weight:900;
     }
     .eval-signal-card .v{
-      font-size:20px;
+      font-size:clamp(16px, 2.4vw, 20px);
       line-height:1.15;
       font-weight:1000;
       color:var(--text);
+      overflow-wrap:anywhere;
     }
     .eval-signal-card .s{
       font-size:12px;
@@ -2625,6 +2728,12 @@
       display:grid;
       grid-template-columns: repeat(4, minmax(0,1fr));
       gap:10px;
+    }
+    .eval-filter-grid .field,
+    .eval-filter-grid label,
+    .eval-filter-grid select,
+    .eval-filter-grid input{
+      min-width:0;
     }
     .eval-kpi-grid{
       margin-bottom:12px;
@@ -2649,11 +2758,12 @@
       margin-top:10px;
     }
     .eval-donut{
-      width:128px;
-      height:128px;
+      width:min(128px, 32vw);
+      height:min(128px, 32vw);
       border-radius:50%;
       position:relative;
       box-shadow: inset 0 0 0 1px rgba(255,255,255,.5), 0 14px 28px rgba(25,35,60,.10);
+      flex-shrink:0;
     }
     .eval-donut::after{
       content:"";
@@ -2676,6 +2786,7 @@
       align-items:center;
       font-size:12px;
       color:var(--muted);
+      min-width:0;
     }
     .eval-legend-item span{
       min-width:0;
@@ -2772,6 +2883,9 @@
       gap:6px;
       flex-wrap:wrap;
       justify-content:flex-end;
+    }
+    .analytics-card .card-actions{
+      flex-wrap:wrap;
     }
     .eval-form-grid{
       display:grid;
