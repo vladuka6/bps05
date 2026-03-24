@@ -3504,13 +3504,6 @@
 /* Analytics mobile polish: keep these overrides at the end so they win */
 .eval-hero-metric .k{display:none;}
 .eval-donut-grid-single{grid-template-columns:1fr;}
-.analytics-card .card-h{
-  position:sticky;
-  top:calc(58px + env(safe-area-inset-top));
-  z-index:16;
-  backdrop-filter:blur(12px);
-  background:linear-gradient(180deg, rgba(244,248,255,.98), rgba(237,243,255,.94));
-}
 .analytics-card .card-actions{flex-wrap:wrap;}
 .eval-donut-status .eval-legend-item span:nth-child(2){display:none;}
 .eval-donut-depts{margin-top:2px;}
@@ -3522,7 +3515,6 @@
     align-items:stretch;
     gap:8px;
     padding:12px;
-    top:calc(52px + env(safe-area-inset-top));
   }
   .analytics-card .card-actions{
     justify-content:space-between;
