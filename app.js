@@ -16679,7 +16679,7 @@ function viewAnalytics(){
         <button class="chip ${UI.analyticsEvalPeriod==="all" ? "active" : ""}" data-action="setAnalyticsEvalPeriod" data-arg1="all">Усе</button>
       </div>
       <div class="eval-filter-grid">
-        <div class="field">
+        <div class="field eval-filter-start">
           <label>Старт оцінювання</label>
           <input type="date" id="evaluationStartDate" value="${htmlesc(evaluationStartDate)}" data-change="setEvaluationStartDateFromInput" />
         </div>
@@ -16690,7 +16690,7 @@ function viewAnalytics(){
             ${deptOptions.map(d=>`<option value="${d.id}" ${UI.analyticsEvalDeptFilter===d.id ? "selected" : ""}>${htmlesc(d.name)}</option>`).join("")}
           </select>
         </div>
-        <div class="field">
+        <div class="field eval-filter-user">
           <label>Виконавець</label>
           <select id="analyticsUserFilter" data-change="setAnalyticsEvalUserFilterFromInput">
             <option value="all">Усі виконавці</option>
@@ -16712,7 +16712,7 @@ function viewAnalytics(){
             ${["managerial","internal","personal"].map(type=>`<option value="${type}" ${UI.analyticsEvalTypeFilter===type ? "selected" : ""}>${htmlesc(taskTypeLabel(type))}</option>`).join("")}
           </select>
         </div>
-        <div class="field">
+        <div class="field eval-filter-preset">
           <label>Шаблон оцінки</label>
           <select id="analyticsPresetFilter" data-change="setAnalyticsEvalPresetFilterFromInput">
             <option value="all">Усі шаблони</option>
@@ -16737,7 +16737,10 @@ function viewAnalytics(){
     <div class="eval-hero">
       <div class="eval-hero-card">
         <div class="eval-hero-eyebrow">Оцінювання після закриття</div>
-        <div class="eval-hero-title">Керівницький дашборд якості виконання</div>
+        <div class="eval-hero-title">
+          <span class="eval-hero-title-full">Керівницький дашборд якості виконання</span>
+          <span class="eval-hero-title-short">Дашборд</span>
+        </div>
         <div class="eval-hero-sub">
           Період: <span class="mono">${htmlesc(period.label)}</span>
           • Старт оцінювання: <span class="mono">${fmtDate(evaluationStartDate)}</span>

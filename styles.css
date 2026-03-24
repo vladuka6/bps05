@@ -3507,6 +3507,7 @@
 .analytics-card .card-actions{flex-wrap:wrap;}
 .eval-donut-status .eval-legend-item span:nth-child(2){display:none;}
 .eval-donut-depts{margin-top:2px;}
+.eval-hero-title-short{display:none;}
 
 @media (max-width: 640px){
   .analytics-card .card-h{
@@ -3525,10 +3526,30 @@
     line-height:1.18;
     overflow-wrap:anywhere;
   }
+  .eval-hero-title-full{display:none;}
+  .eval-hero-title-short{display:inline;}
+  .eval-hero-metrics{
+    grid-template-columns:repeat(3, minmax(0,1fr));
+  }
+  .eval-hero-metric{
+    min-width:0;
+    padding:8px 6px;
+  }
+  .eval-hero-metric .v{
+    font-size:clamp(14px, 4.2vw, 18px);
+    line-height:1;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
   .eval-hero-sub,
   .eval-signal-card .v,
   .analytics-block .row .name{
     overflow-wrap:anywhere;
+  }
+  .eval-filter-start,
+  .eval-filter-user,
+  .eval-filter-preset{
+    display:none;
   }
   .eval-donut-depts .eval-donut-wrap{
     grid-template-columns:72px minmax(0,1fr);
@@ -3558,6 +3579,12 @@
     height:min(64px, 22vw);
   }
   .eval-donut-depts .eval-donut::after{inset:11px;}
+  .eval-hero-metric{
+    padding:7px 5px;
+  }
+  .eval-hero-metric .v{
+    font-size:clamp(13px, 4vw, 16px);
+  }
   .eval-task-item,
   .eval-task-item.compact{padding:8px 9px;}
   .eval-task-title{font-size:12px;}
