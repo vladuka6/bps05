@@ -3501,5 +3501,76 @@
       background: rgba(110,168,254,.18);
     }
 
+/* Analytics mobile polish: keep these overrides at the end so they win */
+.eval-hero-metric .k{display:none;}
+.eval-donut-grid-single{grid-template-columns:1fr;}
+.analytics-card .card-actions{flex-wrap:wrap;}
+.eval-donut-status .eval-legend-item span:nth-child(2){display:none;}
+.eval-donut-depts{margin-top:2px;}
+
+@media (max-width: 640px){
+  .analytics-card .card-h{
+    flex-direction:column;
+    align-items:stretch;
+    gap:8px;
+    padding:12px;
+  }
+  .analytics-card .card-actions{
+    justify-content:space-between;
+    gap:6px;
+  }
+  .analytics-card .card-b{padding:10px;}
+  .eval-hero-title{
+    font-size:clamp(15px, 5vw, 17px);
+    line-height:1.18;
+    overflow-wrap:anywhere;
+  }
+  .eval-hero-sub,
+  .eval-signal-card .v,
+  .analytics-block .row .name{
+    overflow-wrap:anywhere;
+  }
+  .eval-donut-depts .eval-donut-wrap{
+    grid-template-columns:72px minmax(0,1fr);
+    gap:10px;
+    justify-items:stretch;
+    align-items:center;
+  }
+  .eval-donut-depts .eval-donut{
+    width:min(72px, 24vw);
+    height:min(72px, 24vw);
+  }
+  .eval-donut-depts .eval-donut::after{inset:12px;}
+  .eval-task-actions .btn{flex:1 1 auto;}
+}
+
+@media (max-width: 420px){
+  .analytics-card .card-b{padding:8px;}
+  .report-grid{grid-template-columns:repeat(2, minmax(0,1fr));}
+  .report-tile{padding:7px 8px;}
+  .report-tile .v{font-size:14px;}
+  .eval-donut-depts .eval-donut-wrap{
+    grid-template-columns:64px minmax(0,1fr);
+    gap:8px;
+  }
+  .eval-donut-depts .eval-donut{
+    width:min(64px, 22vw);
+    height:min(64px, 22vw);
+  }
+  .eval-donut-depts .eval-donut::after{inset:11px;}
+  .eval-task-item,
+  .eval-task-item.compact{padding:8px 9px;}
+  .eval-task-title{font-size:12px;}
+  .eval-task-actions{
+    display:grid;
+    grid-template-columns:repeat(2, minmax(0,1fr));
+  }
+  .eval-task-actions .btn{
+    width:100%;
+    min-width:0;
+    padding-inline:8px;
+  }
+}
+
 
 

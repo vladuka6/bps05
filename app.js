@@ -16773,9 +16773,9 @@ function viewAnalytics(){
     </div>
   `;
 
-  const donutCards = `
-    <div class="eval-donut-grid">
-      <div class="item analytics-block eval-donut-card" style="cursor:default;">
+  const statusDonutCard = `
+    <div class="eval-donut-grid eval-donut-grid-single">
+      <div class="item analytics-block eval-donut-card eval-donut-status" style="cursor:default;">
         <div class="row"><div class="name">Статус оцінювання</div><span class="badge b-blue mono">${filteredClosed.length}</span></div>
         <div class="eval-donut-wrap">
           <div class="eval-donut" style="background:${statusDonut.gradient};"></div>
@@ -16784,13 +16784,16 @@ function viewAnalytics(){
           </div>
         </div>
       </div>
-      <div class="item analytics-block eval-donut-card" style="cursor:default;">
-        <div class="row"><div class="name">Внесок відділів</div><span class="badge b-violet mono">${deptScoreRows.length}</span></div>
-        <div class="eval-donut-wrap">
-          <div class="eval-donut" style="background:${deptDonut.gradient};"></div>
-          <div class="eval-legend">
-            ${deptDonut.legendRows.length ? deptDonut.legendRows.map(row=>`<div class="eval-legend-item"><span class="eval-legend-dot" style="background:${row.color}"></span><span>${htmlesc(row.label)}</span><b class="mono">${row.value}</b><span class="mono">${row.percent}%</span></div>`).join("") : `<div class="hint">Поки немає оцінених задач.</div>`}
-          </div>
+    </div>
+  `;
+
+  const deptDonutCard = `
+    <div class="item analytics-block eval-donut-card eval-donut-depts" style="cursor:default;">
+      <div class="row"><div class="name">Внесок відділів</div><span class="badge b-violet mono">${deptScoreRows.length}</span></div>
+      <div class="eval-donut-wrap">
+        <div class="eval-donut" style="background:${deptDonut.gradient};"></div>
+        <div class="eval-legend">
+          ${deptDonut.legendRows.length ? deptDonut.legendRows.map(row=>`<div class="eval-legend-item"><span class="eval-legend-dot" style="background:${row.color}"></span><span>${htmlesc(row.label)}</span><b class="mono">${row.value}</b><span class="mono">${row.percent}%</span></div>`).join("") : `<div class="hint">Поки немає оцінених задач.</div>`}
         </div>
       </div>
     </div>
@@ -16948,12 +16951,13 @@ function viewAnalytics(){
         ${hero}
         ${filterBar}
         ${kpis}
-        ${donutCards}
+        ${statusDonutCard}
         <div class="analytics-grid">
           ${criteriaBars}
           ${deptRanking}
           ${presetBars}
           ${deptBars}
+          ${deptDonutCard}
           ${pendingList}
           ${recentList}
           ${UI.analyticsShowDetails ? peopleBlock : ``}
