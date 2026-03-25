@@ -2019,6 +2019,10 @@ function statusLabel(s){
 
     "в_процесі":"В процесі",
 
+    "на_перевірці":"На перевірці",
+
+    "перевірено":"Перевірено",
+
     "очікування":"Очікування",
 
     "блокер":"Блокер",
@@ -2043,6 +2047,10 @@ function statusIcon(s){
 
     "в_процесі":"🔄",
 
+    "на_перевірці":"🔎",
+
+    "перевірено":"👁",
+
     "очікування":"⏳",
 
     "блокер":"⛔",
@@ -2065,9 +2073,9 @@ function statusBadgeClass(s){
 
   if(s==="блокер" || s==="очікування") return "b-warn";
 
-  if(s==="очікує_підтвердження") return "b-violet";
+  if(s==="очікує_підтвердження" || s==="на_перевірці") return "b-violet";
 
-  if(s==="в_процесі" || s==="на_контролі") return "b-blue";
+  if(s==="в_процесі" || s==="на_контролі" || s==="перевірено") return "b-blue";
 
   return "";
 
@@ -10768,7 +10776,7 @@ function viewTasks(){
 
     if(deptFilter === "personal"){
 
-      tasks = tasks.filter(t=>t.type==="personal");
+      tasks = tasks.filter(t=>t.type==="personal" || t.status==="на_перевірці");
 
     } else if(deptFilter !== "all"){
 
@@ -11344,6 +11352,14 @@ function viewTasks(){
 
     const isDone = t.status==="закрито";
 
+    const isVerified = t.status==="перевірено";
+
+    const verifiedMark = isVerified
+
+      ? `<span class="task-context-pill subtle" title="Перевірено">👁</span>`
+
+      : ``;
+
     const hideStatus = isAnn || isDone || (t.status==="в_процесі" && !t.dueDate && (t.controlAlways || t.nextControlDate));
 
     const descRaw = (t.description || "");
@@ -11364,7 +11380,7 @@ function viewTasks(){
 
       ? `<div class="task-context"><span class="task-context-pill">${htmlesc(annLabel || "Оголошення")}</span><span class="task-context-code mono">${htmlesc(t.id || "")}</span></div>`
 
-      : `<div class="task-context"><span class="task-context-pill">${htmlesc(deptName)}</span>${respName !== "—" ? `<span class="task-context-pill subtle">${htmlesc(respName)}</span>` : ``}<span class="task-context-code mono">${htmlesc(t.id || "")}</span></div>`;
+      : `<div class="task-context"><span class="task-context-pill">${htmlesc(deptName)}</span>${respName !== "—" ? `<span class="task-context-pill subtle">${htmlesc(respName)}</span>` : ``}${verifiedMark}<span class="task-context-code mono">${htmlesc(t.id || "")}</span></div>`;
 
     const closeUpd = isDone ? getCloseUpdate(t) : null;
 
@@ -11477,6 +11493,36 @@ function viewTasks(){
         <div class="done-list">${rows}</div>
 
       </details>
+
+    `;
+
+  };
+
+  const renderTaskSection = (title, items, emptyText, startIdx=0, doneItems=[])=>{
+
+    const bodyHtml = items.length
+
+      ? items.map((t,i)=>renderTaskItem(t, startIdx + i)).join("")
+
+      : `<div class="hint">${emptyText}</div>`;
+
+    const doneBlock = (showDoneToggle && doneItems.length)
+
+      ? renderDoneToggle(doneItems, startIdx + items.length)
+
+      : "";
+
+    return `
+
+      <div class="task-subsection">
+
+        <div class="section-title">${title} <span class="mono">${items.length}</span></div>
+
+        ${bodyHtml}
+
+        ${doneBlock}
+
+      </div>
 
     `;
 
@@ -11645,6 +11691,26 @@ function viewTasks(){
     if(isScopeAll){
 
       tasksList = renderGroupedList(filtered);
+
+    } else if(isPersonalScope && effectivePersonalFilter==="tasks"){
+
+      const reviewItems = filtered.filter(t=>t.status==="на_перевірці");
+
+      const personalItems = filtered.filter(t=>t.type==="personal" && t.status!=="на_перевірці");
+
+      const doneItems = showDoneToggle
+
+        ? completed.filter(t=>t.type==="personal")
+
+        : [];
+
+      const sections = [];
+
+      sections.push(renderTaskSection("На перевірці", reviewItems, "Немає задач на перевірці."));
+
+      sections.push(renderTaskSection("Особисті", personalItems, "Немає особистих задач.", 0, doneItems));
+
+      tasksList = sections.join("");
 
     } else {
 
@@ -12250,6 +12316,8 @@ function quickActionsForTask(u, t){
 
   const isBlocked = (t.status==="блокер" || t.status==="очікування");
 
+  const isOnReview = (t.status==="на_перевірці");
+
   const blockerBtn = isBlocked
 
     ? `<button class="btn warn" data-action="setTaskStatus" data-arg1="${t.id}" data-arg2="в_процесі">🔓 Розблок</button>`
@@ -12260,13 +12328,23 @@ function quickActionsForTask(u, t){
 
   if(isBoss){
 
-    if(t.type==="managerial" && t.status==="очікує_підтвердження"){
+    if(isOnReview){
+
+      btns.push(`<button class="btn violet" data-action="setTaskStatus" data-arg1="${t.id}" data-arg2="перевірено">↩ Повернути</button>`);
+
+    } else if(t.type==="managerial" && t.status==="очікує_підтвердження"){
 
       btns.push(`<button class="btn ok" data-action="setTaskStatus" data-arg1="${t.id}" data-arg2="закрито">✅ Підтвердити</button>`);
 
     } else {
 
       btns.push(`<button class="btn ok" data-action="setTaskStatus" data-arg1="${t.id}" data-arg2="закрито">✅ Закрити</button>`);
+
+    }
+
+    if(!isOnReview){
+
+      btns.push(`<button class="btn violet" data-action="setTaskStatus" data-arg1="${t.id}" data-arg2="на_перевірці">🔎 На перевірку</button>`);
 
     }
 
@@ -12326,29 +12404,65 @@ function openStatusReasonModal(taskId, status){
 
   const isClosing = status === "закрито";
 
+  const isReviewing = status === "на_перевірці";
+
+  const isVerified = status === "перевірено";
+
   const title = isBlocking
 
     ? "Блокер: вкажи причину"
 
-    : (isClosing ? "Закриття: результат" : "Розблокування: причина");
+    : (isClosing
+
+      ? "Закриття: результат"
+
+      : (isReviewing
+
+        ? "На перевірку: короткий коментар"
+
+        : (isVerified ? "Перевірено: короткий висновок" : "Розблокування: причина")));
 
   const label = isBlocking
 
     ? "Причина блокера"
 
-    : (isClosing ? "Результат / причина закриття" : "Причина розблокування");
+    : (isClosing
+
+      ? "Результат / причина закриття"
+
+      : (isReviewing
+
+        ? "Що саме треба перевірити"
+
+        : (isVerified ? "Що перевірено / який висновок" : "Причина розблокування")));
 
   const hint = isBlocking
 
     ? "Опиши, що заважає або кого/чого очікуємо."
 
-    : (isClosing ? "Коротко: що зроблено або який результат." : "Що змінилося і чому можна рухатись далі.");
+    : (isClosing
+
+      ? "Коротко: що зроблено або який результат."
+
+      : (isReviewing
+
+        ? "Коротко вкажи, що саме треба подивитись або перевірити."
+
+        : (isVerified ? "Коротко зафіксуй результат перевірки." : "Що змінилося і чому можна рухатись далі.")));
 
   const placeholder = isBlocking
 
     ? "Наприклад: немає доступу / чекаємо підтвердження / бракує ресурсу."
 
-    : (isClosing ? "Наприклад: виконано повністю / передано результат / підтверджено." : "Наприклад: отримали доступ / підтвердили рішення / ресурс з’явився.");
+    : (isClosing
+
+      ? "Наприклад: виконано повністю / передано результат / підтверджено."
+
+      : (isReviewing
+
+        ? "Наприклад: перевірити комплектність / звірити дані / переглянути документ."
+
+        : (isVerified ? "Наприклад: перевірено, можна продовжувати / зауважень немає." : "Наприклад: отримали доступ / підтвердили рішення / ресурс з’явився.")));
 
 
 
@@ -12770,6 +12884,14 @@ function submitStatusReason(taskId, status){
 
   const isBoss = (u.role==="boss" && !u.readOnly);
 
+  if((status==="на_перевірці" || status==="перевірено") && !isBoss){
+
+    showSheet("Немає прав", `<div class="hint">Перевірку поки що запускає і повертає лише керівник.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
+
+    return;
+
+  }
+
   if(isAnnouncement(t) && !isBoss){
 
     showSheet("Немає прав", `<div class="hint">Оголошення може змінювати лише керівник.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
@@ -12819,6 +12941,14 @@ function submitStatusReason(taskId, status){
   } else if(status==="закрито"){
 
     note = reason;
+
+  } else if(status==="на_перевірці"){
+
+    note = `На перевірку: ${reason}`;
+
+  } else if(status==="перевірено"){
+
+    note = `Перевірено: ${reason}`;
 
   } else if(wasBlocked && !stillBlocked){
 
@@ -12876,6 +13006,14 @@ function setTaskStatus(taskId, status, bypassConfirm=false){
 
   }
 
+  if((status==="на_перевірці" || status==="перевірено") && u.role!=="boss"){
+
+    showSheet("Немає прав", `<div class="hint">Перевірку поки що запускає і повертає лише керівник.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
+
+    return;
+
+  }
+
   if(u.role!=="boss" && t.type==="managerial" && status==="закрито"){
 
     showSheet("Обмеження", `<div class="hint">Управлінську задачу закриває тільки керівник. Використайте “Запит закриття”.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
@@ -12884,7 +13022,7 @@ function setTaskStatus(taskId, status, bypassConfirm=false){
 
   }
 
-  if(status==="закрито"){
+  if(status==="закрито" || status==="на_перевірці" || status==="перевірено"){
 
     return openStatusReasonModal(taskId, status);
 
