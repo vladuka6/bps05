@@ -1558,6 +1558,12 @@
       background: rgba(255,255,255,.9);
       color:#4d6287;
     }
+    .task-context-pill.review{
+      background: rgba(255, 237, 184, .95);
+      border-color: rgba(230, 180, 64, .45);
+      color: #8a5a00;
+      font-weight: 700;
+    }
     .task-context-code{
       letter-spacing:.02em;
       color:#5b6b88;
@@ -3355,6 +3361,11 @@
     body.theme-dark .task-context-pill.subtle{
       background: rgba(17,19,26,.88);
       color: #cfd8ea;
+    }
+    body.theme-dark .task-context-pill.review{
+      background: rgba(92, 64, 12, .42);
+      border-color: rgba(201, 153, 54, .42);
+      color: #ffd57a;
     }
     body.theme-dark .reporting-month-field{
       background: rgba(21,25,37,.78);

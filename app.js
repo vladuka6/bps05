@@ -11352,7 +11352,15 @@ function viewTasks(){
 
     const isDone = t.status==="закрито";
 
+    const isOnReview = t.status==="на_перевірці";
+
     const isVerified = t.status==="перевірено";
+
+    const reviewMark = isOnReview
+
+      ? `<span class="task-context-pill review" title="На перевірці">🔎 Перевірка</span>`
+
+      : ``;
 
     const verifiedMark = isVerified
 
@@ -11380,7 +11388,7 @@ function viewTasks(){
 
       ? `<div class="task-context"><span class="task-context-pill">${htmlesc(annLabel || "Оголошення")}</span><span class="task-context-code mono">${htmlesc(t.id || "")}</span></div>`
 
-      : `<div class="task-context"><span class="task-context-pill">${htmlesc(deptName)}</span>${respName !== "—" ? `<span class="task-context-pill subtle">${htmlesc(respName)}</span>` : ``}${verifiedMark}<span class="task-context-code mono">${htmlesc(t.id || "")}</span></div>`;
+      : `<div class="task-context"><span class="task-context-pill">${htmlesc(deptName)}</span>${reviewMark}${respName !== "—" ? `<span class="task-context-pill subtle">${htmlesc(respName)}</span>` : ``}${verifiedMark}<span class="task-context-code mono">${htmlesc(t.id || "")}</span></div>`;
 
     const closeUpd = isDone ? getCloseUpdate(t) : null;
 
