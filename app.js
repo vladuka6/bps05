@@ -13512,7 +13512,47 @@ function openEditTask(taskId){
 
   `;
 
-  const deptBlock = !isPersonal ? `
+  const deptBlock = !isPersonal ? (t.type==="managerial" && isBoss ? `
+
+    <div class="task-meta-grid">
+
+      <div class="task-meta-left">
+
+        <div class="field">
+
+          <label>Відділи</label>
+
+          <div class="dept-toggle-grid">
+
+            ${deptOptions.map(d=>`
+
+              <label class="dept-toggle">
+
+                <span class="dept-name">${htmlesc(d.name)}</span>
+
+                <span class="switch">
+
+                  <input type="checkbox" name="tDeptMulti" value="${d.id}" data-change="selectSingleDeptToggleFromInput" ${d.id===deptId ? "checked" : ""} />
+
+                  <span class="slider"></span>
+
+                </span>
+
+              </label>
+
+            `).join("")}
+
+          </div>
+
+        </div>
+
+      </div>
+
+      ${metaBlock}
+
+    </div>
+
+  ` : `
 
     <div class="task-meta-grid">
 
@@ -13548,7 +13588,7 @@ function openEditTask(taskId){
 
     </div>
 
-  ` : metaBlock;
+  `) : metaBlock;
 
   showSheet("Редагувати задачу", `
 
@@ -13680,9 +13720,12 @@ function saveTaskEdits(taskId){
 
   if(t.type!=="personal"){
 
+    const multiToggles = [...document.querySelectorAll('input[name="tDeptMulti"]')];
     const deptSel = document.getElementById("tDept");
 
-    if(isBoss && deptSel) departmentId = deptSel.value;
+    if(isBoss && multiToggles.length){
+      departmentId = multiToggles.find(x=>x.checked)?.value || departmentId;
+    } else if(isBoss && deptSel) departmentId = deptSel.value;
 
     if(!departmentId) departmentId = t.departmentId;
 
@@ -14090,6 +14133,25 @@ function toggleDeptAll(){
 
     multiToggles.forEach(t=>{ t.checked = true; });
 
+  }
+
+  refreshRespOptions();
+
+}
+
+function selectSingleDeptToggleFromInput(){
+
+  const toggles = [...document.querySelectorAll('input[name="tDeptMulti"]')];
+  if(!toggles.length) return;
+
+  const active = document.activeElement;
+  const changed = toggles.find(x=>x===active) || toggles.find(x=>x.checked);
+  if(!changed) return;
+
+  if(changed.checked){
+    toggles.forEach(x=>{ if(x !== changed) x.checked = false; });
+  } else if(!toggles.some(x=>x.checked)){
+    changed.checked = true;
   }
 
   refreshRespOptions();
@@ -17361,6 +17423,8 @@ const CHANGE_ACTIONS = {
   refreshDelPeople,
 
   refreshRespOptions,
+
+  selectSingleDeptToggleFromInput,
 
   setTaskSearchFromInput,
 
