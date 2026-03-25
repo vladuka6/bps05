@@ -13420,6 +13420,136 @@ function openEditTask(taskId){
 
 
 
+  const metaBlock = `
+
+    <div class="task-meta-right">
+
+      <div class="row2">
+
+        <div class="field">
+
+          <label>Складність</label>
+
+          <select id="tCx">
+
+            <option value="легка" ${(taskComplexity(t)==="легка") ? "selected" : ""}>Легка</option>
+
+            <option value="середня" ${(taskComplexity(t)==="середня") ? "selected" : ""}>Середня</option>
+
+            <option value="складна" ${(taskComplexity(t)==="складна") ? "selected" : ""}>Складна</option>
+
+          </select>
+
+        </div>
+
+        <div class="field">
+
+          <label>Дедлайн</label>
+
+          <div class="row" style="display:flex;gap:8px;">
+
+            <input id="tDue" type="date" value="${dueParts.date}" />
+
+            <input id="tDueTime" type="time" value="${dueParts.time}" />
+
+          </div>
+
+        </div>
+
+      </div>
+
+      <div class="row3">
+
+        <div class="field">
+
+          <div class="toggle-row">
+
+            <span class="toggle-label">Без дедлайну</span>
+
+            <label class="switch">
+
+              <input id="noDue" type="checkbox" data-change="toggleNoDue" ${noDue ? "checked" : ""} />
+
+              <span class="slider"></span>
+
+            </label>
+
+          </div>
+
+        </div>
+
+        <div id="ctrlBlock" class="ctrl-inline">
+
+          <div class="field">
+
+            <input id="tCtrl" type="date" value="${t.nextControlDate ?? ""}" />
+
+          </div>
+
+          <div class="field">
+
+            <div class="toggle-row">
+
+              <span class="toggle-label">Постійний контроль</span>
+
+              <label class="switch">
+
+                <input id="tCtrlAlways" type="checkbox" data-change="toggleCtrlAlways" ${t.controlAlways ? "checked" : ""} />
+
+                <span class="slider"></span>
+
+              </label>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  `;
+
+  const deptBlock = !isPersonal ? `
+
+    <div class="task-meta-grid">
+
+      <div class="task-meta-left">
+
+        <div class="row2">
+
+          <div class="field">
+
+            <label>Відділ</label>
+
+            <select id="tDept" data-change="refreshRespOptions" ${isBoss ? "" : "disabled"}>
+
+              ${deptOptions.map(d=>`<option value="${d.id}" ${d.id===deptId ? "selected" : ""}>${htmlesc(d.name)}</option>`).join("")}
+
+            </select>
+
+          </div>
+
+          <div class="field">
+
+            <label>Відповідальний</label>
+
+            <select id="tResp"></select>
+
+          </div>
+
+        </div>
+
+      </div>
+
+      ${metaBlock}
+
+    </div>
+
+  ` : metaBlock;
+
   showSheet("Редагувати задачу", `
 
     <div class="hint">
@@ -13428,8 +13558,6 @@ function openEditTask(taskId){
 
     </div>
 
-
-
     <div class="field">
 
       <label>Назва</label>
@@ -13437,8 +13565,6 @@ function openEditTask(taskId){
       <input id="tTitle" value="${htmlesc(t.title)}" />
 
     </div>
-
-
 
     <div class="field">
 
@@ -13450,145 +13576,11 @@ function openEditTask(taskId){
 
       </div>
 
-      <textarea id="tDesc" class="task-desc-input">${htmlesc(t.description || "")}</textarea>
+      <textarea id="tDesc" class="task-desc-input" placeholder="Деталі / очікуваний результат">${htmlesc(t.description || "")}</textarea>
 
     </div>
 
-
-
-    ${!isPersonal ? `
-
-      <div class="row2">
-
-        <div class="field">
-
-          <label>Відділ</label>
-
-          <select id="tDept" data-change="refreshRespOptions" ${isBoss ? "" : "disabled"}>
-
-            ${deptOptions.map(d=>`<option value="${d.id}" ${d.id===deptId ? "selected" : ""}>${htmlesc(d.name)}</option>`).join("")}
-
-          </select>
-
-        </div>
-
-
-
-        <div class="field">
-
-          <label>Відповідальний</label>
-
-          <select id="tResp"></select>
-
-        </div>
-
-      </div>
-
-    ` : `
-
-      <div class="field">
-
-        <label>Відповідальний</label>
-
-        <input value="Керівник (ви)" disabled />
-
-      </div>
-
-    `}
-
-
-
-    <div class="row2">
-
-      <div class="field">
-
-        <label>Складність</label>
-
-        <select id="tCx">
-
-          <option value="легка" ${(taskComplexity(t)==="легка") ? "selected" : ""}>Легка</option>
-
-          <option value="середня" ${(taskComplexity(t)==="середня") ? "selected" : ""}>Середня</option>
-
-          <option value="складна" ${(taskComplexity(t)==="складна") ? "selected" : ""}>Складна</option>
-
-        </select>
-
-      </div>
-
-
-
-      <div class="field">
-
-        <label>Дедлайн</label>
-
-        <div class="row" style="display:flex;gap:8px;">
-
-          <input id="tDue" type="date" value="${dueParts.date}" />
-
-          <input id="tDueTime" type="time" value="${dueParts.time}" />
-
-        </div>
-
-      </div>
-
-    </div>
-
-
-
-    <div class="row3">
-
-      <div class="field">
-
-        <div class="toggle-row">
-
-          <span class="toggle-label">Без дедлайну</span>
-
-          <label class="switch">
-
-            <input id="noDue" type="checkbox" data-change="toggleNoDue" ${noDue ? "checked" : ""} />
-
-            <span class="slider"></span>
-
-          </label>
-
-        </div>
-
-      </div>
-
-
-
-      <div id="ctrlBlock" class="ctrl-inline">
-
-        <div class="field">
-
-          <input id="tCtrl" type="date" value="${t.nextControlDate ?? ""}" />
-
-        </div>
-
-        <div class="field">
-
-          <div class="toggle-row">
-
-            <span class="toggle-label">Постійний контроль</span>
-
-            <label class="switch">
-
-              <input id="tCtrlAlways" type="checkbox" data-change="toggleCtrlAlways" ${t.controlAlways ? "checked" : ""} />
-
-              <span class="slider"></span>
-
-            </label>
-
-          </div>
-
-        </div>
-
-      </div>
-
-    </div>
-
-
+    ${deptBlock}
 
     <div class="actions" style="margin-top:14px;">
 
