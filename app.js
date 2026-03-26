@@ -1727,9 +1727,11 @@ function mergeBrokenClipboardRows(rows){
 
       if(continuation){
 
-        pending[pending.length - 1] = [pending[pending.length - 1], continuation]
-          .filter(Boolean)
-          .join("\n");
+        pending[pending.length - 1] = sanitizePastedTableCell(
+          [pending[pending.length - 1], continuation]
+            .filter(Boolean)
+            .join("\n")
+        );
 
       }
 
