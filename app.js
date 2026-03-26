@@ -14839,6 +14839,10 @@ function saveTaskEdits(taskId){
 
 
 
+  if(document.querySelector('.text-table-editor[data-for="tDesc"]')){
+    writeTextTableToTextarea("tDesc", readTextTableEditorRows("tDesc"));
+  }
+
   const desc = document.getElementById("tDesc").value || "";
 
   const cx = document.getElementById("tCx").value;
@@ -15837,6 +15841,10 @@ function createTaskNow(kind){
 
     return;
 
+  }
+
+  if(document.querySelector('.text-table-editor[data-for="tDesc"]')){
+    writeTextTableToTextarea("tDesc", readTextTableEditorRows("tDesc"));
   }
 
   const desc = document.getElementById("tDesc").value || "";
