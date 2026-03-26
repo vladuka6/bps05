@@ -1579,7 +1579,7 @@ function splitMarkdownTableRow(line){
 
 function sanitizePastedTableCell(value){
 
-  return String(value ?? "")
+  let next = String(value ?? "")
 
     .replace(/\u00A0/g, " ")
 
@@ -1594,6 +1594,14 @@ function sanitizePastedTableCell(value){
     .replace(/[ \f\v]+/g, " ")
 
     .trim();
+
+  if(/^".*"$/.test(next)){
+
+    next = next.slice(1, -1).replace(/""/g, '"').trim();
+
+  }
+
+  return next;
 
 }
 
