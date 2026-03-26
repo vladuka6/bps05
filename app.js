@@ -2176,7 +2176,7 @@ function renderTaskDescWithTableToggle(text, label, opts={}){
 
         <summary><span>${summary}</span>${updatedShort ? `<span class="task-table-stamp mono">${htmlesc(updatedShort)}</span>` : ``}</summary>
 
-        <div class="task-table-toggle-body">
+        <div class="task-table-toggle-body rich-text">
 
           ${tables.map(item=>renderStoredTableBlock(item.content)).join("")}
 
@@ -18814,6 +18814,7 @@ render();
 initAutoSync();
 
 initOverdueTicker();
+
 
 
 
