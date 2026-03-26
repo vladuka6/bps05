@@ -36,6 +36,8 @@ let _syncPending = false;
 
 let _syncInitDone = !SYNC_URL;
 
+let _lastLocalPersistOk = true;
+
 let DB_TASKS_CACHE = null;
 
 let DB_TASKS_LOADING = false;
@@ -64,9 +66,13 @@ function safeSet(key, value){
 
     localStorage.setItem(key, value);
 
+    return true;
+
   } catch{
 
     memoryStorage[key] = String(value);
+
+    return false;
 
   }
 
@@ -705,7 +711,21 @@ function saveState(st, opts={}){
 
   }
 
-  safeSet(LS_KEY, JSON.stringify(st));
+  const persisted = safeSet(LS_KEY, JSON.stringify(st));
+
+  _lastLocalPersistOk = persisted;
+
+  if(!persisted && !opts.silentLocalPersistWarning){
+
+    console.warn("localStorage save failed; state kept only in memory until sync completes");
+
+    if(_syncReady){
+
+      pushSync();
+
+    }
+
+  }
 
 }
 
@@ -1873,6 +1893,12 @@ function findStoredTableBlock(text){
 function findPreviousStoredTableBlock(text){
 
   return findStoredTableBlockByMarker(text, "TABLE_PREV");
+
+}
+
+function hasStoredTable(text){
+
+  return /\[\[TABLE\]\]/.test(String(text || ""));
 
 }
 
@@ -3906,6 +3932,22 @@ function updateTask(taskId, patch, authorId, note){
 
   saveState(STATE);
 
+  if(hasStoredTable(patch?.description || "")){
+
+    if(!_lastLocalPersistOk){
+
+      showToast("Таблиця поки що збережена тимчасово. Дочекайся синхронізації перед оновленням сторінки.", "warn");
+
+    }
+
+    if(_syncReady){
+
+      pushSync();
+
+    }
+
+  }
+
 }
 
 function createTask(task, authorId){
@@ -3943,6 +3985,22 @@ function createTask(task, authorId){
   });
 
   saveState(STATE);
+
+  if(hasStoredTable(task?.description || "")){
+
+    if(!_lastLocalPersistOk){
+
+      showToast("Таблиця поки що збережена тимчасово. Дочекайся синхронізації перед оновленням сторінки.", "warn");
+
+    }
+
+    if(_syncReady){
+
+      pushSync();
+
+    }
+
+  }
 
 }
 
