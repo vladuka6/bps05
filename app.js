@@ -1597,7 +1597,7 @@ function sanitizePastedTableCell(value){
 
     .trim();
 
-  if(/^".*"$/.test(next)){
+  if(/^"[\s\S]*"$/.test(next)){
 
     next = next.slice(1, -1).replace(/""/g, '"').trim();
 
