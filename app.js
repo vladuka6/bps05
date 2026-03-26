@@ -18661,6 +18661,16 @@ function initOverdueTicker(){
 
 document.addEventListener("click", (e)=>{
 
+  const tableToggle = e.target.closest(".task-table-toggle");
+
+  if(tableToggle){
+
+    e.stopPropagation();
+
+    return;
+
+  }
+
   const deptChip = e.target.closest('[data-action="setTaskDeptFilter"]');
 
   if(deptChip){
@@ -18804,6 +18814,7 @@ render();
 initAutoSync();
 
 initOverdueTicker();
+
 
 
 
