@@ -1577,6 +1577,26 @@ function splitMarkdownTableRow(line){
 
 }
 
+function sanitizePastedTableCell(value){
+
+  return String(value ?? "")
+
+    .replace(/\u00A0/g, " ")
+
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, "")
+
+    .replace(/\r/g, " ")
+
+    .replace(/\t/g, " ")
+
+    .replace(/\s*\n\s*/g, " / ")
+
+    .replace(/[ \f\v]+/g, " ")
+
+    .trim();
+
+}
+
 function parseStoredTableRows(content){
 
   const rows = String(content || "")
@@ -1605,21 +1625,41 @@ function parseStoredTableRows(content){
 
 function parseClipboardTableText(text){
 
-  const raw = String(text || "").replace(/\r/g, "").trim();
+  const raw = String(text || "")
+
+    .replace(/\u00A0/g, " ")
+
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, "")
+
+    .replace(/\r/g, "")
+
+    .trim();
 
   if(!raw) return [];
 
-  const lines = raw.split("\n").filter(line=>line.trim().length);
+  const lines = raw
+
+    .split("\n")
+
+    .map(line=>line.replace(/[ \t]+$/g, ""))
+
+    .filter(line=>line.trim().length);
 
   if(!lines.length) return [];
 
-  let rows = lines.map(line=>line.split("\t").map(cell=>cell.trim()));
+  let rows = lines.map(line=>line.split("\t").map(cell=>sanitizePastedTableCell(cell)));
 
   const maxCols = Math.max(0, ...rows.map(row=>row.length));
 
   if(maxCols < 2 && raw.includes("|")){
 
-    rows = lines.map(splitMarkdownTableRow).filter(row=>row.some(cell=>String(cell || "").trim()));
+    rows = lines
+
+      .map(splitMarkdownTableRow)
+
+      .map(row=>row.map(cell=>sanitizePastedTableCell(cell)))
+
+      .filter(row=>row.some(cell=>String(cell || "").trim()));
 
   }
 
