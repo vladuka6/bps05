@@ -1545,9 +1545,13 @@ function htmlesc(s){
 
 }
 
-function applyInlineRichText(safeText){
+function richText(s){
 
-  let out = safeText || "";
+  const safe = htmlesc(s ?? "");
+
+  if(!safe) return "";
+
+  let out = safe;
 
   out = out.replace(/__(.+?)__/g, "<u>$1</u>");
 
@@ -1561,541 +1565,9 @@ function applyInlineRichText(safeText){
 
 }
 
-function splitMarkdownTableRow(line){
-
-  return String(line || "")
-
-    .trim()
-
-    .replace(/^\|/, "")
-
-    .replace(/\|$/, "")
-
-    .split("|")
-
-    .map(cell=>cell.trim());
-
-}
-
-function sanitizePastedTableCell(value){
-
-  return String(value ?? "")
-
-    .replace(/\u00A0/g, " ")
-
-    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, "")
-
-    .replace(/\r/g, " ")
-
-    .replace(/\t/g, " ")
-
-    .replace(/\s*\n\s*/g, " / ")
-
-    .replace(/[ \f\v]+/g, " ")
-
-    .trim();
-
-}
-
-function mergeBrokenClipboardRows(rows){
-
-  const safeRows = Array.isArray(rows)
-
-    ? rows
-        .map(row=>Array.isArray(row) ? row.map(cell=>sanitizePastedTableCell(cell)) : [])
-        .filter(row=>row.some(cell=>String(cell || "").trim()))
-
-    : [];
-
-  if(!safeRows.length) return [];
-
-  const expectedWidth = Math.max(2, ...safeRows.map(row=>row.length));
-
-  const out = [];
-
-  let pending = null;
-
-  const appendContinuationToRow = (targetRow, continuationRow)=>{
-
-    if(!Array.isArray(targetRow) || !Array.isArray(continuationRow) || !continuationRow.length) return targetRow;
-
-    let attachIdx = -1;
-
-    for(let i = targetRow.length - 1; i >= 0; i -= 1){
-
-      if(String(targetRow[i] || "").trim()){
-
-        attachIdx = i;
-
-        break;
-
-      }
-
-    }
-
-    if(attachIdx < 0) attachIdx = Math.max(0, targetRow.length - 1);
-
-    const firstPart = String(continuationRow[0] || "").trim();
-
-    if(firstPart){
-
-      targetRow[attachIdx] = [targetRow[attachIdx], firstPart]
-        .filter(Boolean)
-        .join(" / ");
-
-    }
-
-    if(continuationRow.length > 1){
-
-      let cursor = attachIdx + 1;
-
-      for(const cell of continuationRow.slice(1)){
-
-        if(cursor >= targetRow.length) break;
-
-        const clean = String(cell || "").trim();
-
-        if(clean){
-
-          targetRow[cursor] = [targetRow[cursor], clean]
-            .filter(Boolean)
-            .join(" / ");
-
-        }
-
-        cursor += 1;
-
-      }
-
-    }
-
-    return targetRow;
-
-  };
-
-  const pushPending = ()=>{
-
-    if(!pending) return;
-
-    const next = pending.slice(0, expectedWidth);
-
-    while(next.length < expectedWidth) next.push("");
-
-    out.push(next);
-
-    pending = null;
-
-  };
-
-  safeRows.forEach(row=>{
-
-    if(!pending && out.length > 1 && row.length < expectedWidth){
-
-      out[out.length - 1] = appendContinuationToRow(out[out.length - 1], row.slice());
-
-      return;
-
-    }
-
-    if(!pending){
-
-      pending = row.slice();
-
-      if(pending.length >= expectedWidth) pushPending();
-
-      return;
-
-    }
-
-    if(pending.length < expectedWidth){
-
-      const continuation = String(row[0] || "").trim();
-
-      if(continuation){
-
-        pending[pending.length - 1] = [pending[pending.length - 1], continuation]
-          .filter(Boolean)
-          .join(" / ");
-
-      }
-
-      if(row.length > 1){
-
-        pending.push(...row.slice(1));
-
-      }
-
-      if(pending.length >= expectedWidth) pushPending();
-
-      return;
-
-    }
-
-    pushPending();
-
-    pending = row.slice();
-
-    if(pending.length >= expectedWidth) pushPending();
-
-  });
-
-  pushPending();
-
-  return out;
-
-}
-
-function parseStoredTableRows(content){
-
-  const rows = String(content || "")
-
-    .split(/\r?\n/)
-
-    .map(line=>splitMarkdownTableRow(line))
-
-    .filter(row=>row.some(cell=>String(cell || "").trim()));
-
-  if(!rows.length) return [["Колонка 1","Колонка 2"],["",""]];
-
-  const width = Math.max(2, ...rows.map(row=>row.length));
-
-  return rows.map(row=>{
-
-    const next = row.slice(0, width);
-
-    while(next.length < width) next.push("");
-
-    return next;
-
-  });
-
-}
-
-function parseClipboardTableText(text){
-
-  const raw = String(text || "")
-
-    .replace(/\u00A0/g, " ")
-
-    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, "")
-
-    .replace(/\r/g, "")
-
-    .trim();
-
-  if(!raw) return [];
-
-  const lines = raw
-
-    .split("\n")
-
-    .map(line=>line.replace(/[ \t]+$/g, ""))
-
-    .filter(line=>line.trim().length);
-
-  if(!lines.length) return [];
-
-  let rows = lines.map(line=>line.split("\t").map(cell=>sanitizePastedTableCell(cell)));
-
-  const maxCols = Math.max(0, ...rows.map(row=>row.length));
-
-  if(maxCols < 2 && raw.includes("|")){
-
-    rows = lines
-
-      .map(splitMarkdownTableRow)
-
-      .map(row=>row.map(cell=>sanitizePastedTableCell(cell)))
-
-      .filter(row=>row.some(cell=>String(cell || "").trim()));
-
-  }
-
-  rows = mergeBrokenClipboardRows(rows);
-
-  const width = Math.max(2, ...rows.map(row=>row.length));
-
-  return rows.map(row=>{
-
-    const next = row.slice(0, width);
-
-    while(next.length < width) next.push("");
-
-    return next;
-
-  });
-
-}
-
-function findStoredTableBlockByMarker(text, marker="TABLE"){
-
-  const safeMarker = String(marker || "TABLE").replace(/[^\w]/g, "");
-
-  const re = new RegExp(`\\[\\[${safeMarker}\\]\\]\\r?\\n([\\s\\S]*?)\\r?\\n\\[\\[\\/${safeMarker}\\]\\]`);
-
-  const match = re.exec(String(text || ""));
-
-  if(!match) return null;
-
-  return {
-    start: match.index,
-    end: match.index + match[0].length,
-    raw: match[0],
-    rows: parseStoredTableRows(match[1] || "")
-  };
-
-}
-
-function findStoredTableBlock(text){
-
-  return findStoredTableBlockByMarker(text, "TABLE");
-
-}
-
-function findPreviousStoredTableBlock(text){
-
-  return findStoredTableBlockByMarker(text, "TABLE_PREV");
-
-}
-
-function serializeStoredTable(rows, marker="TABLE"){
-
-  const normalized = (rows || []).map(row=>(row || []).map(cell=>String(cell || "").replace(/\|/g, "/").trim()));
-
-  const safeMarker = String(marker || "TABLE").replace(/[^\w]/g, "");
-
-  return `[[${safeMarker}]]\n${normalized.map(row=>`| ${row.join(" | ")} |`).join("\n")}\n[[/${safeMarker}]]`;
-
-}
-
-function isMarkdownTableBlock(lines){
-
-  if(!Array.isArray(lines) || lines.length < 2) return false;
-
-  if(!lines[0].includes("|") || !lines[1].includes("|")) return false;
-
-  const header = splitMarkdownTableRow(lines[0]);
-
-  const divider = splitMarkdownTableRow(lines[1]);
-
-  if(header.length < 2 || divider.length !== header.length) return false;
-
-  if(!divider.every(cell=>/^:?-{3,}:?$/.test(cell))) return false;
-
-  return true;
-
-}
-
-function renderMarkdownTableBlock(lines){
-
-  const rows = lines.map(splitMarkdownTableRow);
-
-  const header = rows[0] || [];
-
-  const body = rows.slice(2).filter(row=>row.some(cell=>String(cell || "").trim()));
-
-  const headHtml = `<tr>${header.map(cell=>`<th>${applyInlineRichText(cell)}</th>`).join("")}</tr>`;
-
-  const bodyHtml = body.length
-
-    ? body.map(row=>`<tr>${row.map(cell=>`<td>${applyInlineRichText(cell)}</td>`).join("")}</tr>`).join("")
-
-    : `<tr>${header.map(()=>`<td>—</td>`).join("")}</tr>`;
-
-  return `<div class="rt-table-wrap"><table class="rt-table"><thead>${headHtml}</thead><tbody>${bodyHtml}</tbody></table></div>`;
-
-}
-
-function renderStoredTableBlock(content){
-
-  return renderMarkdownTableBlock(
-
-    parseStoredTableRows(content).map((row, idx)=>{
-
-      const line = `| ${row.join(" | ")} |`;
-
-      if(idx === 0){
-
-        return [line, `| ${row.map(()=> "---").join(" | ")} |`];
-
-      }
-
-      return line;
-
-    }).flat()
-
-  );
-
-}
-
-function normalizeComparedTableRows(rows, width, height){
-
-  const safeRows = Array.isArray(rows) ? rows : [];
-
-  return Array.from({length:height}, (_, r)=>{
-
-    const src = Array.isArray(safeRows[r]) ? safeRows[r] : [];
-
-    return Array.from({length:width}, (_, c)=> String(src[c] ?? "").trim());
-
-  });
-
-}
-
-function tableDiffMeta(currentRows, previousRows){
-
-  const currentWidth = Math.max(2, ...(Array.isArray(currentRows) ? currentRows.map(row=>Array.isArray(row) ? row.length : 0) : [0]));
-
-  const previousWidth = Math.max(2, ...(Array.isArray(previousRows) ? previousRows.map(row=>Array.isArray(row) ? row.length : 0) : [0]));
-
-  const width = Math.max(currentWidth, previousWidth);
-
-  const height = Math.max(Array.isArray(currentRows) ? currentRows.length : 0, Array.isArray(previousRows) ? previousRows.length : 0, 2);
-
-  const current = normalizeComparedTableRows(currentRows, width, height);
-
-  const previous = normalizeComparedTableRows(previousRows, width, height);
-
-  let changedCount = 0;
-
-  for(let r=0; r<height; r+=1){
-
-    for(let c=0; c<width; c+=1){
-
-      if((current[r]?.[c] || "") !== (previous[r]?.[c] || "")) changedCount += 1;
-
-    }
-
-  }
-
-  return {
-    width,
-    height,
-    current,
-    previous,
-    changedCount,
-    structureChanged: currentWidth !== previousWidth || (Array.isArray(currentRows) ? currentRows.length : 0) !== (Array.isArray(previousRows) ? previousRows.length : 0)
-  };
-
-}
-
-function renderTableDiffBlock(currentRows, previousRows){
-
-  const meta = tableDiffMeta(currentRows, previousRows);
-
-  const headerCells = meta.current[0].map((cell, idx)=>{
-
-    const prev = meta.previous[0]?.[idx] || "";
-
-    const changed = cell !== prev;
-
-    const cls = changed ? ` class="is-diff"` : "";
-
-    const title = changed && prev ? ` title="Було: ${htmlesc(prev)}"` : "";
-
-    return `<th${cls}${title}>${applyInlineRichText(cell || prev || "—")}</th>`;
-
-  }).join("");
-
-  const bodyHtml = Array.from({length:Math.max(1, meta.height - 1)}, (_, rowIndex)=>{
-
-    const r = rowIndex + 1;
-
-    const cells = meta.current[r].map((cell, colIndex)=>{
-
-      const prev = meta.previous[r]?.[colIndex] || "";
-
-      const changed = cell !== prev;
-
-      const cls = changed ? ` class="is-diff"` : "";
-
-      const title = changed ? ` title="Було: ${htmlesc(prev || "—")}"` : "";
-
-      return `<td${cls}${title}>${applyInlineRichText(cell || "—")}</td>`;
-
-    }).join("");
-
-    return `<tr>${cells}</tr>`;
-
-  }).join("");
-
-  const hint = meta.structureChanged
-
-    ? `<div class="task-table-diff-hint">Структура таблиці змінена, тому порівняння показано по позиції клітинок.</div>`
-
-    : `<div class="task-table-diff-hint">Жовтим підсвічені змінені клітинки відносно попередньої версії.</div>`;
-
-  return `
-
-    <div class="task-table-diff-meta">Змінено клітинок: <span class="mono">${meta.changedCount}</span></div>
-
-    ${hint}
-
-    <div class="rt-table-wrap"><table class="rt-table rt-table-diff"><thead><tr>${headerCells}</tr></thead><tbody>${bodyHtml}</tbody></table></div>
-
-  `;
-
-}
-
-function richText(s){
-
-  const safe = htmlesc(String(s ?? "").replace(/\[\[TABLE_PREV\]\]\r?\n[\s\S]*?\r?\n\[\[\/TABLE_PREV\]\]/g, ""));
-
-  if(!safe) return "";
-
-  const chunks = [];
-
-  let cursor = 0;
-
-  safe.replace(/\[\[TABLE\]\]\r?\n([\s\S]*?)\r?\n\[\[\/TABLE\]\]/g, (full, tableContent, offset)=>{
-
-    chunks.push({type:"text", value:safe.slice(cursor, offset)});
-
-    chunks.push({type:"table", value:tableContent});
-
-    cursor = offset + full.length;
-
-    return full;
-
-  });
-
-  chunks.push({type:"text", value:safe.slice(cursor)});
-
-  const renderTextChunk = (text)=> text.split(/\r?\n\r?\n+/).map(block=>{
-
-    const lines = block.split(/\r?\n/);
-
-    if(isMarkdownTableBlock(lines)) return renderMarkdownTableBlock(lines);
-
-    return applyInlineRichText(block);
-
-  }).join("\n\n");
-
-  return chunks.map(chunk=>{
-
-    if(chunk.type === "table") return renderStoredTableBlock(chunk.value);
-
-    return renderTextChunk(chunk.value);
-
-  }).join("");
-
-}
-
-function formatToolbar(textareaId, variant="", opts={}){
+function formatToolbar(textareaId, variant=""){
 
   const cls = variant === "inline" ? "format-chips inline" : "format-chips";
-
-  const tableBtn = opts?.table
-
-    ? `<button class="format-chip" data-action="insertTextTable" data-arg1="${textareaId}" title="Вставити таблицю"><span class="format-ico">▦</span></button>`
-
-    : "";
-
-  const pasteTableBtn = opts?.table
-
-    ? `<button class="format-chip" data-action="pasteTextTableFromClipboard" data-arg1="${textareaId}" title="Вставити з Excel / Word"><span class="format-ico">📋</span></button>`
-
-    : "";
 
   return `
 
@@ -2108,10 +1580,6 @@ function formatToolbar(textareaId, variant="", opts={}){
       <button class="format-chip" data-action="applyTextFormat" data-arg1="${textareaId}" data-arg2="underline" title="Підкреслення (__текст__)"><span class="format-ico"><u>U</u></span></button>
 
       <button class="format-chip" data-action="applyTextFormat" data-arg1="${textareaId}" data-arg2="strike" title="Перекреслення (~~текст~~)"><span class="format-ico"><s>S</s></span></button>
-
-      ${tableBtn}
-
-      ${pasteTableBtn}
 
     </div>
 
@@ -2156,447 +1624,6 @@ function applyTextFormat(textareaId, type){
   }
 
   el.dispatchEvent(new Event("input", {bubbles:true}));
-
-}
-
-function defaultTextTableRows(){
-
-  return [
-    ["Колонка 1","Колонка 2"],
-    ["",""],
-    ["",""]
-  ];
-
-}
-
-function readTextTableEditorRows(textareaId){
-
-  const wrap = document.querySelector(`.text-table-editor[data-for="${textareaId}"]`);
-
-  if(!wrap) return defaultTextTableRows();
-
-  const rows = Number(wrap.dataset.rows || 0);
-
-  const cols = Number(wrap.dataset.cols || 0);
-
-  if(!rows || !cols) return defaultTextTableRows();
-
-  const data = [];
-
-  for(let r=0; r<rows; r+=1){
-
-    const row = [];
-
-    for(let c=0; c<cols; c+=1){
-
-      row.push(document.getElementById(`${textareaId}_tbl_${r}_${c}`)?.value || "");
-
-    }
-
-    data.push(row);
-
-  }
-
-  return data;
-
-}
-
-function buildTextTableEditorHtml(textareaId, rows){
-
-  const safeRows = (rows && rows.length) ? rows : defaultTextTableRows();
-
-  const rowCount = safeRows.length;
-
-  const colCount = Math.max(2, ...safeRows.map(row=>row.length));
-
-  const normalized = safeRows.map(row=>{
-
-    const next = row.slice(0, colCount);
-
-    while(next.length < colCount) next.push("");
-
-    return next;
-
-  });
-
-  const grid = normalized.map((row, r)=>`
-
-    <div class="text-table-row">
-
-      ${row.map((cell, c)=>`<input id="${textareaId}_tbl_${r}_${c}" class="text-table-cell ${r===0 ? "is-head" : ""}" value="${htmlesc(cell)}" placeholder="${r===0 ? `Колонка ${c + 1}` : "Значення"}" />`).join("")}
-
-    </div>
-
-  `).join("");
-
-  return `
-
-    <div class="text-table-editor" data-for="${textareaId}" data-rows="${rowCount}" data-cols="${colCount}">
-
-      <div class="text-table-editor-head">
-
-        <div class="hint">Таблиця для опису задачі. Перший рядок — заголовки.</div>
-
-        <div class="text-table-editor-actions">
-
-          <button type="button" class="btn ghost btn-mini" data-action="mutateTextTableEditor" data-arg1="${textareaId}" data-arg2="addRow">+ Рядок</button>
-
-          <button type="button" class="btn ghost btn-mini" data-action="mutateTextTableEditor" data-arg1="${textareaId}" data-arg2="removeRow">- Рядок</button>
-
-          <button type="button" class="btn ghost btn-mini" data-action="mutateTextTableEditor" data-arg1="${textareaId}" data-arg2="addCol">+ Колонка</button>
-
-          <button type="button" class="btn ghost btn-mini" data-action="mutateTextTableEditor" data-arg1="${textareaId}" data-arg2="removeCol">- Колонка</button>
-
-        </div>
-
-      </div>
-
-      <div class="text-table-grid">${grid}</div>
-
-      <div class="actions" style="margin-top:12px;">
-
-        <button type="button" class="btn primary btn-mini" data-action="applyTextTableEditor" data-arg1="${textareaId}">Застосувати</button>
-
-        <button type="button" class="btn danger btn-mini" data-action="deleteTextTableFromTextarea" data-arg1="${textareaId}">Видалити таблицю</button>
-
-        <button type="button" class="btn ghost btn-mini" data-action="closeTextTableEditor" data-arg1="${textareaId}">Сховати</button>
-
-      </div>
-
-    </div>
-
-  `;
-
-}
-
-function writeTextTableToTextarea(textareaId, rows){
-
-  const el = document.getElementById(textareaId);
-
-  if(!el) return;
-
-  const serialized = serializeStoredTable(rows);
-
-  let nextValue = el.value || "";
-
-  const prevBlock = findPreviousStoredTableBlock(nextValue);
-
-  if(prevBlock){
-
-    nextValue = nextValue.slice(0, prevBlock.start) + nextValue.slice(prevBlock.end);
-
-  }
-
-  const existing = findStoredTableBlock(nextValue);
-
-  const previousSerialized = (existing && existing.raw !== serialized)
-
-    ? serializeStoredTable(existing.rows, "TABLE_PREV")
-
-    : "";
-
-  if(existing){
-
-    nextValue = nextValue.slice(0, existing.start) + serialized + (previousSerialized ? `\n\n${previousSerialized}` : "") + nextValue.slice(existing.end);
-
-  } else {
-
-    const needBreak = nextValue.trim() ? "\n\n" : "";
-
-    nextValue = `${nextValue}${needBreak}${serialized}`;
-
-  }
-
-  el.value = nextValue;
-
-  el.dispatchEvent(new Event("input", {bubbles:true}));
-
-}
-
-function bindTextTableEditorLiveSync(textareaId){
-
-  const wrap = document.querySelector(`.text-table-editor[data-for="${textareaId}"]`);
-
-  if(!wrap) return;
-
-  wrap.querySelectorAll(".text-table-cell").forEach(input=>{
-
-    input.addEventListener("input", ()=>{
-
-      writeTextTableToTextarea(textareaId, readTextTableEditorRows(textareaId));
-
-    });
-
-  });
-
-}
-
-function renderTextTableEditor(textareaId, rows){
-
-  const el = document.getElementById(textareaId);
-
-  if(!el) return;
-
-  let wrap = document.querySelector(`.text-table-editor[data-for="${textareaId}"]`);
-
-  if(!wrap){
-
-    el.insertAdjacentHTML("afterend", buildTextTableEditorHtml(textareaId, rows));
-
-    bindTextTableEditorLiveSync(textareaId);
-
-    return;
-
-  }
-
-  wrap.outerHTML = buildTextTableEditorHtml(textareaId, rows);
-
-  bindTextTableEditorLiveSync(textareaId);
-
-}
-
-function insertTextTable(textareaId){
-
-  const el = document.getElementById(textareaId);
-
-  if(!el) return;
-
-  const existing = findStoredTableBlock(el.value || "");
-
-  renderTextTableEditor(textareaId, existing?.rows || defaultTextTableRows());
-
-}
-
-function mutateTextTableEditor(textareaId, action){
-
-  let rows = readTextTableEditorRows(textareaId);
-
-  if(action==="addRow"){
-
-    rows.push(new Array(rows[0]?.length || 2).fill(""));
-
-  } else if(action==="removeRow"){
-
-    if(rows.length > 2) rows = rows.slice(0, -1);
-
-  } else if(action==="addCol"){
-
-    rows = rows.map(row=>[...row, ""]);
-
-  } else if(action==="removeCol"){
-
-    if((rows[0]?.length || 0) > 2){
-
-      rows = rows.map(row=>row.slice(0, -1));
-
-    }
-
-  }
-
-  renderTextTableEditor(textareaId, rows);
-
-}
-
-function applyTextTableEditor(textareaId){
-
-  const el = document.getElementById(textareaId);
-
-  if(!el) return;
-
-  const rows = readTextTableEditorRows(textareaId).map(row=>row.map(cell=>String(cell || "").trim()));
-
-  writeTextTableToTextarea(textareaId, rows);
-
-  renderTextTableEditor(textareaId, rows);
-
-}
-
-function deleteTextTableFromTextarea(textareaId){
-
-  const el = document.getElementById(textareaId);
-
-  if(!el) return;
-
-  let nextValue = el.value || "";
-
-  const prevBlock = findPreviousStoredTableBlock(nextValue);
-
-  if(prevBlock){
-
-    nextValue = nextValue.slice(0, prevBlock.start) + nextValue.slice(prevBlock.end);
-
-  }
-
-  const existing = findStoredTableBlock(nextValue);
-
-  if(existing){
-
-    const before = nextValue.slice(0, existing.start).replace(/\s+$/, "");
-
-    const after = nextValue.slice(existing.end).replace(/^\s+/, "");
-
-    el.value = [before, after].filter(Boolean).join("\n\n");
-
-    el.dispatchEvent(new Event("input", {bubbles:true}));
-
-  }
-
-  closeTextTableEditor(textareaId);
-
-}
-
-function closeTextTableEditor(textareaId){
-
-  const wrap = document.querySelector(`.text-table-editor[data-for="${textareaId}"]`);
-
-  if(wrap) wrap.remove();
-
-}
-
-function extractStoredTables(text){
-
-  const items = [];
-
-  String(text || "").replace(/\[\[TABLE\]\]\r?\n([\s\S]*?)\r?\n\[\[\/TABLE\]\]/g, (_, content)=>{
-
-    items.push({content: content || ""});
-
-    return _;
-
-  });
-
-  return items;
-
-}
-
-function stripStoredTables(text){
-
-  return String(text || "")
-
-    .replace(/\[\[TABLE_PREV\]\]\r?\n[\s\S]*?\r?\n\[\[\/TABLE_PREV\]\]/g, "")
-
-    .replace(/\[\[TABLE\]\]\r?\n[\s\S]*?\r?\n\[\[\/TABLE\]\]/g, "")
-
-    .replace(/\n{3,}/g, "\n\n")
-
-    .trim();
-
-}
-
-function renderTaskDescWithTableToggle(text, label, opts={}){
-
-  const raw = String(text || "");
-
-  const tables = extractStoredTables(raw);
-
-  const currentTable = findStoredTableBlock(raw);
-
-  const previousTable = findPreviousStoredTableBlock(raw);
-
-  const diffMeta = (currentTable && previousTable) ? tableDiffMeta(currentTable.rows, previousTable.rows) : null;
-
-  const textOnly = stripStoredTables(raw);
-
-  const parts = [];
-
-  if(textOnly){
-
-    const startsWithBreak = /^\s*\r?\n/.test(textOnly);
-
-    const prefix = startsWithBreak ? `${label}:<br/>` : `${label}: `;
-
-    parts.push(`<div class="${opts.className || "task-desc rich-text"}">${prefix}${richText(textOnly)}</div>`);
-
-  } else if(!tables.length && opts.showEmpty){
-
-    parts.push(`<div class="${opts.className || "task-desc rich-text"}">${label}: —</div>`);
-
-  }
-
-  if(tables.length){
-
-    const summary = tables.length > 1 ? `Показати дані (${tables.length})` : "Показати дані";
-
-    const updatedShort = opts.updatedAt ? compactTimeFirst(opts.updatedAt) : "";
-    parts.push(`
-
-      <details class="task-table-toggle">
-
-        <summary><span>${summary}</span>${updatedShort ? `<span class="task-table-stamp mono">${htmlesc(updatedShort)}</span>` : ``}</summary>
-
-        <div class="task-table-toggle-body rich-text">
-
-          ${tables.map(item=>renderStoredTableBlock(item.content)).join("")}
-
-        </div>
-
-      </details>
-
-    `);
-
-    if(diffMeta && diffMeta.changedCount){
-
-      parts.push(`
-
-        <details class="task-table-toggle task-table-diff-toggle">
-
-          <summary><span>Показати зміни</span><span class="task-table-diff-badge mono">${htmlesc(String(diffMeta.changedCount))}</span></summary>
-
-          <div class="task-table-toggle-body rich-text">
-
-            ${renderTableDiffBlock(currentTable.rows, previousTable.rows)}
-
-          </div>
-
-        </details>
-
-      `);
-
-      }
-
-  }
-
-  return parts.join("");
-
-}
-
-async function pasteTextTableFromClipboard(textareaId){
-
-  if(!(navigator?.clipboard?.readText)){
-
-    showToast("Буфер обміну недоступний у цьому браузері.", "warn");
-
-    return;
-
-  }
-
-  try{
-
-    const text = await navigator.clipboard.readText();
-
-    const rows = parseClipboardTableText(text);
-
-    if(!rows.length){
-
-      showToast("У буфері немає табличних даних.", "warn");
-
-      return;
-
-    }
-
-    writeTextTableToTextarea(textareaId, rows);
-
-    renderTextTableEditor(textareaId, rows);
-
-    showToast("Таблицю вставлено з буфера", "ok");
-
-  } catch(err){
-
-    console.warn("clipboard read failed", err);
-
-    showToast("Не вдалося прочитати буфер. Скопіюй таблицю ще раз і повтори.", "warn");
-
-  }
 
 }
 
@@ -2723,20 +1750,6 @@ function closeTitle(dt){
   if(!date) return "—";
 
   return time ? `${fmtDate(date)} ${time}` : `${fmtDate(date)}`;
-
-}
-
-function compactTimeFirst(dt){
-
-  const {date, time} = splitDateTimeLoose(dt);
-
-  if(!date) return "";
-
-  const d = fmtDateShort(date);
-
-  if(!time) return d;
-
-  return `${time.replace(":", ".")} ${d}`;
 
 }
 
@@ -3006,10 +2019,6 @@ function statusLabel(s){
 
     "в_процесі":"В процесі",
 
-    "на_перевірці":"На перевірці",
-
-    "перевірено":"Перевірено",
-
     "очікування":"Очікування",
 
     "блокер":"Блокер",
@@ -3034,10 +2043,6 @@ function statusIcon(s){
 
     "в_процесі":"🔄",
 
-    "на_перевірці":"🔎",
-
-    "перевірено":"👁",
-
     "очікування":"⏳",
 
     "блокер":"⛔",
@@ -3060,9 +2065,9 @@ function statusBadgeClass(s){
 
   if(s==="блокер" || s==="очікування") return "b-warn";
 
-  if(s==="очікує_підтвердження" || s==="на_перевірці") return "b-violet";
+  if(s==="очікує_підтвердження") return "b-violet";
 
-  if(s==="в_процесі" || s==="на_контролі" || s==="перевірено") return "b-blue";
+  if(s==="в_процесі" || s==="на_контролі") return "b-blue";
 
   return "";
 
@@ -11763,7 +10768,7 @@ function viewTasks(){
 
     if(deptFilter === "personal"){
 
-      tasks = tasks.filter(t=>t.type==="personal" || t.status==="на_перевірці");
+      tasks = tasks.filter(t=>t.type==="personal");
 
     } else if(deptFilter !== "all"){
 
@@ -12339,33 +11344,19 @@ function viewTasks(){
 
     const isDone = t.status==="закрито";
 
-    const isOnReview = t.status==="на_перевірці";
-
-    const isVerified = t.status==="перевірено";
-
-    const reviewMark = isOnReview
-
-      ? `<span class="task-context-pill review" title="На перевірці">🔎 Перевірка</span>`
-
-      : ``;
-
-    const verifiedMark = isVerified
-
-      ? `<span class="task-context-pill subtle" title="Перевірено">👁</span>`
-
-      : ``;
-
     const hideStatus = isAnn || isDone || (t.status==="в_процесі" && !t.dueDate && (t.controlAlways || t.nextControlDate));
 
     const descRaw = (t.description || "");
 
     const hasDesc = descRaw.trim().length > 0;
 
-    const descStartsWithBreak = /^\s*(?:\r?\n)/.test(descRaw);
-
     const descLabel = isAnn ? "Текст" : "Опис";
 
-    const descHtml = (!isAnn && hasDesc) ? renderTaskDescWithTableToggle(descRaw, descLabel, {updatedAt: t.updatedAt || t.createdAt || ""}) : "";
+    const descStartsWithBreak = /^\s*\r?\n/.test(descRaw);
+
+    const descPrefix = descStartsWithBreak ? `${descLabel}:<br/>` : `${descLabel}: `;
+
+    const descHtml = (!isAnn && hasDesc) ? `<div class="task-desc rich-text">${descPrefix}${richText(descRaw)}</div>` : "";
 
     const annDesc = (isAnn && t.audience==="meeting" && hasDesc) ? `<div class="task-desc rich-text">Опис:${descStartsWithBreak ? "<br/>" : " "}${richText(descRaw)}</div>` : "";
 
@@ -12373,7 +11364,7 @@ function viewTasks(){
 
       ? `<div class="task-context"><span class="task-context-pill">${htmlesc(annLabel || "Оголошення")}</span><span class="task-context-code mono">${htmlesc(t.id || "")}</span></div>`
 
-      : `<div class="task-context"><span class="task-context-pill">${htmlesc(deptName)}</span>${reviewMark}${respName !== "—" ? `<span class="task-context-pill subtle">${htmlesc(respName)}</span>` : ``}${verifiedMark}<span class="task-context-code mono">${htmlesc(t.id || "")}</span></div>`;
+      : `<div class="task-context"><span class="task-context-pill">${htmlesc(deptName)}</span>${respName !== "—" ? `<span class="task-context-pill subtle">${htmlesc(respName)}</span>` : ``}<span class="task-context-code mono">${htmlesc(t.id || "")}</span></div>`;
 
     const closeUpd = isDone ? getCloseUpdate(t) : null;
 
@@ -12486,36 +11477,6 @@ function viewTasks(){
         <div class="done-list">${rows}</div>
 
       </details>
-
-    `;
-
-  };
-
-  const renderTaskSection = (title, items, emptyText, startIdx=0, doneItems=[])=>{
-
-    const bodyHtml = items.length
-
-      ? items.map((t,i)=>renderTaskItem(t, startIdx + i)).join("")
-
-      : `<div class="hint">${emptyText}</div>`;
-
-    const doneBlock = (showDoneToggle && doneItems.length)
-
-      ? renderDoneToggle(doneItems, startIdx + items.length)
-
-      : "";
-
-    return `
-
-      <div class="task-subsection">
-
-        <div class="section-title">${title} <span class="mono">${items.length}</span></div>
-
-        ${bodyHtml}
-
-        ${doneBlock}
-
-      </div>
 
     `;
 
@@ -12684,26 +11645,6 @@ function viewTasks(){
     if(isScopeAll){
 
       tasksList = renderGroupedList(filtered);
-
-    } else if(isPersonalScope && effectivePersonalFilter==="tasks"){
-
-      const reviewItems = filtered.filter(t=>t.status==="на_перевірці");
-
-      const personalItems = filtered.filter(t=>t.type==="personal" && t.status!=="на_перевірці");
-
-      const doneItems = showDoneToggle
-
-        ? completed.filter(t=>t.type==="personal")
-
-        : [];
-
-      const sections = [];
-
-      sections.push(renderTaskSection("На перевірці", reviewItems, "Немає задач на перевірці."));
-
-      sections.push(renderTaskSection("Особисті", personalItems, "Немає особистих задач.", 0, doneItems));
-
-      tasksList = sections.join("");
 
     } else {
 
@@ -13309,8 +12250,6 @@ function quickActionsForTask(u, t){
 
   const isBlocked = (t.status==="блокер" || t.status==="очікування");
 
-  const isOnReview = (t.status==="на_перевірці");
-
   const blockerBtn = isBlocked
 
     ? `<button class="btn warn" data-action="setTaskStatus" data-arg1="${t.id}" data-arg2="в_процесі">🔓 Розблок</button>`
@@ -13321,23 +12260,13 @@ function quickActionsForTask(u, t){
 
   if(isBoss){
 
-    if(isOnReview){
-
-      btns.push(`<button class="btn violet" data-action="setTaskStatus" data-arg1="${t.id}" data-arg2="перевірено">↩ Повернути</button>`);
-
-    } else if(t.type==="managerial" && t.status==="очікує_підтвердження"){
+    if(t.type==="managerial" && t.status==="очікує_підтвердження"){
 
       btns.push(`<button class="btn ok" data-action="setTaskStatus" data-arg1="${t.id}" data-arg2="закрито">✅ Підтвердити</button>`);
 
     } else {
 
       btns.push(`<button class="btn ok" data-action="setTaskStatus" data-arg1="${t.id}" data-arg2="закрито">✅ Закрити</button>`);
-
-    }
-
-    if(!isOnReview){
-
-      btns.push(`<button class="btn violet" data-action="setTaskStatus" data-arg1="${t.id}" data-arg2="на_перевірці">🔎 На перевірку</button>`);
 
     }
 
@@ -13397,65 +12326,29 @@ function openStatusReasonModal(taskId, status){
 
   const isClosing = status === "закрито";
 
-  const isReviewing = status === "на_перевірці";
-
-  const isVerified = status === "перевірено";
-
   const title = isBlocking
 
     ? "Блокер: вкажи причину"
 
-    : (isClosing
-
-      ? "Закриття: результат"
-
-      : (isReviewing
-
-        ? "На перевірку: короткий коментар"
-
-        : (isVerified ? "Перевірено: короткий висновок" : "Розблокування: причина")));
+    : (isClosing ? "Закриття: результат" : "Розблокування: причина");
 
   const label = isBlocking
 
     ? "Причина блокера"
 
-    : (isClosing
-
-      ? "Результат / причина закриття"
-
-      : (isReviewing
-
-        ? "Що саме треба перевірити"
-
-        : (isVerified ? "Що перевірено / який висновок" : "Причина розблокування")));
+    : (isClosing ? "Результат / причина закриття" : "Причина розблокування");
 
   const hint = isBlocking
 
     ? "Опиши, що заважає або кого/чого очікуємо."
 
-    : (isClosing
-
-      ? "Коротко: що зроблено або який результат."
-
-      : (isReviewing
-
-        ? "Коротко вкажи, що саме треба подивитись або перевірити."
-
-        : (isVerified ? "Коротко зафіксуй результат перевірки." : "Що змінилося і чому можна рухатись далі.")));
+    : (isClosing ? "Коротко: що зроблено або який результат." : "Що змінилося і чому можна рухатись далі.");
 
   const placeholder = isBlocking
 
     ? "Наприклад: немає доступу / чекаємо підтвердження / бракує ресурсу."
 
-    : (isClosing
-
-      ? "Наприклад: виконано повністю / передано результат / підтверджено."
-
-      : (isReviewing
-
-        ? "Наприклад: перевірити комплектність / звірити дані / переглянути документ."
-
-        : (isVerified ? "Наприклад: перевірено, можна продовжувати / зауважень немає." : "Наприклад: отримали доступ / підтвердили рішення / ресурс з’явився.")));
+    : (isClosing ? "Наприклад: виконано повністю / передано результат / підтверджено." : "Наприклад: отримали доступ / підтвердили рішення / ресурс з’явився.");
 
 
 
@@ -13877,14 +12770,6 @@ function submitStatusReason(taskId, status){
 
   const isBoss = (u.role==="boss" && !u.readOnly);
 
-  if((status==="на_перевірці" || status==="перевірено") && !isBoss){
-
-    showSheet("Немає прав", `<div class="hint">Перевірку поки що запускає і повертає лише керівник.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
-
-    return;
-
-  }
-
   if(isAnnouncement(t) && !isBoss){
 
     showSheet("Немає прав", `<div class="hint">Оголошення може змінювати лише керівник.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
@@ -13934,14 +12819,6 @@ function submitStatusReason(taskId, status){
   } else if(status==="закрито"){
 
     note = reason;
-
-  } else if(status==="на_перевірці"){
-
-    note = `На перевірку: ${reason}`;
-
-  } else if(status==="перевірено"){
-
-    note = `Перевірено: ${reason}`;
 
   } else if(wasBlocked && !stillBlocked){
 
@@ -13999,14 +12876,6 @@ function setTaskStatus(taskId, status, bypassConfirm=false){
 
   }
 
-  if((status==="на_перевірці" || status==="перевірено") && u.role!=="boss"){
-
-    showSheet("Немає прав", `<div class="hint">Перевірку поки що запускає і повертає лише керівник.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
-
-    return;
-
-  }
-
   if(u.role!=="boss" && t.type==="managerial" && status==="закрито"){
 
     showSheet("Обмеження", `<div class="hint">Управлінську задачу закриває тільки керівник. Використайте “Запит закриття”.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
@@ -14015,7 +12884,7 @@ function setTaskStatus(taskId, status, bypassConfirm=false){
 
   }
 
-  if(status==="закрито" || status==="на_перевірці" || status==="перевірено"){
+  if(status==="закрито"){
 
     return openStatusReasonModal(taskId, status);
 
@@ -14379,7 +13248,7 @@ function openTask(taskId, opts={}){
 
       ${(isAnn && t.audience==="meeting" && t.description) ? `<div class="hint rich-text"><b>Опис:</b> ${richText(t.description)}</div>` : ``}
 
-      ${isAnn ? `` : renderTaskDescWithTableToggle(t.description || "", descLabel, {className:"hint rich-text", showEmpty:true, updatedAt: t.updatedAt || t.createdAt || ""})}
+      ${isAnn ? `` : `<div class="hint rich-text"><b>${descLabel}:</b> ${t.description ? richText(t.description) : "—"}</div>`}
 
       ${(!isAnn && isDone) ? `<div class="hint"><b>Результат:</b>${closeNote ? htmlesc(closeNote) : "—"}</div>` : ``}
 
@@ -14743,7 +13612,7 @@ function openEditTask(taskId){
 
         <label>Опис (опційно)</label>
 
-        ${formatToolbar("tDesc", "inline", {table:true})}
+        ${formatToolbar("tDesc", "inline")}
 
       </div>
 
@@ -15681,7 +14550,7 @@ function openCreateTask(kind, preselectDeptId=null, preselectDueDate=null){
 
         <label>Опис (опційно)</label>
 
-        ${formatToolbar("tDesc", "inline", {table:true})}
+        ${formatToolbar("tDesc", "inline")}
 
       </div>
 
@@ -16310,10 +15179,6 @@ function openCreateAnnouncement(){
     </div>
 
   `);
-
-  const existingTable = findStoredTableBlock(t.description || "");
-
-  if(existingTable) renderTextTableEditor("tDesc", existingTable.rows);
 
 }
 
@@ -18371,18 +17236,6 @@ const ACTIONS = {
 
   applyTextFormat,
 
-  insertTextTable,
-
-  pasteTextTableFromClipboard,
-
-  mutateTextTableEditor,
-
-  applyTextTableEditor,
-
-  deleteTextTableFromTextarea,
-
-  closeTextTableEditor,
-
   openCreateTask,
 
   openCreateAnnouncement,
@@ -19033,16 +17886,6 @@ function initOverdueTicker(){
 
 document.addEventListener("click", (e)=>{
 
-  const tableToggle = e.target.closest(".task-table-toggle");
-
-  if(tableToggle){
-
-    e.stopPropagation();
-
-    return;
-
-  }
-
   const deptChip = e.target.closest('[data-action="setTaskDeptFilter"]');
 
   if(deptChip){
@@ -19186,9 +18029,6 @@ render();
 initAutoSync();
 
 initOverdueTicker();
-
-
-
 
 
 
