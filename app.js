@@ -1954,6 +1954,52 @@ function buildTextTableEditorHtml(textareaId, rows){
 
 }
 
+function writeTextTableToTextarea(textareaId, rows){
+
+  const el = document.getElementById(textareaId);
+
+  if(!el) return;
+
+  const serialized = serializeStoredTable(rows);
+
+  const val = el.value || "";
+
+  const existing = findStoredTableBlock(val);
+
+  if(existing){
+
+    el.value = val.slice(0, existing.start) + serialized + val.slice(existing.end);
+
+  } else {
+
+    const needBreak = val.trim() ? "\n\n" : "";
+
+    el.value = `${val}${needBreak}${serialized}`;
+
+  }
+
+  el.dispatchEvent(new Event("input", {bubbles:true}));
+
+}
+
+function bindTextTableEditorLiveSync(textareaId){
+
+  const wrap = document.querySelector(`.text-table-editor[data-for="${textareaId}"]`);
+
+  if(!wrap) return;
+
+  wrap.querySelectorAll(".text-table-cell").forEach(input=>{
+
+    input.addEventListener("input", ()=>{
+
+      writeTextTableToTextarea(textareaId, readTextTableEditorRows(textareaId));
+
+    });
+
+  });
+
+}
+
 function renderTextTableEditor(textareaId, rows){
 
   const el = document.getElementById(textareaId);
@@ -1966,11 +2012,15 @@ function renderTextTableEditor(textareaId, rows){
 
     el.insertAdjacentHTML("afterend", buildTextTableEditorHtml(textareaId, rows));
 
+    bindTextTableEditorLiveSync(textareaId);
+
     return;
 
   }
 
   wrap.outerHTML = buildTextTableEditorHtml(textareaId, rows);
+
+  bindTextTableEditorLiveSync(textareaId);
 
 }
 
@@ -2024,25 +2074,7 @@ function applyTextTableEditor(textareaId){
 
   const rows = readTextTableEditorRows(textareaId).map(row=>row.map(cell=>String(cell || "").trim()));
 
-  const serialized = serializeStoredTable(rows);
-
-  const val = el.value || "";
-
-  const existing = findStoredTableBlock(val);
-
-  if(existing){
-
-    el.value = val.slice(0, existing.start) + serialized + val.slice(existing.end);
-
-  } else {
-
-    const needBreak = val.trim() ? "\n\n" : "";
-
-    el.value = `${val}${needBreak}${serialized}`;
-
-  }
-
-  el.dispatchEvent(new Event("input", {bubbles:true}));
+  writeTextTableToTextarea(textareaId, rows);
 
   renderTextTableEditor(textareaId, rows);
 
@@ -2077,6 +2109,86 @@ function closeTextTableEditor(textareaId){
   const wrap = document.querySelector(`.text-table-editor[data-for="${textareaId}"]`);
 
   if(wrap) wrap.remove();
+
+}
+
+function extractStoredTables(text){
+
+  const items = [];
+
+  String(text || "").replace(/\[\[TABLE\]\]\r?\n([\s\S]*?)\r?\n\[\[\/TABLE\]\]/g, (_, content)=>{
+
+    items.push({content: content || ""});
+
+    return _;
+
+  });
+
+  return items;
+
+}
+
+function stripStoredTables(text){
+
+  return String(text || "")
+
+    .replace(/\[\[TABLE\]\]\r?\n[\s\S]*?\r?\n\[\[\/TABLE\]\]/g, "")
+
+    .replace(/\n{3,}/g, "\n\n")
+
+    .trim();
+
+}
+
+function renderTaskDescWithTableToggle(text, label, opts={}){
+
+  const raw = String(text || "");
+
+  const tables = extractStoredTables(raw);
+
+  const textOnly = stripStoredTables(raw);
+
+  const parts = [];
+
+  if(textOnly){
+
+    const startsWithBreak = /^\s*\r?\n/.test(textOnly);
+
+    const prefix = startsWithBreak ? `${label}:<br/>` : `${label}: `;
+
+    parts.push(`<div class="${opts.className || "task-desc rich-text"}">${prefix}${richText(textOnly)}</div>`);
+
+  } else if(!tables.length && opts.showEmpty){
+
+    parts.push(`<div class="${opts.className || "task-desc rich-text"}">${label}: —</div>`);
+
+  }
+
+  if(tables.length){
+
+    const summary = tables.length > 1 ? `Показати дані (${tables.length})` : "Показати дані";
+
+    const updatedShort = opts.updatedAt ? compactTimeFirst(opts.updatedAt) : "";
+
+    parts.push(`
+
+      <details class="task-table-toggle">
+
+        <summary><span>${summary}</span>${updatedShort ? `<span class="task-table-stamp mono">${htmlesc(updatedShort)}</span>` : ``}</summary>
+
+        <div class="task-table-toggle-body">
+
+          ${tables.map(item=>renderStoredTableBlock(item.content)).join("")}
+
+        </div>
+
+      </details>
+
+    `);
+
+  }
+
+  return parts.join("");
 
 }
 
@@ -2241,6 +2353,20 @@ function closeTitle(dt){
   if(!date) return "—";
 
   return time ? `${fmtDate(date)} ${time}` : `${fmtDate(date)}`;
+
+}
+
+function compactTimeFirst(dt){
+
+  const {date, time} = splitDateTimeLoose(dt);
+
+  if(!date) return "";
+
+  const d = fmtDateShort(date);
+
+  if(!time) return d;
+
+  return `${time.replace(":", ".")} ${d}`;
 
 }
 
@@ -11867,11 +11993,7 @@ function viewTasks(){
 
     const descLabel = isAnn ? "Текст" : "Опис";
 
-    const descStartsWithBreak = /^\s*\r?\n/.test(descRaw);
-
-    const descPrefix = descStartsWithBreak ? `${descLabel}:<br/>` : `${descLabel}: `;
-
-    const descHtml = (!isAnn && hasDesc) ? `<div class="task-desc rich-text">${descPrefix}${richText(descRaw)}</div>` : "";
+    const descHtml = (!isAnn && hasDesc) ? renderTaskDescWithTableToggle(descRaw, descLabel, {updatedAt: t.updatedAt || t.createdAt || ""}) : "";
 
     const annDesc = (isAnn && t.audience==="meeting" && hasDesc) ? `<div class="task-desc rich-text">Опис:${descStartsWithBreak ? "<br/>" : " "}${richText(descRaw)}</div>` : "";
 
@@ -13885,7 +14007,7 @@ function openTask(taskId, opts={}){
 
       ${(isAnn && t.audience==="meeting" && t.description) ? `<div class="hint rich-text"><b>Опис:</b> ${richText(t.description)}</div>` : ``}
 
-      ${isAnn ? `` : `<div class="hint rich-text"><b>${descLabel}:</b> ${t.description ? richText(t.description) : "—"}</div>`}
+      ${isAnn ? `` : renderTaskDescWithTableToggle(t.description || "", descLabel, {className:"hint rich-text", showEmpty:true, updatedAt: t.updatedAt || t.createdAt || ""})}
 
       ${(!isAnn && isDone) ? `<div class="hint"><b>Результат:</b>${closeNote ? htmlesc(closeNote) : "—"}</div>` : ``}
 
@@ -15816,6 +15938,10 @@ function openCreateAnnouncement(){
     </div>
 
   `);
+
+  const existingTable = findStoredTableBlock(t.description || "");
+
+  if(existingTable) renderTextTableEditor("tDesc", existingTable.rows);
 
 }
 

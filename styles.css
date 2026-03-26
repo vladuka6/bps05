@@ -857,8 +857,8 @@
       min-width:100%;
       border-collapse:collapse;
       table-layout:auto;
-      font-size:13px;
-      line-height:1.35;
+      font-size:12px;
+      line-height:1.28;
     }
     .rich-text .rt-table th,
     .rich-text .rt-table td{
@@ -875,6 +875,9 @@
       background: rgba(236,242,255,.9);
       color: var(--text);
       font-weight:800;
+      white-space:normal;
+      word-break:break-word;
+      overflow-wrap:anywhere;
     }
     .rich-text .rt-table td{
       color: var(--muted);
@@ -960,6 +963,44 @@
     .text-table-cell.is-head{
       font-weight:800;
       background: rgba(236,242,255,.96);
+    }
+    .task-table-toggle{
+      margin-top:10px;
+      border:1px dashed rgba(150,170,205,.38);
+      border-radius:14px;
+      background: rgba(248,250,255,.7);
+      overflow:hidden;
+    }
+    .task-table-toggle summary{
+      list-style:none;
+      cursor:pointer;
+      padding:10px 12px;
+      font-size:12px;
+      font-weight:700;
+      color:#4d6287;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px;
+    }
+    .task-table-toggle summary::-webkit-details-marker{display:none;}
+    .task-table-toggle summary::before{
+      content:"▸";
+      font-size:11px;
+      transition:transform .18s ease;
+    }
+    .task-table-toggle[open] summary::before{transform:rotate(90deg);}
+    .task-table-toggle-body{
+      padding:0 10px 10px;
+    }
+    .task-table-stamp{
+      font-size:10px;
+      line-height:1;
+      color:#7f8da7;
+      font-weight:600;
+      letter-spacing:.01em;
+      white-space:nowrap;
+      opacity:.9;
     }
     .dept-multi{display:flex;flex-direction:column;gap:6px;}
     .dept-multi .check{display:flex;gap:8px;align-items:center;font-size:13px;line-height:1.2;}
@@ -3514,6 +3555,16 @@
     }
     body.theme-dark .text-table-cell.is-head{
       background: rgba(27,33,47,.94);
+    }
+    body.theme-dark .task-table-toggle{
+      background: rgba(18,22,32,.66);
+      border-color: rgba(35,42,58,.72);
+    }
+    body.theme-dark .task-table-toggle summary{
+      color:#cfd8ea;
+    }
+    body.theme-dark .task-table-stamp{
+      color:#8f9bb4;
     }
     body.theme-dark .rich-text .rt-table-wrap{
       background: rgba(16,19,28,.82);
