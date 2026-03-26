@@ -11993,7 +11993,7 @@ function viewTasks(){
 
     const descLabel = isAnn ? "Текст" : "Опис";
 
-    const descHtml = (!isAnn && hasDesc) ? renderTaskDescWithTableToggle(descRaw, descLabel, {updatedAt: t.updatedAt || t.createdAt || ""}) : "";
+    const descHtml = (!isAnn && hasDesc) ? renderTaskDescWithTableToggle(descRaw, descLabel) : "";
 
     const annDesc = (isAnn && t.audience==="meeting" && hasDesc) ? `<div class="task-desc rich-text">Опис:${descStartsWithBreak ? "<br/>" : " "}${richText(descRaw)}</div>` : "";
 
