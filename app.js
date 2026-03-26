@@ -1597,6 +1597,88 @@ function sanitizePastedTableCell(value){
 
 }
 
+function mergeBrokenClipboardRows(rows){
+
+  const safeRows = Array.isArray(rows)
+
+    ? rows
+        .map(row=>Array.isArray(row) ? row.map(cell=>sanitizePastedTableCell(cell)) : [])
+        .filter(row=>row.some(cell=>String(cell || "").trim()))
+
+    : [];
+
+  if(!safeRows.length) return [];
+
+  const expectedWidth = Math.max(2, ...safeRows.map(row=>row.length));
+
+  const out = [];
+
+  let pending = null;
+
+  const pushPending = ()=>{
+
+    if(!pending) return;
+
+    const next = pending.slice(0, expectedWidth);
+
+    while(next.length < expectedWidth) next.push("");
+
+    out.push(next);
+
+    pending = null;
+
+  };
+
+  safeRows.forEach(row=>{
+
+    if(!pending){
+
+      pending = row.slice();
+
+      if(pending.length >= expectedWidth) pushPending();
+
+      return;
+
+    }
+
+    if(pending.length < expectedWidth){
+
+      const continuation = String(row[0] || "").trim();
+
+      if(continuation){
+
+        pending[pending.length - 1] = [pending[pending.length - 1], continuation]
+          .filter(Boolean)
+          .join(" / ");
+
+      }
+
+      if(row.length > 1){
+
+        pending.push(...row.slice(1));
+
+      }
+
+      if(pending.length >= expectedWidth) pushPending();
+
+      return;
+
+    }
+
+    pushPending();
+
+    pending = row.slice();
+
+    if(pending.length >= expectedWidth) pushPending();
+
+  });
+
+  pushPending();
+
+  return out;
+
+}
+
 function parseStoredTableRows(content){
 
   const rows = String(content || "")
@@ -1662,6 +1744,8 @@ function parseClipboardTableText(text){
       .filter(row=>row.some(cell=>String(cell || "").trim()));
 
   }
+
+  rows = mergeBrokenClipboardRows(rows);
 
   const width = Math.max(2, ...rows.map(row=>row.length));
 
