@@ -853,23 +853,23 @@
       background: rgba(255,255,255,.82);
     }
     .rich-text .rt-table{
-      width:max-content;
-      min-width:100%;
-      border-collapse:collapse;
-      table-layout:auto;
-      font-size:12px;
-      line-height:1.28;
-    }
+        width:max-content;
+        min-width:100%;
+        border-collapse:collapse;
+        table-layout:auto;
+        font-size:12px;
+        line-height:1.28;
+        border:1px solid rgba(150,170,205,.34);
+      }
     .rich-text .rt-table th,
     .rich-text .rt-table td{
-      padding:10px 12px;
-      text-align:left;
-      vertical-align:top;
-      min-width:72px;
-      border-bottom:1px solid rgba(150,170,205,.22);
-      border-right:1px solid rgba(150,170,205,.18);
-      word-break:normal;
-      overflow-wrap:break-word;
+        padding:10px 12px;
+        text-align:left;
+        vertical-align:top;
+        min-width:72px;
+        border:1px solid rgba(150,170,205,.34);
+        word-break:normal;
+        overflow-wrap:break-word;
     }
     .rich-text .rt-table th{
       background: rgba(236,242,255,.9);
@@ -883,10 +883,7 @@
       color: var(--muted);
       background: rgba(255,255,255,.72);
     }
-    .rich-text .rt-table tr:last-child td{border-bottom:none;}
-    .rich-text .rt-table th:last-child,
-    .rich-text .rt-table td:last-child{border-right:none;}
-    .label-row{
+      .label-row{
       display:flex;
       align-items:center;
       justify-content: space-between;
@@ -3571,17 +3568,15 @@
       border-color: rgba(35,42,58,.72);
     }
     body.theme-dark .rich-text .rt-table th{
-      background: rgba(24,29,42,.95);
-      color: var(--text);
-      border-bottom-color: rgba(35,42,58,.78);
-      border-right-color: rgba(35,42,58,.7);
-    }
+        background: rgba(24,29,42,.95);
+        color: var(--text);
+        border-color: rgba(64,74,96,.82);
+      }
     body.theme-dark .rich-text .rt-table td{
-      background: rgba(18,22,32,.78);
-      color: var(--muted);
-      border-bottom-color: rgba(35,42,58,.58);
-      border-right-color: rgba(35,42,58,.5);
-    }
+        background: rgba(18,22,32,.78);
+        color: var(--muted);
+        border-color: rgba(64,74,96,.68);
+      }
     body.theme-dark .weekly-item.is-completed .name,
     body.theme-dark .weekly-item.is-completed .hint{
       color: var(--text);
