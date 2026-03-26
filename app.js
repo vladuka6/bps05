@@ -1577,6 +1577,57 @@ function splitMarkdownTableRow(line){
 
 }
 
+function parseStoredTableRows(content){
+
+  const rows = String(content || "")
+
+    .split(/\r?\n/)
+
+    .map(line=>splitMarkdownTableRow(line))
+
+    .filter(row=>row.some(cell=>String(cell || "").trim()));
+
+  if(!rows.length) return [["Колонка 1","Колонка 2"],["",""]];
+
+  const width = Math.max(2, ...rows.map(row=>row.length));
+
+  return rows.map(row=>{
+
+    const next = row.slice(0, width);
+
+    while(next.length < width) next.push("");
+
+    return next;
+
+  });
+
+}
+
+function findStoredTableBlock(text){
+
+  const re = /\[\[TABLE\]\]\r?\n([\s\S]*?)\r?\n\[\[\/TABLE\]\]/;
+
+  const match = re.exec(String(text || ""));
+
+  if(!match) return null;
+
+  return {
+    start: match.index,
+    end: match.index + match[0].length,
+    raw: match[0],
+    rows: parseStoredTableRows(match[1] || "")
+  };
+
+}
+
+function serializeStoredTable(rows){
+
+  const normalized = (rows || []).map(row=>(row || []).map(cell=>String(cell || "").replace(/\|/g, "/").trim()));
+
+  return `[[TABLE]]\n${normalized.map(row=>`| ${row.join(" | ")} |`).join("\n")}\n[[/TABLE]]`;
+
+}
+
 function isMarkdownTableBlock(lines){
 
   if(!Array.isArray(lines) || lines.length < 2) return false;
@@ -1615,15 +1666,53 @@ function renderMarkdownTableBlock(lines){
 
 }
 
+function renderStoredTableBlock(content){
+
+  return renderMarkdownTableBlock(
+
+    parseStoredTableRows(content).map((row, idx)=>{
+
+      const line = `| ${row.join(" | ")} |`;
+
+      if(idx === 0){
+
+        return [line, `| ${row.map(()=> "---").join(" | ")} |`];
+
+      }
+
+      return line;
+
+    }).flat()
+
+  );
+
+}
+
 function richText(s){
 
   const safe = htmlesc(s ?? "");
 
   if(!safe) return "";
 
-  const blocks = safe.split(/\r?\n\r?\n+/);
+  const chunks = [];
 
-  return blocks.map(block=>{
+  let cursor = 0;
+
+  safe.replace(/\[\[TABLE\]\]\r?\n([\s\S]*?)\r?\n\[\[\/TABLE\]\]/g, (full, tableContent, offset)=>{
+
+    chunks.push({type:"text", value:safe.slice(cursor, offset)});
+
+    chunks.push({type:"table", value:tableContent});
+
+    cursor = offset + full.length;
+
+    return full;
+
+  });
+
+  chunks.push({type:"text", value:safe.slice(cursor)});
+
+  const renderTextChunk = (text)=> text.split(/\r?\n\r?\n+/).map(block=>{
 
     const lines = block.split(/\r?\n/);
 
@@ -1632,6 +1721,14 @@ function richText(s){
     return applyInlineRichText(block);
 
   }).join("\n\n");
+
+  return chunks.map(chunk=>{
+
+    if(chunk.type === "table") return renderStoredTableBlock(chunk.value);
+
+    return renderTextChunk(chunk.value);
+
+  }).join("");
 
 }
 
@@ -1705,46 +1802,239 @@ function applyTextFormat(textareaId, type){
 
 }
 
+function defaultTextTableRows(){
+
+  return [
+    ["Колонка 1","Колонка 2"],
+    ["",""],
+    ["",""]
+  ];
+
+}
+
+function readTextTableEditorRows(textareaId){
+
+  const wrap = document.querySelector(`.text-table-editor[data-for="${textareaId}"]`);
+
+  if(!wrap) return defaultTextTableRows();
+
+  const rows = Number(wrap.dataset.rows || 0);
+
+  const cols = Number(wrap.dataset.cols || 0);
+
+  if(!rows || !cols) return defaultTextTableRows();
+
+  const data = [];
+
+  for(let r=0; r<rows; r+=1){
+
+    const row = [];
+
+    for(let c=0; c<cols; c+=1){
+
+      row.push(document.getElementById(`${textareaId}_tbl_${r}_${c}`)?.value || "");
+
+    }
+
+    data.push(row);
+
+  }
+
+  return data;
+
+}
+
+function buildTextTableEditorHtml(textareaId, rows){
+
+  const safeRows = (rows && rows.length) ? rows : defaultTextTableRows();
+
+  const rowCount = safeRows.length;
+
+  const colCount = Math.max(2, ...safeRows.map(row=>row.length));
+
+  const normalized = safeRows.map(row=>{
+
+    const next = row.slice(0, colCount);
+
+    while(next.length < colCount) next.push("");
+
+    return next;
+
+  });
+
+  const grid = normalized.map((row, r)=>`
+
+    <div class="text-table-row">
+
+      ${row.map((cell, c)=>`<input id="${textareaId}_tbl_${r}_${c}" class="text-table-cell ${r===0 ? "is-head" : ""}" value="${htmlesc(cell)}" placeholder="${r===0 ? `Колонка ${c + 1}` : "Значення"}" />`).join("")}
+
+    </div>
+
+  `).join("");
+
+  return `
+
+    <div class="text-table-editor" data-for="${textareaId}" data-rows="${rowCount}" data-cols="${colCount}">
+
+      <div class="text-table-editor-head">
+
+        <div class="hint">Таблиця для опису задачі. Перший рядок — заголовки.</div>
+
+        <div class="text-table-editor-actions">
+
+          <button type="button" class="btn ghost btn-mini" data-action="mutateTextTableEditor" data-arg1="${textareaId}" data-arg2="addRow">+ Рядок</button>
+
+          <button type="button" class="btn ghost btn-mini" data-action="mutateTextTableEditor" data-arg1="${textareaId}" data-arg2="removeRow">- Рядок</button>
+
+          <button type="button" class="btn ghost btn-mini" data-action="mutateTextTableEditor" data-arg1="${textareaId}" data-arg2="addCol">+ Колонка</button>
+
+          <button type="button" class="btn ghost btn-mini" data-action="mutateTextTableEditor" data-arg1="${textareaId}" data-arg2="removeCol">- Колонка</button>
+
+        </div>
+
+      </div>
+
+      <div class="text-table-grid">${grid}</div>
+
+      <div class="actions" style="margin-top:12px;">
+
+        <button type="button" class="btn primary btn-mini" data-action="applyTextTableEditor" data-arg1="${textareaId}">Застосувати</button>
+
+        <button type="button" class="btn danger btn-mini" data-action="deleteTextTableFromTextarea" data-arg1="${textareaId}">Видалити таблицю</button>
+
+        <button type="button" class="btn ghost btn-mini" data-action="closeTextTableEditor" data-arg1="${textareaId}">Сховати</button>
+
+      </div>
+
+    </div>
+
+  `;
+
+}
+
+function renderTextTableEditor(textareaId, rows){
+
+  const el = document.getElementById(textareaId);
+
+  if(!el) return;
+
+  let wrap = document.querySelector(`.text-table-editor[data-for="${textareaId}"]`);
+
+  if(!wrap){
+
+    el.insertAdjacentHTML("afterend", buildTextTableEditorHtml(textareaId, rows));
+
+    return;
+
+  }
+
+  wrap.outerHTML = buildTextTableEditorHtml(textareaId, rows);
+
+}
+
 function insertTextTable(textareaId){
 
   const el = document.getElementById(textareaId);
 
   if(!el) return;
 
-  const template = [
-    "| Колонка 1 | Колонка 2 |",
-    "| --- | --- |",
-    "| Значення 1 | Значення 2 |",
-    "| Значення 3 | Значення 4 |"
-  ].join("\n");
+  const existing = findStoredTableBlock(el.value || "");
 
-  const start = el.selectionStart ?? 0;
+  renderTextTableEditor(textareaId, existing?.rows || defaultTextTableRows());
 
-  const end = el.selectionEnd ?? 0;
+}
+
+function mutateTextTableEditor(textareaId, action){
+
+  let rows = readTextTableEditorRows(textareaId);
+
+  if(action==="addRow"){
+
+    rows.push(new Array(rows[0]?.length || 2).fill(""));
+
+  } else if(action==="removeRow"){
+
+    if(rows.length > 2) rows = rows.slice(0, -1);
+
+  } else if(action==="addCol"){
+
+    rows = rows.map(row=>[...row, ""]);
+
+  } else if(action==="removeCol"){
+
+    if((rows[0]?.length || 0) > 2){
+
+      rows = rows.map(row=>row.slice(0, -1));
+
+    }
+
+  }
+
+  renderTextTableEditor(textareaId, rows);
+
+}
+
+function applyTextTableEditor(textareaId){
+
+  const el = document.getElementById(textareaId);
+
+  if(!el) return;
+
+  const rows = readTextTableEditorRows(textareaId).map(row=>row.map(cell=>String(cell || "").trim()));
+
+  const serialized = serializeStoredTable(rows);
 
   const val = el.value || "";
 
-  const before = val.slice(0, start);
+  const existing = findStoredTableBlock(val);
 
-  const after = val.slice(end);
+  if(existing){
 
-  const needBeforeBreak = before && !before.endsWith("\n") ? "\n\n" : (before ? "\n" : "");
+    el.value = val.slice(0, existing.start) + serialized + val.slice(existing.end);
 
-  const needAfterBreak = after && !after.startsWith("\n") ? "\n\n" : "";
+  } else {
 
-  const insert = `${needBeforeBreak}${template}${needAfterBreak}`;
+    const needBreak = val.trim() ? "\n\n" : "";
 
-  el.value = before + insert + after;
+    el.value = `${val}${needBreak}${serialized}`;
 
-  const selectStart = before.length + needBeforeBreak.length;
-
-  const selectEnd = selectStart + "| Колонка 1 | Колонка 2 |".length;
-
-  el.focus();
-
-  el.setSelectionRange(selectStart, selectEnd);
+  }
 
   el.dispatchEvent(new Event("input", {bubbles:true}));
+
+  renderTextTableEditor(textareaId, rows);
+
+}
+
+function deleteTextTableFromTextarea(textareaId){
+
+  const el = document.getElementById(textareaId);
+
+  if(!el) return;
+
+  const existing = findStoredTableBlock(el.value || "");
+
+  if(existing){
+
+    const before = el.value.slice(0, existing.start).replace(/\s+$/, "");
+
+    const after = el.value.slice(existing.end).replace(/^\s+/, "");
+
+    el.value = [before, after].filter(Boolean).join("\n\n");
+
+    el.dispatchEvent(new Event("input", {bubbles:true}));
+
+  }
+
+  closeTextTableEditor(textareaId);
+
+}
+
+function closeTextTableEditor(textareaId){
+
+  const wrap = document.querySelector(`.text-table-editor[data-for="${textareaId}"]`);
+
+  if(wrap) wrap.remove();
 
 }
 
@@ -17504,6 +17794,14 @@ const ACTIONS = {
   applyTextFormat,
 
   insertTextTable,
+
+  mutateTextTableEditor,
+
+  applyTextTableEditor,
+
+  deleteTextTableFromTextarea,
+
+  closeTextTableEditor,
 
   openCreateTask,
 

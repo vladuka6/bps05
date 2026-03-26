@@ -912,6 +912,51 @@
     }
     .format-chip:active{transform: scale(.98);}
     .format-ico{display:inline-flex;align-items:center;justify-content:center;min-width:10px;}
+    .text-table-editor{
+      margin-top:12px;
+      padding:12px;
+      border:1px solid rgba(150,170,205,.32);
+      border-radius:16px;
+      background: rgba(246,249,255,.92);
+      box-shadow: 0 8px 24px rgba(36,74,140,.08);
+    }
+    .text-table-editor-head{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:12px;
+      margin-bottom:10px;
+    }
+    .text-table-editor-actions{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+    .text-table-grid{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+    .text-table-row{
+      display:grid;
+      gap:8px;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    }
+    .text-table-cell{
+      min-width:0;
+      height:40px;
+      padding:8px 10px;
+      border-radius:12px;
+      border:1px solid rgba(150,170,205,.34);
+      background: rgba(255,255,255,.96);
+      color: var(--text);
+      font: inherit;
+    }
+    .text-table-cell.is-head{
+      font-weight:800;
+      background: rgba(236,242,255,.96);
+    }
     .dept-multi{display:flex;flex-direction:column;gap:6px;}
     .dept-multi .check{display:flex;gap:8px;align-items:center;font-size:13px;line-height:1.2;}
     .dept-toggle-grid{
@@ -3452,6 +3497,19 @@
       border-color: rgba(35,42,58,.75);
       background: rgba(21,25,37,.75);
       color: var(--text);
+    }
+    body.theme-dark .text-table-editor{
+      background: rgba(17,20,29,.92);
+      border-color: rgba(35,42,58,.78);
+      box-shadow: 0 10px 26px rgba(0,0,0,.24);
+    }
+    body.theme-dark .text-table-cell{
+      background: rgba(21,25,37,.88);
+      border-color: rgba(35,42,58,.76);
+      color: var(--text);
+    }
+    body.theme-dark .text-table-cell.is-head{
+      background: rgba(27,33,47,.94);
     }
     body.theme-dark .rich-text .rt-table-wrap{
       background: rgba(16,19,28,.82);
