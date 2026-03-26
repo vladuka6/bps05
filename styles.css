@@ -846,18 +846,22 @@
     .rich-text{white-space: pre-wrap;}
     .rich-text .rt-table-wrap{
       margin:10px 0 2px;
-      overflow:auto;
+      display:block;
+      max-width:100%;
+      overflow-x:auto;
+      overflow-y:hidden;
       white-space:normal;
       border:1px solid rgba(150,170,205,.42);
       border-radius:14px;
       background: rgba(255,255,255,.82);
+      -webkit-overflow-scrolling:touch;
     }
     .rich-text .rt-table{
-          width:max-content;
-          min-width:100%;
+          width:100%;
+          min-width:0;
           border-collapse:separate !important;
           border-spacing:0 !important;
-          table-layout:auto;
+          table-layout:fixed;
           font-size:clamp(10px, .68vw, 12px);
           line-height:1.22;
           border:1px solid rgba(126,146,182,.72);
@@ -868,18 +872,20 @@
           padding:8px 10px;
           text-align:left;
           vertical-align:top;
-          min-width:58px;
+          min-width:0;
           border-right:1px solid rgba(126,146,182,.72) !important;
           border-bottom:1px solid rgba(126,146,182,.72) !important;
-          word-break:normal;
+          white-space:normal !important;
+          word-break:break-word;
           overflow-wrap:anywhere;
+          hyphens:auto;
           box-shadow:none !important;
       }
     .rich-text .rt-table th{
       background: rgba(236,242,255,.9);
       color: var(--text);
       font-weight:800;
-      white-space:normal;
+      white-space:normal !important;
       word-break:break-word;
       overflow-wrap:anywhere;
     }
@@ -897,59 +903,40 @@
         .rich-text .rt-table th,
         .rich-text .rt-table td{
           padding:7px 9px;
-          min-width:52px;
         }
       }
       @media (max-width: 1366px){
         .rich-text .rt-table{
-          width:100%;
-          min-width:0;
-          table-layout:fixed;
           font-size:9.5px;
           line-height:1.16;
         }
         .rich-text .rt-table th,
         .rich-text .rt-table td{
           padding:5px 6px;
-          min-width:0;
         }
       }
       @media (max-width: 1280px){
         .rich-text .rt-table{
-          width:100%;
-          min-width:0;
-          table-layout:fixed;
           font-size:9px;
         }
         .rich-text .rt-table th,
         .rich-text .rt-table td{
           padding:4px 6px;
-          min-width:0;
         }
       }
       @media (max-width: 1200px){
         .rich-text .rt-table{
-          width:100%;
-          min-width:0;
-          table-layout:fixed;
           font-size:10px;
         }
         .rich-text .rt-table th,
         .rich-text .rt-table td{
           padding:6px 8px;
-          min-width:0;
         }
       }
       @media (max-width: 1024px){
-        .rich-text .rt-table{
-          width:100%;
-          min-width:0;
-          table-layout:fixed;
-        }
         .rich-text .rt-table th,
         .rich-text .rt-table td{
           padding:5px 7px;
-          min-width:0;
         }
       }
       .label-row{
