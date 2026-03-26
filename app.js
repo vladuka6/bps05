@@ -1603,6 +1603,40 @@ function parseStoredTableRows(content){
 
 }
 
+function parseClipboardTableText(text){
+
+  const raw = String(text || "").replace(/\r/g, "").trim();
+
+  if(!raw) return [];
+
+  const lines = raw.split("\n").filter(line=>line.trim().length);
+
+  if(!lines.length) return [];
+
+  let rows = lines.map(line=>line.split("\t").map(cell=>cell.trim()));
+
+  const maxCols = Math.max(0, ...rows.map(row=>row.length));
+
+  if(maxCols < 2 && raw.includes("|")){
+
+    rows = lines.map(splitMarkdownTableRow).filter(row=>row.some(cell=>String(cell || "").trim()));
+
+  }
+
+  const width = Math.max(2, ...rows.map(row=>row.length));
+
+  return rows.map(row=>{
+
+    const next = row.slice(0, width);
+
+    while(next.length < width) next.push("");
+
+    return next;
+
+  });
+
+}
+
 function findStoredTableBlock(text){
 
   const re = /\[\[TABLE\]\]\r?\n([\s\S]*?)\r?\n\[\[\/TABLE\]\]/;
@@ -1742,6 +1776,12 @@ function formatToolbar(textareaId, variant="", opts={}){
 
     : "";
 
+  const pasteTableBtn = opts?.table
+
+    ? `<button class="format-chip" data-action="pasteTextTableFromClipboard" data-arg1="${textareaId}" title="Вставити з Excel / Word"><span class="format-ico">📋</span></button>`
+
+    : "";
+
   return `
 
     <div class="${cls}" aria-label="Форматування тексту">
@@ -1755,6 +1795,8 @@ function formatToolbar(textareaId, variant="", opts={}){
       <button class="format-chip" data-action="applyTextFormat" data-arg1="${textareaId}" data-arg2="strike" title="Перекреслення (~~текст~~)"><span class="format-ico"><s>S</s></span></button>
 
       ${tableBtn}
+
+      ${pasteTableBtn}
 
     </div>
 
@@ -2035,6 +2077,44 @@ function closeTextTableEditor(textareaId){
   const wrap = document.querySelector(`.text-table-editor[data-for="${textareaId}"]`);
 
   if(wrap) wrap.remove();
+
+}
+
+async function pasteTextTableFromClipboard(textareaId){
+
+  if(!(navigator?.clipboard?.readText)){
+
+    showToast("Буфер обміну недоступний у цьому браузері.", "warn");
+
+    return;
+
+  }
+
+  try{
+
+    const text = await navigator.clipboard.readText();
+
+    const rows = parseClipboardTableText(text);
+
+    if(!rows.length){
+
+      showToast("У буфері немає табличних даних.", "warn");
+
+      return;
+
+    }
+
+    renderTextTableEditor(textareaId, rows);
+
+    showToast("Таблицю вставлено з буфера", "ok");
+
+  } catch(err){
+
+    console.warn("clipboard read failed", err);
+
+    showToast("Не вдалося прочитати буфер. Скопіюй таблицю ще раз і повтори.", "warn");
+
+  }
 
 }
 
@@ -17794,6 +17874,8 @@ const ACTIONS = {
   applyTextFormat,
 
   insertTextTable,
+
+  pasteTextTableFromClipboard,
 
   mutateTextTableEditor,
 
