@@ -1577,6 +1577,8 @@ function splitMarkdownTableRow(line){
 
 }
 
+const TABLE_LINEBREAK_TOKEN = "[[LB]]";
+
 function sanitizePastedTableCell(value){
 
   let next = String(value ?? "")
@@ -1589,7 +1591,7 @@ function sanitizePastedTableCell(value){
 
     .replace(/\t/g, " ")
 
-    .replace(/\s*\n\s*/g, " / ")
+    .replace(/\s*\n\s*/g, "\n")
 
     .replace(/[ \f\v]+/g, " ")
 
@@ -1650,7 +1652,7 @@ function mergeBrokenClipboardRows(rows){
       targetRow[attachIdx] = sanitizePastedTableCell(
         [targetRow[attachIdx], firstPart]
           .filter(Boolean)
-          .join(" / ")
+          .join("\n")
       );
 
     }
@@ -1670,7 +1672,7 @@ function mergeBrokenClipboardRows(rows){
           targetRow[cursor] = sanitizePastedTableCell(
             [targetRow[cursor], clean]
               .filter(Boolean)
-              .join(" / ")
+              .join("\n")
           );
 
         }
@@ -1727,7 +1729,7 @@ function mergeBrokenClipboardRows(rows){
 
         pending[pending.length - 1] = [pending[pending.length - 1], continuation]
           .filter(Boolean)
-          .join(" / ");
+          .join("\n");
 
       }
 
@@ -1773,7 +1775,9 @@ function parseStoredTableRows(content){
 
   return rows.map(row=>{
 
-    const next = row.slice(0, width);
+    const next = row
+      .slice(0, width)
+      .map(cell=>String(cell || "").replaceAll(TABLE_LINEBREAK_TOKEN, "\n"));
 
     while(next.length < width) next.push("");
 
@@ -1872,7 +1876,13 @@ function findPreviousStoredTableBlock(text){
 
 function serializeStoredTable(rows, marker="TABLE"){
 
-  const normalized = (rows || []).map(row=>(row || []).map(cell=>String(cell || "").replace(/\|/g, "/").trim()));
+  const normalized = (rows || []).map(row=>(row || []).map(cell=>
+    String(cell || "")
+      .replace(/\|/g, "/")
+      .replace(/\r/g, "")
+      .replace(/\n/g, TABLE_LINEBREAK_TOKEN)
+      .trim()
+  ));
 
   const safeMarker = String(marker || "TABLE").replace(/[^\w]/g, "");
 
@@ -1906,11 +1916,13 @@ function renderMarkdownTableBlock(lines){
 
   const body = rows.slice(2).filter(row=>row.some(cell=>String(cell || "").trim()));
 
-  const headHtml = `<tr>${header.map(cell=>`<th>${applyInlineRichText(cell)}</th>`).join("")}</tr>`;
+  const renderCellHtml = (cell)=> applyInlineRichText(String(cell || "")).replaceAll(TABLE_LINEBREAK_TOKEN, "<br/>").replace(/\n/g, "<br/>");
+
+  const headHtml = `<tr>${header.map(cell=>`<th>${renderCellHtml(cell)}</th>`).join("")}</tr>`;
 
   const bodyHtml = body.length
 
-    ? body.map(row=>`<tr>${row.map(cell=>`<td>${applyInlineRichText(cell)}</td>`).join("")}</tr>`).join("")
+    ? body.map(row=>`<tr>${row.map(cell=>`<td>${renderCellHtml(cell)}</td>`).join("")}</tr>`).join("")
 
     : `<tr>${header.map(()=>`<td>—</td>`).join("")}</tr>`;
 
@@ -2005,7 +2017,7 @@ function renderTableDiffBlock(currentRows, previousRows){
 
     const title = changed && prev ? ` title="Було: ${htmlesc(prev)}"` : "";
 
-    return `<th${cls}${title}>${applyInlineRichText(cell || prev || "—")}</th>`;
+    return `<th${cls}${title}>${applyInlineRichText(String(cell || prev || "—")).replaceAll(TABLE_LINEBREAK_TOKEN, "<br/>").replace(/\n/g, "<br/>")}</th>`;
 
   }).join("");
 
@@ -2023,7 +2035,7 @@ function renderTableDiffBlock(currentRows, previousRows){
 
       const title = changed ? ` title="Було: ${htmlesc(prev || "—")}"` : "";
 
-      return `<td${cls}${title}>${applyInlineRichText(cell || "—")}</td>`;
+      return `<td${cls}${title}>${applyInlineRichText(String(cell || "—")).replaceAll(TABLE_LINEBREAK_TOKEN, "<br/>").replace(/\n/g, "<br/>")}</td>`;
 
     }).join("");
 
@@ -2235,7 +2247,7 @@ function buildTextTableEditorHtml(textareaId, rows){
 
     <div class="text-table-row">
 
-      ${row.map((cell, c)=>`<input id="${textareaId}_tbl_${r}_${c}" class="text-table-cell ${r===0 ? "is-head" : ""}" value="${htmlesc(cell)}" placeholder="${r===0 ? `Колонка ${c + 1}` : "Значення"}" />`).join("")}
+      ${row.map((cell, c)=>`<textarea id="${textareaId}_tbl_${r}_${c}" class="text-table-cell ${r===0 ? "is-head" : ""}" placeholder="${r===0 ? `Колонка ${c + 1}` : "Значення"}">${htmlesc(String(cell || "").replaceAll(TABLE_LINEBREAK_TOKEN, "\n"))}</textarea>`).join("")}
 
     </div>
 

@@ -1005,13 +1005,16 @@
     }
     .text-table-cell{
       min-width:0;
-      height:40px;
+      min-height:44px;
       padding:8px 10px;
       border-radius:12px;
       border:1px solid rgba(150,170,205,.34);
       background: rgba(255,255,255,.96);
       color: var(--text);
       font: inherit;
+      line-height:1.35;
+      resize:vertical;
+      white-space:pre-wrap;
     }
     .text-table-cell.is-head{
       font-weight:800;
