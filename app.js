@@ -2328,8 +2328,9 @@ function renderTaskDescWithTableToggle(text, label, opts={}){
     const summary = tables.length > 1 ? `Показати дані (${tables.length})` : "Показати дані";
 
     const updatedShort = opts.updatedAt ? compactTimeFirst(opts.updatedAt) : "";
+    const toggleBlocks = [];
 
-    parts.push(`
+    toggleBlocks.push(`
 
       <details class="task-table-toggle">
 
@@ -2341,29 +2342,31 @@ function renderTaskDescWithTableToggle(text, label, opts={}){
 
         </div>
 
+      </details>
+
+    `);
+
+    if(diffMeta && diffMeta.changedCount){
+
+      toggleBlocks.push(`
+
+        <details class="task-table-toggle task-table-diff-toggle">
+
+          <summary><span>Показати зміни</span><span class="task-table-diff-badge mono">${htmlesc(String(diffMeta.changedCount))}</span></summary>
+
+          <div class="task-table-toggle-body rich-text">
+
+            ${renderTableDiffBlock(currentTable.rows, previousTable.rows)}
+
+          </div>
+
         </details>
 
       `);
 
-      if(diffMeta && diffMeta.changedCount){
-
-        parts.push(`
-
-          <details class="task-table-toggle task-table-diff-toggle">
-
-            <summary><span>Показати зміни</span><span class="task-table-diff-badge mono">${htmlesc(String(diffMeta.changedCount))}</span></summary>
-
-            <div class="task-table-toggle-body rich-text">
-
-              ${renderTableDiffBlock(currentTable.rows, previousTable.rows)}
-
-            </div>
-
-          </details>
-
-        `);
-
       }
+
+    parts.push(`<div class="task-table-toggle-row">${toggleBlocks.join("")}</div>`);
 
   }
 
