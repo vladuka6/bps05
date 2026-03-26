@@ -855,13 +855,13 @@
     .rich-text .rt-table{
           width:max-content;
           min-width:100%;
-          border-collapse:separate;
-          border-spacing:0;
+          border-collapse:separate !important;
+          border-spacing:0 !important;
           table-layout:auto;
           font-size:clamp(10px, .68vw, 12px);
           line-height:1.22;
-          border:1px solid rgba(126,146,182,.62);
-          background: rgba(255,255,255,.9);
+          border:1px solid rgba(126,146,182,.72);
+          background: rgba(255,255,255,.92);
         }
     .rich-text .rt-table th,
     .rich-text .rt-table td{
@@ -869,11 +869,11 @@
           text-align:left;
           vertical-align:top;
           min-width:58px;
-          border-right:1px solid rgba(126,146,182,.62);
-          border-bottom:1px solid rgba(126,146,182,.62);
+          border-right:1px solid rgba(126,146,182,.72) !important;
+          border-bottom:1px solid rgba(126,146,182,.72) !important;
           word-break:normal;
           overflow-wrap:anywhere;
-          box-shadow: inset 0 0 0 1px rgba(126,146,182,.18);
+          box-shadow:none !important;
       }
     .rich-text .rt-table th{
       background: rgba(236,242,255,.9);
@@ -902,40 +902,54 @@
       }
       @media (max-width: 1366px){
         .rich-text .rt-table{
+          width:100%;
+          min-width:0;
+          table-layout:fixed;
           font-size:9.5px;
           line-height:1.16;
         }
         .rich-text .rt-table th,
         .rich-text .rt-table td{
           padding:5px 6px;
-          min-width:38px;
+          min-width:0;
         }
       }
       @media (max-width: 1280px){
         .rich-text .rt-table{
+          width:100%;
+          min-width:0;
+          table-layout:fixed;
           font-size:9px;
         }
         .rich-text .rt-table th,
         .rich-text .rt-table td{
           padding:4px 6px;
-          min-width:34px;
+          min-width:0;
         }
       }
       @media (max-width: 1200px){
         .rich-text .rt-table{
+          width:100%;
+          min-width:0;
+          table-layout:fixed;
           font-size:10px;
         }
         .rich-text .rt-table th,
         .rich-text .rt-table td{
           padding:6px 8px;
-          min-width:46px;
+          min-width:0;
         }
       }
       @media (max-width: 1024px){
+        .rich-text .rt-table{
+          width:100%;
+          min-width:0;
+          table-layout:fixed;
+        }
         .rich-text .rt-table th,
         .rich-text .rt-table td{
           padding:5px 7px;
-          min-width:42px;
+          min-width:0;
         }
       }
       .label-row{
@@ -3629,16 +3643,16 @@
       body.theme-dark .rich-text .rt-table th{
           background: rgba(24,29,42,.95);
           color: var(--text);
-          border-right-color: rgba(92,106,136,.9);
-          border-bottom-color: rgba(92,106,136,.9);
-          box-shadow: inset 0 0 0 1px rgba(92,106,136,.22);
+          border-right-color: rgba(92,106,136,.92) !important;
+          border-bottom-color: rgba(92,106,136,.92) !important;
+          box-shadow:none !important;
         }
     body.theme-dark .rich-text .rt-table td{
           background: rgba(18,22,32,.78);
           color: var(--muted);
-          border-right-color: rgba(92,106,136,.8);
-          border-bottom-color: rgba(92,106,136,.8);
-          box-shadow: inset 0 0 0 1px rgba(92,106,136,.16);
+          border-right-color: rgba(92,106,136,.82) !important;
+          border-bottom-color: rgba(92,106,136,.82) !important;
+          box-shadow:none !important;
         }
     body.theme-dark .weekly-item.is-completed .name,
     body.theme-dark .weekly-item.is-completed .hint{
