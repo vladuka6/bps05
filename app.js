@@ -1637,9 +1637,11 @@ function parseClipboardTableText(text){
 
 }
 
-function findStoredTableBlock(text){
+function findStoredTableBlockByMarker(text, marker="TABLE"){
 
-  const re = /\[\[TABLE\]\]\r?\n([\s\S]*?)\r?\n\[\[\/TABLE\]\]/;
+  const safeMarker = String(marker || "TABLE").replace(/[^\w]/g, "");
+
+  const re = new RegExp(`\\[\\[${safeMarker}\\]\\]\\r?\\n([\\s\\S]*?)\\r?\\n\\[\\[\\/${safeMarker}\\]\\]`);
 
   const match = re.exec(String(text || ""));
 
@@ -1654,11 +1656,25 @@ function findStoredTableBlock(text){
 
 }
 
-function serializeStoredTable(rows){
+function findStoredTableBlock(text){
+
+  return findStoredTableBlockByMarker(text, "TABLE");
+
+}
+
+function findPreviousStoredTableBlock(text){
+
+  return findStoredTableBlockByMarker(text, "TABLE_PREV");
+
+}
+
+function serializeStoredTable(rows, marker="TABLE"){
 
   const normalized = (rows || []).map(row=>(row || []).map(cell=>String(cell || "").replace(/\|/g, "/").trim()));
 
-  return `[[TABLE]]\n${normalized.map(row=>`| ${row.join(" | ")} |`).join("\n")}\n[[/TABLE]]`;
+  const safeMarker = String(marker || "TABLE").replace(/[^\w]/g, "");
+
+  return `[[${safeMarker}]]\n${normalized.map(row=>`| ${row.join(" | ")} |`).join("\n")}\n[[/${safeMarker}]]`;
 
 }
 
@@ -1722,9 +1738,118 @@ function renderStoredTableBlock(content){
 
 }
 
+function normalizeComparedTableRows(rows, width, height){
+
+  const safeRows = Array.isArray(rows) ? rows : [];
+
+  return Array.from({length:height}, (_, r)=>{
+
+    const src = Array.isArray(safeRows[r]) ? safeRows[r] : [];
+
+    return Array.from({length:width}, (_, c)=> String(src[c] ?? "").trim());
+
+  });
+
+}
+
+function tableDiffMeta(currentRows, previousRows){
+
+  const currentWidth = Math.max(2, ...(Array.isArray(currentRows) ? currentRows.map(row=>Array.isArray(row) ? row.length : 0) : [0]));
+
+  const previousWidth = Math.max(2, ...(Array.isArray(previousRows) ? previousRows.map(row=>Array.isArray(row) ? row.length : 0) : [0]));
+
+  const width = Math.max(currentWidth, previousWidth);
+
+  const height = Math.max(Array.isArray(currentRows) ? currentRows.length : 0, Array.isArray(previousRows) ? previousRows.length : 0, 2);
+
+  const current = normalizeComparedTableRows(currentRows, width, height);
+
+  const previous = normalizeComparedTableRows(previousRows, width, height);
+
+  let changedCount = 0;
+
+  for(let r=0; r<height; r+=1){
+
+    for(let c=0; c<width; c+=1){
+
+      if((current[r]?.[c] || "") !== (previous[r]?.[c] || "")) changedCount += 1;
+
+    }
+
+  }
+
+  return {
+    width,
+    height,
+    current,
+    previous,
+    changedCount,
+    structureChanged: currentWidth !== previousWidth || (Array.isArray(currentRows) ? currentRows.length : 0) !== (Array.isArray(previousRows) ? previousRows.length : 0)
+  };
+
+}
+
+function renderTableDiffBlock(currentRows, previousRows){
+
+  const meta = tableDiffMeta(currentRows, previousRows);
+
+  const headerCells = meta.current[0].map((cell, idx)=>{
+
+    const prev = meta.previous[0]?.[idx] || "";
+
+    const changed = cell !== prev;
+
+    const cls = changed ? ` class="is-diff"` : "";
+
+    const title = changed && prev ? ` title="Було: ${htmlesc(prev)}"` : "";
+
+    return `<th${cls}${title}>${applyInlineRichText(cell || prev || "—")}</th>`;
+
+  }).join("");
+
+  const bodyHtml = Array.from({length:Math.max(1, meta.height - 1)}, (_, rowIndex)=>{
+
+    const r = rowIndex + 1;
+
+    const cells = meta.current[r].map((cell, colIndex)=>{
+
+      const prev = meta.previous[r]?.[colIndex] || "";
+
+      const changed = cell !== prev;
+
+      const cls = changed ? ` class="is-diff"` : "";
+
+      const title = changed ? ` title="Було: ${htmlesc(prev || "—")}"` : "";
+
+      return `<td${cls}${title}>${applyInlineRichText(cell || "—")}</td>`;
+
+    }).join("");
+
+    return `<tr>${cells}</tr>`;
+
+  }).join("");
+
+  const hint = meta.structureChanged
+
+    ? `<div class="task-table-diff-hint">Структура таблиці змінена, тому порівняння показано по позиції клітинок.</div>`
+
+    : `<div class="task-table-diff-hint">Жовтим підсвічені змінені клітинки відносно попередньої версії.</div>`;
+
+  return `
+
+    <div class="task-table-diff-meta">Змінено клітинок: <span class="mono">${meta.changedCount}</span></div>
+
+    ${hint}
+
+    <div class="rt-table-wrap"><table class="rt-table rt-table-diff"><thead><tr>${headerCells}</tr></thead><tbody>${bodyHtml}</tbody></table></div>
+
+  `;
+
+}
+
 function richText(s){
 
-  const safe = htmlesc(s ?? "");
+  const safe = htmlesc(String(s ?? "").replace(/\[\[TABLE_PREV\]\]\r?\n[\s\S]*?\r?\n\[\[\/TABLE_PREV\]\]/g, ""));
 
   if(!safe) return "";
 
@@ -1962,21 +2087,37 @@ function writeTextTableToTextarea(textareaId, rows){
 
   const serialized = serializeStoredTable(rows);
 
-  const val = el.value || "";
+  let nextValue = el.value || "";
 
-  const existing = findStoredTableBlock(val);
+  const prevBlock = findPreviousStoredTableBlock(nextValue);
+
+  if(prevBlock){
+
+    nextValue = nextValue.slice(0, prevBlock.start) + nextValue.slice(prevBlock.end);
+
+  }
+
+  const existing = findStoredTableBlock(nextValue);
+
+  const previousSerialized = (existing && existing.raw !== serialized)
+
+    ? serializeStoredTable(existing.rows, "TABLE_PREV")
+
+    : "";
 
   if(existing){
 
-    el.value = val.slice(0, existing.start) + serialized + val.slice(existing.end);
+    nextValue = nextValue.slice(0, existing.start) + serialized + (previousSerialized ? `\n\n${previousSerialized}` : "") + nextValue.slice(existing.end);
 
   } else {
 
-    const needBreak = val.trim() ? "\n\n" : "";
+    const needBreak = nextValue.trim() ? "\n\n" : "";
 
-    el.value = `${val}${needBreak}${serialized}`;
+    nextValue = `${nextValue}${needBreak}${serialized}`;
 
   }
+
+  el.value = nextValue;
 
   el.dispatchEvent(new Event("input", {bubbles:true}));
 
@@ -2086,13 +2227,23 @@ function deleteTextTableFromTextarea(textareaId){
 
   if(!el) return;
 
-  const existing = findStoredTableBlock(el.value || "");
+  let nextValue = el.value || "";
+
+  const prevBlock = findPreviousStoredTableBlock(nextValue);
+
+  if(prevBlock){
+
+    nextValue = nextValue.slice(0, prevBlock.start) + nextValue.slice(prevBlock.end);
+
+  }
+
+  const existing = findStoredTableBlock(nextValue);
 
   if(existing){
 
-    const before = el.value.slice(0, existing.start).replace(/\s+$/, "");
+    const before = nextValue.slice(0, existing.start).replace(/\s+$/, "");
 
-    const after = el.value.slice(existing.end).replace(/^\s+/, "");
+    const after = nextValue.slice(existing.end).replace(/^\s+/, "");
 
     el.value = [before, after].filter(Boolean).join("\n\n");
 
@@ -2132,6 +2283,8 @@ function stripStoredTables(text){
 
   return String(text || "")
 
+    .replace(/\[\[TABLE_PREV\]\]\r?\n[\s\S]*?\r?\n\[\[\/TABLE_PREV\]\]/g, "")
+
     .replace(/\[\[TABLE\]\]\r?\n[\s\S]*?\r?\n\[\[\/TABLE\]\]/g, "")
 
     .replace(/\n{3,}/g, "\n\n")
@@ -2145,6 +2298,12 @@ function renderTaskDescWithTableToggle(text, label, opts={}){
   const raw = String(text || "");
 
   const tables = extractStoredTables(raw);
+
+  const currentTable = findStoredTableBlock(raw);
+
+  const previousTable = findPreviousStoredTableBlock(raw);
+
+  const diffMeta = (currentTable && previousTable) ? tableDiffMeta(currentTable.rows, previousTable.rows) : null;
 
   const textOnly = stripStoredTables(raw);
 
@@ -2182,9 +2341,29 @@ function renderTaskDescWithTableToggle(text, label, opts={}){
 
         </div>
 
-      </details>
+        </details>
 
-    `);
+      `);
+
+      if(diffMeta && diffMeta.changedCount){
+
+        parts.push(`
+
+          <details class="task-table-toggle task-table-diff-toggle">
+
+            <summary><span>Показати зміни</span><span class="task-table-diff-badge mono">${htmlesc(String(diffMeta.changedCount))}</span></summary>
+
+            <div class="task-table-toggle-body rich-text">
+
+              ${renderTableDiffBlock(currentTable.rows, previousTable.rows)}
+
+            </div>
+
+          </details>
+
+        `);
+
+      }
 
   }
 
@@ -2215,6 +2394,8 @@ async function pasteTextTableFromClipboard(textareaId){
       return;
 
     }
+
+    writeTextTableToTextarea(textareaId, rows);
 
     renderTextTableEditor(textareaId, rows);
 
