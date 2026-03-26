@@ -2307,6 +2307,8 @@ function writeTextTableToTextarea(textareaId, rows){
 
   const prevBlock = findPreviousStoredTableBlock(nextValue);
 
+  const prevRaw = prevBlock?.raw || "";
+
   if(prevBlock){
 
     nextValue = nextValue.slice(0, prevBlock.start) + nextValue.slice(prevBlock.end);
@@ -2319,7 +2321,7 @@ function writeTextTableToTextarea(textareaId, rows){
 
     ? serializeStoredTable(existing.rows, "TABLE_PREV")
 
-    : "";
+    : prevRaw;
 
   if(existing){
 
