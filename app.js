@@ -2317,11 +2317,13 @@ function writeTextTableToTextarea(textareaId, rows){
 
   const existing = findStoredTableBlock(nextValue);
 
-  const previousSerialized = (existing && existing.raw !== serialized)
+  const previousSerialized = prevRaw || (
+    (existing && existing.raw !== serialized)
 
-    ? serializeStoredTable(existing.rows, "TABLE_PREV")
+      ? serializeStoredTable(existing.rows, "TABLE_PREV")
 
-    : prevRaw;
+      : ""
+  );
 
   if(existing){
 
