@@ -1545,13 +1545,9 @@ function htmlesc(s){
 
 }
 
-function richText(s){
+function applyInlineRichText(safeText){
 
-  const safe = htmlesc(s ?? "");
-
-  if(!safe) return "";
-
-  let out = safe;
+  let out = safeText || "";
 
   out = out.replace(/__(.+?)__/g, "<u>$1</u>");
 
@@ -1565,9 +1561,89 @@ function richText(s){
 
 }
 
-function formatToolbar(textareaId, variant=""){
+function splitMarkdownTableRow(line){
+
+  return String(line || "")
+
+    .trim()
+
+    .replace(/^\|/, "")
+
+    .replace(/\|$/, "")
+
+    .split("|")
+
+    .map(cell=>cell.trim());
+
+}
+
+function isMarkdownTableBlock(lines){
+
+  if(!Array.isArray(lines) || lines.length < 2) return false;
+
+  if(!lines[0].includes("|") || !lines[1].includes("|")) return false;
+
+  const header = splitMarkdownTableRow(lines[0]);
+
+  const divider = splitMarkdownTableRow(lines[1]);
+
+  if(header.length < 2 || divider.length !== header.length) return false;
+
+  if(!divider.every(cell=>/^:?-{3,}:?$/.test(cell))) return false;
+
+  return true;
+
+}
+
+function renderMarkdownTableBlock(lines){
+
+  const rows = lines.map(splitMarkdownTableRow);
+
+  const header = rows[0] || [];
+
+  const body = rows.slice(2).filter(row=>row.some(cell=>String(cell || "").trim()));
+
+  const headHtml = `<tr>${header.map(cell=>`<th>${applyInlineRichText(cell)}</th>`).join("")}</tr>`;
+
+  const bodyHtml = body.length
+
+    ? body.map(row=>`<tr>${row.map(cell=>`<td>${applyInlineRichText(cell)}</td>`).join("")}</tr>`).join("")
+
+    : `<tr>${header.map(()=>`<td>—</td>`).join("")}</tr>`;
+
+  return `<div class="rt-table-wrap"><table class="rt-table"><thead>${headHtml}</thead><tbody>${bodyHtml}</tbody></table></div>`;
+
+}
+
+function richText(s){
+
+  const safe = htmlesc(s ?? "");
+
+  if(!safe) return "";
+
+  const blocks = safe.split(/\r?\n\r?\n+/);
+
+  return blocks.map(block=>{
+
+    const lines = block.split(/\r?\n/);
+
+    if(isMarkdownTableBlock(lines)) return renderMarkdownTableBlock(lines);
+
+    return applyInlineRichText(block);
+
+  }).join("\n\n");
+
+}
+
+function formatToolbar(textareaId, variant="", opts={}){
 
   const cls = variant === "inline" ? "format-chips inline" : "format-chips";
+
+  const tableBtn = opts?.table
+
+    ? `<button class="format-chip" data-action="insertTextTable" data-arg1="${textareaId}" title="Вставити таблицю"><span class="format-ico">▦</span></button>`
+
+    : "";
 
   return `
 
@@ -1580,6 +1656,8 @@ function formatToolbar(textareaId, variant=""){
       <button class="format-chip" data-action="applyTextFormat" data-arg1="${textareaId}" data-arg2="underline" title="Підкреслення (__текст__)"><span class="format-ico"><u>U</u></span></button>
 
       <button class="format-chip" data-action="applyTextFormat" data-arg1="${textareaId}" data-arg2="strike" title="Перекреслення (~~текст~~)"><span class="format-ico"><s>S</s></span></button>
+
+      ${tableBtn}
 
     </div>
 
@@ -1622,6 +1700,49 @@ function applyTextFormat(textareaId, type){
     el.setSelectionRange(start + wrap.length, end + wrap.length);
 
   }
+
+  el.dispatchEvent(new Event("input", {bubbles:true}));
+
+}
+
+function insertTextTable(textareaId){
+
+  const el = document.getElementById(textareaId);
+
+  if(!el) return;
+
+  const template = [
+    "| Колонка 1 | Колонка 2 |",
+    "| --- | --- |",
+    "| Значення 1 | Значення 2 |",
+    "| Значення 3 | Значення 4 |"
+  ].join("\n");
+
+  const start = el.selectionStart ?? 0;
+
+  const end = el.selectionEnd ?? 0;
+
+  const val = el.value || "";
+
+  const before = val.slice(0, start);
+
+  const after = val.slice(end);
+
+  const needBeforeBreak = before && !before.endsWith("\n") ? "\n\n" : (before ? "\n" : "");
+
+  const needAfterBreak = after && !after.startsWith("\n") ? "\n\n" : "";
+
+  const insert = `${needBeforeBreak}${template}${needAfterBreak}`;
+
+  el.value = before + insert + after;
+
+  const selectStart = before.length + needBeforeBreak.length;
+
+  const selectEnd = selectStart + "| Колонка 1 | Колонка 2 |".length;
+
+  el.focus();
+
+  el.setSelectionRange(selectStart, selectEnd);
 
   el.dispatchEvent(new Event("input", {bubbles:true}));
 
@@ -13758,7 +13879,7 @@ function openEditTask(taskId){
 
         <label>Опис (опційно)</label>
 
-        ${formatToolbar("tDesc", "inline")}
+        ${formatToolbar("tDesc", "inline", {table:true})}
 
       </div>
 
@@ -14696,7 +14817,7 @@ function openCreateTask(kind, preselectDeptId=null, preselectDueDate=null){
 
         <label>Опис (опційно)</label>
 
-        ${formatToolbar("tDesc", "inline")}
+        ${formatToolbar("tDesc", "inline", {table:true})}
 
       </div>
 
@@ -17381,6 +17502,8 @@ const ACTIONS = {
   openHelp,
 
   applyTextFormat,
+
+  insertTextTable,
 
   openCreateTask,
 
