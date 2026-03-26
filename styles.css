@@ -853,9 +853,10 @@
       background: rgba(255,255,255,.82);
     }
     .rich-text .rt-table{
-      width:100%;
+      width:max-content;
+      min-width:100%;
       border-collapse:collapse;
-      min-width:320px;
+      table-layout:auto;
       font-size:13px;
       line-height:1.35;
     }
@@ -864,8 +865,11 @@
       padding:10px 12px;
       text-align:left;
       vertical-align:top;
+      min-width:72px;
       border-bottom:1px solid rgba(150,170,205,.22);
       border-right:1px solid rgba(150,170,205,.18);
+      word-break:normal;
+      overflow-wrap:break-word;
     }
     .rich-text .rt-table th{
       background: rgba(236,242,255,.9);
