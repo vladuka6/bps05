@@ -52,7 +52,7 @@
       padding:6px;
       border-radius:18px;
       background: rgba(255,255,255,.58);
-      border:1px solid rgba(150,170,205,.28);
+      border:1px solid rgba(150,170,205,.42);
       box-shadow: 0 8px 18px rgba(54,78,127,.08);
     }
     .sync-dot{
@@ -217,7 +217,7 @@
       min-height:30px;
       padding:0 12px;
       border-radius:999px;
-      border:1px solid rgba(150,170,205,.28);
+      border:1px solid rgba(150,170,205,.42);
       background: rgba(255,255,255,.7);
       color: #587092;
       font-size:11px;
@@ -848,7 +848,7 @@
       margin:10px 0 2px;
       overflow:auto;
       white-space:normal;
-      border:1px solid rgba(150,170,205,.28);
+      border:1px solid rgba(150,170,205,.42);
       border-radius:14px;
       background: rgba(255,255,255,.82);
     }
@@ -2981,7 +2981,7 @@
       align-items:center;
       padding:10px 12px;
       border-radius:14px;
-      border:1px solid rgba(150,170,205,.28);
+      border:1px solid rgba(150,170,205,.42);
       background: rgba(255,255,255,.72);
     }
     .eval-task-item.compact{
@@ -3118,7 +3118,7 @@
       padding:10px 12px;
       border-radius:14px;
       background: rgba(255,255,255,.72);
-      border:1px solid rgba(150,170,205,.28);
+      border:1px solid rgba(150,170,205,.42);
     }
     .ref-hero-metric .k{
       font-size:11px;
@@ -3137,7 +3137,7 @@
       gap:12px;
     }
     .ref-card{
-      border:1px solid rgba(150,170,205,.28);
+      border:1px solid rgba(150,170,205,.42);
       border-radius:16px;
       padding:12px;
       background: rgba(255,255,255,.78);
@@ -3773,6 +3773,7 @@
     padding-inline:8px;
   }
 }
+
 
 
 
