@@ -1615,6 +1615,64 @@ function mergeBrokenClipboardRows(rows){
 
   let pending = null;
 
+  const appendContinuationToRow = (targetRow, continuationRow)=>{
+
+    if(!Array.isArray(targetRow) || !Array.isArray(continuationRow) || !continuationRow.length) return targetRow;
+
+    let attachIdx = -1;
+
+    for(let i = targetRow.length - 1; i >= 0; i -= 1){
+
+      if(String(targetRow[i] || "").trim()){
+
+        attachIdx = i;
+
+        break;
+
+      }
+
+    }
+
+    if(attachIdx < 0) attachIdx = Math.max(0, targetRow.length - 1);
+
+    const firstPart = String(continuationRow[0] || "").trim();
+
+    if(firstPart){
+
+      targetRow[attachIdx] = [targetRow[attachIdx], firstPart]
+        .filter(Boolean)
+        .join(" / ");
+
+    }
+
+    if(continuationRow.length > 1){
+
+      let cursor = attachIdx + 1;
+
+      for(const cell of continuationRow.slice(1)){
+
+        if(cursor >= targetRow.length) break;
+
+        const clean = String(cell || "").trim();
+
+        if(clean){
+
+          targetRow[cursor] = [targetRow[cursor], clean]
+            .filter(Boolean)
+            .join(" / ");
+
+        }
+
+        cursor += 1;
+
+      }
+
+    }
+
+    return targetRow;
+
+  };
+
   const pushPending = ()=>{
 
     if(!pending) return;
@@ -1630,6 +1688,14 @@ function mergeBrokenClipboardRows(rows){
   };
 
   safeRows.forEach(row=>{
+
+    if(!pending && out.length && row.length < expectedWidth){
+
+      out[out.length - 1] = appendContinuationToRow(out[out.length - 1], row.slice());
+
+      return;
+
+    }
 
     if(!pending){
 
