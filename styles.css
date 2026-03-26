@@ -1017,21 +1017,13 @@
       font-weight:800;
       background: rgba(236,242,255,.96);
     }
-    .task-table-toggle-row{
-      display:grid;
-      grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));
-      gap:8px;
-      margin-top:10px;
-      align-items:start;
-    }
     .task-table-toggle{
-      margin-top:0;
+      margin-top:10px;
       border:1px dashed rgba(150,170,205,.38);
       border-radius:14px;
       background: rgba(248,250,255,.7);
       overflow:hidden;
       min-width:0;
-      width:100%;
     }
     .task-table-toggle summary{
       list-style:none;
@@ -1054,6 +1046,7 @@
     .task-table-toggle[open] summary::before{transform:rotate(90deg);}
     .task-table-toggle-body{
       padding:0 10px 10px;
+      white-space:normal !important;
     }
     .task-table-stamp{
       font-size:10px;
@@ -1064,7 +1057,7 @@
       white-space:nowrap;
       opacity:.9;
     }
-    .task-table-diff-toggle{margin-top:0;}
+    .task-table-diff-toggle{margin-top:8px;}
     .task-table-diff-badge{
       display:inline-flex;
       align-items:center;
@@ -1091,7 +1084,7 @@
       color:var(--text-soft);
     }
     .task-table-diff-toggle .rt-table-wrap{
-      margin-top:4px;
+      margin-top:2px;
     }
     .rich-text .rt-table .is-diff{
       background: rgba(255,235,146,.58) !important;
@@ -3663,9 +3656,6 @@
     }
     body.theme-dark .task-table-stamp{
       color:#8f9bb4;
-    }
-    body.theme-dark .task-table-toggle-row{
-      gap:8px;
     }
     body.theme-dark .task-table-diff-badge{
       background: rgba(164,118,25,.35);

@@ -2328,9 +2328,7 @@ function renderTaskDescWithTableToggle(text, label, opts={}){
     const summary = tables.length > 1 ? `Показати дані (${tables.length})` : "Показати дані";
 
     const updatedShort = opts.updatedAt ? compactTimeFirst(opts.updatedAt) : "";
-    const toggleBlocks = [];
-
-    toggleBlocks.push(`
+    parts.push(`
 
       <details class="task-table-toggle">
 
@@ -2348,7 +2346,7 @@ function renderTaskDescWithTableToggle(text, label, opts={}){
 
     if(diffMeta && diffMeta.changedCount){
 
-      toggleBlocks.push(`
+      parts.push(`
 
         <details class="task-table-toggle task-table-diff-toggle">
 
@@ -2365,8 +2363,6 @@ function renderTaskDescWithTableToggle(text, label, opts={}){
       `);
 
       }
-
-    parts.push(`<div class="task-table-toggle-row">${toggleBlocks.join("")}</div>`);
 
   }
 
