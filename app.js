@@ -11991,6 +11991,8 @@ function viewTasks(){
 
     const hasDesc = descRaw.trim().length > 0;
 
+    const descStartsWithBreak = /^\s*(?:\r?\n)/.test(descRaw);
+
     const descLabel = isAnn ? "Текст" : "Опис";
 
     const descHtml = (!isAnn && hasDesc) ? renderTaskDescWithTableToggle(descRaw, descLabel, {updatedAt: t.updatedAt || t.createdAt || ""}) : "";
