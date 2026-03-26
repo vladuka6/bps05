@@ -1647,9 +1647,11 @@ function mergeBrokenClipboardRows(rows){
 
     if(firstPart){
 
-      targetRow[attachIdx] = [targetRow[attachIdx], firstPart]
-        .filter(Boolean)
-        .join(" / ");
+      targetRow[attachIdx] = sanitizePastedTableCell(
+        [targetRow[attachIdx], firstPart]
+          .filter(Boolean)
+          .join(" / ")
+      );
 
     }
 
@@ -1665,9 +1667,11 @@ function mergeBrokenClipboardRows(rows){
 
         if(clean){
 
-          targetRow[cursor] = [targetRow[cursor], clean]
-            .filter(Boolean)
-            .join(" / ");
+          targetRow[cursor] = sanitizePastedTableCell(
+            [targetRow[cursor], clean]
+              .filter(Boolean)
+              .join(" / ")
+          );
 
         }
 
@@ -1749,7 +1753,7 @@ function mergeBrokenClipboardRows(rows){
 
   pushPending();
 
-  return out;
+  return out.map(row=>row.map(cell=>sanitizePastedTableCell(cell)));
 
 }
 
