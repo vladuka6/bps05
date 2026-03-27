@@ -2307,11 +2307,9 @@ function buildTextTableEditorHtml(textareaId, rows){
 
       <div class="actions" style="margin-top:12px;">
 
-        <button type="button" class="btn primary btn-mini" data-action="applyTextTableEditor" data-arg1="${textareaId}">Застосувати</button>
+        <button type="button" class="btn primary btn-mini" data-action="applyTextTableEditor" data-arg1="${textareaId}">Оновити таблицю</button>
 
         <button type="button" class="btn danger btn-mini" data-action="deleteTextTableFromTextarea" data-arg1="${textareaId}">Видалити таблицю</button>
-
-        <button type="button" class="btn ghost btn-mini" data-action="closeTextTableEditor" data-arg1="${textareaId}">Сховати</button>
 
       </div>
 
@@ -2329,43 +2327,83 @@ function writeTextTableToTextarea(textareaId, rows){
 
   const serialized = serializeStoredTable(rows);
 
-  let nextValue = el.value || "";
+  const currentRaw = String(el.dataset.tableRaw || "");
 
-  const prevBlock = findPreviousStoredTableBlock(nextValue);
+  const previousRaw = String(el.dataset.tablePrevRaw || "");
 
-  const prevRaw = prevBlock?.raw || "";
+  const currentBlock = currentRaw ? findStoredTableBlock(currentRaw) : null;
 
-  if(prevBlock){
+  const previousSerialized = previousRaw || (
+    (currentBlock && currentBlock.raw !== serialized)
 
-    nextValue = nextValue.slice(0, prevBlock.start) + nextValue.slice(prevBlock.end);
-
-  }
-
-  const existing = findStoredTableBlock(nextValue);
-
-  const previousSerialized = prevRaw || (
-    (existing && existing.raw !== serialized)
-
-      ? serializeStoredTable(existing.rows, "TABLE_PREV")
+      ? serializeStoredTable(currentBlock.rows, "TABLE_PREV")
 
       : ""
   );
 
-  if(existing){
+  el.dataset.tableRaw = serialized;
 
-    nextValue = nextValue.slice(0, existing.start) + serialized + (previousSerialized ? `\n\n${previousSerialized}` : "") + nextValue.slice(existing.end);
+  if(previousSerialized){
+
+    el.dataset.tablePrevRaw = previousSerialized;
 
   } else {
 
-    const needBreak = nextValue.trim() ? "\n\n" : "";
-
-    nextValue = `${nextValue}${needBreak}${serialized}`;
+    delete el.dataset.tablePrevRaw;
 
   }
 
-  el.value = nextValue;
+}
 
-  el.dispatchEvent(new Event("input", {bubbles:true}));
+function initDescriptionTableState(textareaId, fullText=""){
+
+  const el = document.getElementById(textareaId);
+
+  if(!el) return;
+
+  const raw = String(fullText || "");
+
+  const currentBlock = findStoredTableBlock(raw);
+
+  const previousBlock = findPreviousStoredTableBlock(raw);
+
+  el.value = stripStoredTables(raw);
+
+  if(currentBlock?.raw){
+
+    el.dataset.tableRaw = currentBlock.raw;
+
+  } else {
+
+    delete el.dataset.tableRaw;
+
+  }
+
+  if(previousBlock?.raw){
+
+    el.dataset.tablePrevRaw = previousBlock.raw;
+
+  } else {
+
+    delete el.dataset.tablePrevRaw;
+
+  }
+
+}
+
+function buildDescriptionValueFromEditor(textareaId){
+
+  const el = document.getElementById(textareaId);
+
+  if(!el) return "";
+
+  const textOnly = stripStoredTables(el.value || "");
+
+  const currentRaw = String(el.dataset.tableRaw || "").trim();
+
+  const previousRaw = String(el.dataset.tablePrevRaw || "").trim();
+
+  return [textOnly, currentRaw, previousRaw].filter(Boolean).join("\n\n").trim();
 
 }
 
@@ -2417,7 +2455,7 @@ function insertTextTable(textareaId){
 
   if(!el) return;
 
-  const existing = findStoredTableBlock(el.value || "");
+  const existing = findStoredTableBlock(el.dataset.tableRaw || "");
 
   renderTextTableEditor(textareaId, existing?.rows || defaultTextTableRows());
 
@@ -2473,29 +2511,11 @@ function deleteTextTableFromTextarea(textareaId){
 
   if(!el) return;
 
-  let nextValue = el.value || "";
+  el.value = stripStoredTables(el.value || "");
 
-  const prevBlock = findPreviousStoredTableBlock(nextValue);
+  delete el.dataset.tableRaw;
 
-  if(prevBlock){
-
-    nextValue = nextValue.slice(0, prevBlock.start) + nextValue.slice(prevBlock.end);
-
-  }
-
-  const existing = findStoredTableBlock(nextValue);
-
-  if(existing){
-
-    const before = nextValue.slice(0, existing.start).replace(/\s+$/, "");
-
-    const after = nextValue.slice(existing.end).replace(/^\s+/, "");
-
-    el.value = [before, after].filter(Boolean).join("\n\n");
-
-    el.dispatchEvent(new Event("input", {bubbles:true}));
-
-  }
+  delete el.dataset.tablePrevRaw;
 
   closeTextTableEditor(textareaId);
 
@@ -14835,7 +14855,7 @@ function openEditTask(taskId){
 
       </div>
 
-      <textarea id="tDesc" class="task-desc-input" placeholder="Деталі / очікуваний результат">${htmlesc(t.description || "")}</textarea>
+      <textarea id="tDesc" class="task-desc-input" placeholder="Деталі / очікуваний результат">${htmlesc(stripStoredTables(t.description || ""))}</textarea>
 
     </div>
 
@@ -14864,6 +14884,12 @@ function openEditTask(taskId){
     respSel.value = t.responsibleUserId;
 
   }
+
+  initDescriptionTableState("tDesc", t.description || "");
+
+  const existingTable = findStoredTableBlock(t.description || "");
+
+  if(existingTable) renderTextTableEditor("tDesc", existingTable.rows);
 
 }
 
@@ -14905,7 +14931,7 @@ function saveTaskEdits(taskId){
     writeTextTableToTextarea("tDesc", readTextTableEditorRows("tDesc"));
   }
 
-  const desc = document.getElementById("tDesc").value || "";
+  const desc = buildDescriptionValueFromEditor("tDesc");
 
   const cx = document.getElementById("tCx").value;
 
@@ -15855,6 +15881,8 @@ function openCreateTask(kind, preselectDeptId=null, preselectDueDate=null){
 
   }
 
+  initDescriptionTableState("tDesc", "");
+
 }
 
 function toggleRecurrenceEnabled(){
@@ -15909,7 +15937,7 @@ function createTaskNow(kind){
     writeTextTableToTextarea("tDesc", readTextTableEditorRows("tDesc"));
   }
 
-  const desc = document.getElementById("tDesc").value || "";
+  const desc = buildDescriptionValueFromEditor("tDesc");
 
   const cx = document.getElementById("tCx").value;
 
