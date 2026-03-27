@@ -3338,51 +3338,98 @@ const TASK_EVAL_PRESETS = [
 
   {
     key:"letter",
-    label:"Лист / уточнення / записка",
+    label:"Листи",
     scores:{labor:2, importance:3, urgency:3, result:3},
-    hint:"Для листів, коротких уточнень, службових записок."
+    hint:"Для листів, відповідей, направлень.",
+    ranges:{labor:"1–2", importance:"2–4", urgency:"2–4", result:"2–3"}
+  },
+
+  {
+    key:"service_docs",
+    label:"Службові документи",
+    scores:{labor:2, importance:4, urgency:3, result:3},
+    hint:"Для службових записок, розпоряджень, наказів, рапортів.",
+    ranges:{labor:"2–3", importance:"3–4", urgency:"2–4", result:"2–4"}
   },
 
   {
     key:"analysis",
-    label:"Таблиця / довідка / слайди",
+    label:"Довідки та таблиці",
     scores:{labor:4, importance:4, urgency:3, result:4},
-    hint:"Для порівняльних таблиць, довідок, слайдів, аналітичних матеріалів."
+    hint:"Для довідок, порівняльних таблиць, зведень, звітів, списків.",
+    ranges:{labor:"3–5", importance:"2–4", urgency:"2–3", result:"2–4"}
   },
 
   {
     key:"external",
-    label:"Зовнішня взаємодія / зустріч",
+    label:"Зовнішня взаємодія",
     scores:{labor:4, importance:5, urgency:3, result:4},
-    hint:"Для виробників, компаній, НГУ, зовнішніх органів і зустрічей."
-  },
-
-  {
-    key:"permits",
-    label:"Допуск / декларація / оформлення",
-    scores:{labor:3, importance:4, urgency:3, result:4},
-    hint:"Для допусків, перепусток, декларацій, оформлення документів."
+    hint:"Для виробників, компаній, НГУ, інших структур, робочої координації.",
+    ranges:{labor:"2–4", importance:"3–5", urgency:"2–4", result:"3–5"}
   },
 
   {
     key:"event",
-    label:"Організація участі / навчання / заходу",
-    scores:{labor:5, importance:4, urgency:4, result:4},
-    hint:"Для навчань, демонстрацій, організації участі, супроводу заходів."
+    label:"Зустрічі та участь",
+    scores:{labor:4, importance:4, urgency:3, result:4},
+    hint:"Для зустрічей, демонстрацій, участі в заходах і виїздів.",
+    ranges:{labor:"2–4", importance:"3–4", urgency:"2–4", result:"3–4"}
+  },
+
+  {
+    key:"training",
+    label:"Навчання",
+    scores:{labor:4, importance:4, urgency:3, result:4},
+    hint:"Для організації навчання, проходження навчання, оповіщення по навчанню.",
+    ranges:{labor:"3–4", importance:"3–4", urgency:"2–3", result:"3–5"}
+  },
+
+  {
+    key:"permits",
+    label:"Допуски та перепустки",
+    scores:{labor:3, importance:4, urgency:3, result:4},
+    hint:"Для допусків, перепусток, посвідчень, недопусків.",
+    ranges:{labor:"2–3", importance:"3–5", urgency:"2–4", result:"3–4"}
   },
 
   {
     key:"support",
-    label:"АРМ / доступ / токен / налаштування",
+    label:"Доступи та налаштування",
     scores:{labor:2, importance:3, urgency:2, result:3},
-    hint:"Для налаштування робочого місця, доступів, токенів, АРМ."
+    hint:"Для доступів, токенів, АРМ, робочого місця, технічного налаштування.",
+    ranges:{labor:"2–3", importance:"2–4", urgency:"2–4", result:"2–4"}
+  },
+
+  {
+    key:"docs_decl",
+    label:"Оформлення та декларації",
+    scores:{labor:3, importance:4, urgency:3, result:3},
+    hint:"Для пакетів документів, форм, декларацій, службового оформлення.",
+    ranges:{labor:"2–4", importance:"3–4", urgency:"2–4", result:"2–4"}
   },
 
   {
     key:"assets",
-    label:"Майно / закупівлі / договір / контроль",
-    scores:{labor:4, importance:4, urgency:3, result:4},
-    hint:"Для майна, закупівель, договорів, контрольних задач по забезпеченню."
+    label:"Майно та господарські питання",
+    scores:{labor:3, importance:3, urgency:2, result:3},
+    hint:"Для майна, авто, приміщень, харчування, господарських питань.",
+    ranges:{labor:"2–3", importance:"2–4", urgency:"1–3", result:"2–3"}
+  },
+
+  {
+    key:"followup",
+    label:"Уточнення та контроль",
+    scores:{labor:1, importance:2, urgency:3, result:2},
+    hint:"Для уточнень, коротких доручень, контролю, перевірки статусу.",
+    ranges:{labor:"1–2", importance:"1–3", urgency:"2–4", result:"1–2"}
+  },
+
+  {
+    key:"other",
+    label:"Інше / разові",
+    scores:{labor:3, importance:3, urgency:3, result:3},
+    hint:"Для нетипових задач, які не лягають у стандартні категорії.",
+    ranges:{labor:"оцінюй вручну", importance:"оцінюй вручну", urgency:"оцінюй вручну", result:"оцінюй вручну"}
   }
 
 ];
@@ -3393,22 +3440,59 @@ function guessTaskEvaluationPreset(task){
 
   if(!title) return null;
 
-  if(/лист|уточнен|записк|довест|відповідь|звернен/.test(title)) return "letter";
+  if(/лист|відповід|направлен|звернен/.test(title)) return "letter";
 
-  if(/таблиц|довідк|слайд|аналіт|порівнял/.test(title)) return "analysis";
+  if(/службов|записк|розпоряджен|наказ|рапорт/.test(title)) return "service_docs";
 
-  if(/взаємод|зустріч|виробник|компан|нгу|нацпол|окоіз|диндурк|квантум/.test(title)) return "external";
+  if(/таблиц|довідк|слайд|аналіт|порівнял|зведен|звіт|список/.test(title)) return "analysis";
 
-  if(/допуск|декларац|перепуст|оформлен|допуску|перепрацюванн.*звіт/.test(title)) return "permits";
+  if(/взаємод|виробник|компан|нгу|нацпол|окоіз|диндур|квантум|брейв|дснс/.test(title)) return "external";
 
-  if(/участ|навчан|демонстрац|захід|школ|оператор|випробуван/.test(title)) return "event";
+  if(/зустріч|участ|демонстрац|захід|виїзд|відеоконференц/.test(title)) return "event";
 
-  if(/арм|робочого місця|токен|доступ|налаштуван/.test(title)) return "support";
+  if(/навчан|оператор|ппм|неон/.test(title)) return "training";
 
-  if(/майн|закуп|догов|підписан|контрол|харчуван/.test(title)) return "assets";
+  if(/допуск|перепуст|посвідчен|недопуск/.test(title)) return "permits";
+
+  if(/декларац|пакет документ|форма для мвс|оформлен|договір|договор|подання документ/.test(title)) return "docs_decl";
+
+  if(/арм|робочого місця|токен|доступ|налаштуван|дельт|mission/.test(title)) return "support";
+
+  if(/майн|авто|машин|приміщ|їдальн|харчуван|столів|облік|дефект|господар/.test(title)) return "assets";
+
+  if(/уточн|контрол|чекаємо|оповіст|перевірити|дізнат|розібратись|розібратися/.test(title)) return "followup";
 
   return null;
 
+}
+
+function taskEvalPresetRangeText(value){
+  return value ? String(value) : "—";
+}
+
+function renderTaskEvaluationPresetGuide(preset){
+  if(!preset){
+    return `
+      <div class="item" style="cursor:default; margin-top:10px;">
+        <div class="name">Підказка по типу задачі</div>
+        <div class="hint">Обери тип задачі вище — і система підкаже робочі діапазони оцінки. Це лише орієнтир, не жорстке правило.</div>
+      </div>
+    `;
+  }
+
+  const ranges = preset.ranges || {};
+  return `
+    <div class="item" style="cursor:default; margin-top:10px;">
+      <div class="name">Підказка по типу: ${htmlesc(preset.label)}</div>
+      <div class="hint">${htmlesc(preset.hint || "")}</div>
+      <div class="hint" style="margin-top:8px;">
+        <b>Трудомісткість</b>: ${htmlesc(taskEvalPresetRangeText(ranges.labor))} •
+        <b>Важливість</b>: ${htmlesc(taskEvalPresetRangeText(ranges.importance))} •
+        <b>Терміновість</b>: ${htmlesc(taskEvalPresetRangeText(ranges.urgency))} •
+        <b>Результат</b>: ${htmlesc(taskEvalPresetRangeText(ranges.result))}
+      </div>
+    </div>
+  `;
 }
 
 function getTaskEvaluationPreset(task, evaluation=null){
@@ -6668,13 +6752,13 @@ function openReferenceEntry(entryId=""){
     ${readOnly ? `
       <div class="field">
         <label>Текст</label>
-        <div class="task-desc-input ref-entry-preview rich-text">${entry?.text ? richText(entry.text) : "—"}</div>
+        <div class="task-desc-input ref-entry-preview">${renderTaskDescWithTableToggle(entry?.text || "", "Текст", {showEmpty:true, updatedAt:entry?.updatedAt, className:"ref-entry-preview rich-text"})}</div>
       </div>
     ` : `
       <div class="field">
         <label>Текст</label>
-        ${formatToolbar("referenceEntryText", "inline")}
-        <textarea id="referenceEntryText" class="task-desc-input" placeholder="Запиши коротко те, що хочеш тримати під рукою." ${readOnly ? "readonly" : ""}>${htmlesc(entry?.text || "")}</textarea>
+        ${formatToolbar("referenceEntryText", "inline", {table:true})}
+        <textarea id="referenceEntryText" class="task-desc-input" placeholder="Запиши коротко те, що хочеш тримати під рукою." ${readOnly ? "readonly" : ""}>${htmlesc(stripStoredTables(entry?.text || ""))}</textarea>
       </div>
     `}
     ${entry?.updatedAt ? `<div class="hint">Оновлено: <span class="mono">${fmtDate(toDateOnly(entry.updatedAt) || "")}</span></div>` : ""}
@@ -6686,13 +6770,26 @@ function openReferenceEntry(entryId=""){
 
   `);
 
+  if(!readOnly){
+
+    initDescriptionTableState("referenceEntryText", entry?.text || "");
+
+    const existingTable = findStoredTableBlock(entry?.text || "");
+
+    if(existingTable) renderTextTableEditor("referenceEntryText", existingTable.rows);
+
+  }
+
 }
 
 function saveReferenceEntryNow(entryId=""){
 
   const deptId = document.getElementById("referenceEntryDept")?.value || "";
   const title = (document.getElementById("referenceEntryTitle")?.value || "").trim();
-  const text = (document.getElementById("referenceEntryText")?.value || "").trim();
+  if(document.querySelector('.text-table-editor[data-for="referenceEntryText"]')){
+    writeTextTableToTextarea("referenceEntryText", readTextTableEditorRows("referenceEntryText"));
+  }
+  const text = buildDescriptionValueFromEditor("referenceEntryText").trim();
 
   if(!text){
     showToast("Додай текст запису", "warn");
@@ -6775,14 +6872,21 @@ function viewControl(){
       if(deptFilter !== "all" && deptFilter !== "general" && entry.deptId !== deptFilter) return false;
       return true;
     }
-    const haystack = `${entry.title || ""} ${entry.text || ""} ${getReferenceEntryDeptLabel(entry.deptId)}`.toLowerCase();
+    const haystack = `${entry.title || ""} ${stripStoredTables(entry.text || "")} ${getReferenceEntryDeptLabel(entry.deptId)}`.toLowerCase();
     return haystack.includes(refSearch);
   });
 
   const entryCards = entries.map((entry, idx)=>{
     const title = entry.title || `Запис ${idx + 1}`;
     const numberedTitle = `${idx + 1}. ${title}`;
-    const bodyHtml = refSearch ? highlightReferenceText(entry.text || "", refSearch) : richText(entry.text || "");
+    const plainText = stripStoredTables(entry.text || "");
+    const currentTable = findStoredTableBlock(entry.text || "");
+    const previousTable = findPreviousStoredTableBlock(entry.text || "");
+    const tableOnlyText = [currentTable?.raw || "", previousTable?.raw || ""].filter(Boolean).join("\n\n");
+    const bodyHtml = refSearch ? highlightReferenceText(plainText, refSearch) : richText(plainText);
+    const tableHtml = tableOnlyText
+      ? renderTaskDescWithTableToggle(tableOnlyText, "Дані", {updatedAt:entry.updatedAt, showEmpty:false, className:"ref-note-body rich-text"})
+      : "";
     const isExpanded = !!refSearch || !!UI.refExpandedEntries?.[entry.id];
     const entryAttachments = (notes.attachments || []).filter(item=>item && item.url && item.entryId===entry.id);
     const attachmentList = entryAttachments.map((item, fileIdx)=>`
@@ -6803,7 +6907,8 @@ function viewControl(){
           <button class="ref-note-link" data-action="openReferenceEntry" data-arg1="${entry.id}">${refSearch ? highlightReferenceText(numberedTitle, refSearch) : htmlesc(numberedTitle)}</button>
         </div>
         ${isExpanded ? `
-          <div class="ref-note-body rich-text">${bodyHtml || "Без тексту"}</div>
+          <div class="ref-note-body rich-text">${bodyHtml || (!tableHtml ? "Без тексту" : "")}</div>
+          ${tableHtml}
           <div class="ref-attachments-block">
             <div class="ref-attachments-head">
               <span>Вкладення</span>
@@ -17571,7 +17676,7 @@ function applyTaskEvaluationPresetFromInput(){
   const preset = TASK_EVAL_PRESETS.find(x=>x.key===presetKey);
 
   if(!preset){
-    showToast("Оберіть шаблон оцінки.", "warn");
+    showToast("Оберіть тип задачі.", "warn");
     return;
   }
 
@@ -17581,7 +17686,7 @@ function applyTaskEvaluationPresetFromInput(){
     el.value = String(Number(preset.scores[item.key] || 3));
   });
 
-  showToast(`Підставлено шаблон: ${preset.label}`, "ok");
+  showToast(`Підставлено тип задачі: ${preset.label}`, "ok");
 
 }
 
@@ -17620,7 +17725,7 @@ function openTaskEvaluation(taskId){
     </div>
     <div class="sep"></div>
     <div class="field">
-      <label>Швидкий шаблон оцінки</label>
+      <label>Тип задачі</label>
       <div class="row2">
         <select id="eval_preset">
           <option value="">Оберіть тип задачі…</option>
@@ -17630,9 +17735,10 @@ function openTaskEvaluation(taskId){
       </div>
       <div class="hint" style="margin-top:6px;">
         ${guessedPreset ? `Рекомендовано за назвою задачі: <b>${htmlesc(guessedPreset.label)}</b>.<br/>` : ""}
-        Шаблон лише підставляє стартові бали. Після цього ти можеш спокійно скоригувати оцінку вручну.
+        Тип задачі лише підставляє стартові бали й дає діапазон-підказку. Після цього ти можеш спокійно скоригувати оцінку вручну.
       </div>
     </div>
+    ${renderTaskEvaluationPresetGuide(guessedPreset)}
     <div class="sep"></div>
     <div class="eval-form-grid">
       ${fields}
@@ -17777,7 +17883,7 @@ function openTaskEvaluationHelp(){
     </div>
 
     <div class="item" style="cursor:default;">
-      <div class="name">Типові задачі і який шаблон обирати</div>
+      <div class="name">Типові задачі і який тип обирати</div>
       <div class="hint">
         <b>Лист / уточнення / записка</b> — лист на нацпол, лист на виробників, уточнення по наявності, службова записка.<br/>
         <b>Таблиця / довідка / слайди</b> — порівняльні таблиці, довідки, слайди, аналітичні матеріали.<br/>
@@ -18026,9 +18132,9 @@ function viewAnalytics(){
           </select>
         </div>
         <div class="field eval-filter-preset">
-          <label>Шаблон оцінки</label>
+          <label>Тип задачі</label>
           <select id="analyticsPresetFilter" data-change="setAnalyticsEvalPresetFilterFromInput">
-            <option value="all">Усі шаблони</option>
+            <option value="all">Усі типи</option>
             ${presetOptions.map(item=>`<option value="${item.key}" ${UI.analyticsEvalPresetFilter===item.key ? "selected" : ""}>${htmlesc(item.label)}</option>`).join("")}
           </select>
         </div>
@@ -18175,7 +18281,7 @@ function viewAnalytics(){
             <div class="eval-value mono">${row.score}</div>
           </div>
           <div class="hint" style="margin:-6px 0 8px;">${row.count} задач • середній ${row.avg.toFixed(1)}</div>
-        `).join("") : `<div class="hint">Ще немає оцінених задач по шаблонах.</div>`}
+        `).join("") : `<div class="hint">Ще немає оцінених задач по типах.</div>`}
       </div>
     </div>
   `;
@@ -18195,7 +18301,7 @@ function viewAnalytics(){
                   ${dept ? deptBadgeHtml(dept) : `<span class="pill">Особисто</span>`}
                   <span class="pill">${htmlesc(user?.name || "Без виконавця")}</span>
                   <span class="pill mono">${row.closeDate ? fmtDate(row.closeDate) : "—"}</span>
-                  ${row.preset ? `<span class="pill">Шаблон: ${htmlesc(row.preset.label)}</span>` : ``}
+                  ${row.preset ? `<span class="pill">Тип: ${htmlesc(row.preset.label)}</span>` : ``}
                 </div>
               </div>
               <div class="eval-task-actions">
