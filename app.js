@@ -8208,9 +8208,9 @@ function viewControl(){
     const tableHtml = tableOnlyText
       ? renderTaskDescWithTableToggle(tableOnlyText, "Дані", {updatedAt:entry.updatedAt, showEmpty:false, className:"ref-note-body rich-text", analyticsType: entry.tableType, analyticsTitle: title})
       : "";
-    const tableTypeBadge = currentTable
-      ? `<span class="badge b-blue">${htmlesc(getReferenceTableTypeLabel(entry.tableType))}</span>`
-      : "";
+      const tableTypeBadge = currentTable
+        ? `<span class="ref-tabletype-badge"><span class="ref-tabletype-dot"></span><span>${htmlesc(getReferenceTableTypeLabel(entry.tableType))}</span></span>`
+        : "";
     const isExpanded = !!refSearch || !!UI.refExpandedEntries?.[entry.id];
     const entryAttachments = (notes.attachments || []).filter(item=>item && item.url && item.entryId===entry.id);
     const attachmentList = entryAttachments.map((item, fileIdx)=>`
