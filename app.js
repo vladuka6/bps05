@@ -3117,7 +3117,7 @@ function buildStaffingAnalyticsModalHtml(rows, title=""){
     <div class="item analytics-block eval-donut-card">
       <div class="row"><div class="name">Загальна укомплектованість</div></div>
       <div class="eval-donut-wrap">
-        <div class="eval-donut" style="background:${donut.gradient};"></div>
+        <div class="eval-donut is-animated-donut" data-donut-gradient="${htmlesc(donut.gradient)}" style="background:conic-gradient(#dfe6f6 0 360deg);"></div>
         <div>
           ${donut.legendRows.map(row=>`<div class="eval-legend-item"><span class="eval-legend-dot" style="background:${row.color}"></span><span>${htmlesc(row.label)}</span><b class="mono">${fmtNum(row.value)}</b><span class="mono">${row.percent}%</span></div>`).join("")}
         </div>
@@ -3129,7 +3129,7 @@ function buildStaffingAnalyticsModalHtml(rows, title=""){
     <div class="item analytics-block eval-donut-card">
       <div class="row"><div class="name">Найбільший некомплект</div></div>
       <div class="eval-donut-wrap">
-        <div class="eval-donut" style="background:${shortageDonut.gradient};"></div>
+        <div class="eval-donut is-animated-donut" data-donut-gradient="${htmlesc(shortageDonut.gradient)}" style="background:conic-gradient(#dfe6f6 0 360deg);"></div>
         <div>
           ${shortageDonut.legendRows.length
             ? shortageDonut.legendRows.map(row=>`<div class="eval-legend-item"><span class="eval-legend-dot" style="background:${row.color}"></span><span>${htmlesc(row.label)}</span><b class="mono">${fmtNum(row.value)}</b><span class="mono">${row.percent}%</span></div>`).join("")
@@ -3586,10 +3586,10 @@ function renderComparisonDonutCard(title, rows, metricKey, unit="", emptyText="�
     <div class="item analytics-block eval-donut-card comparison-donut-card">
       <div class="row"><div class="name">${htmlesc(title)}</div></div>
       <div class="eval-donut-wrap">
-        <div class="eval-donut" style="background:${slices.gradient};"></div>
+        <div class="eval-donut is-animated-donut" data-donut-gradient="${htmlesc(slices.gradient)}" style="background:conic-gradient(#dfe6f6 0 360deg);"></div>
         <div>
           ${slices.legendRows.length
-            ? slices.legendRows.map(row=>`<div class="eval-legend-item"><span class="eval-legend-dot" style="background:${row.color}"></span><span>${htmlesc(row.label)}</span><b class="mono">${fmtNum(row.value)}${unit}</b><span class="mono">${row.percent}%</span></div>`).join("")
+            ? slices.legendRows.map(row=>`<div class="eval-legend-item"><span class="eval-legend-dot" style="background:${row.color}"></span><span>${htmlesc(row.label)}</span><b class="mono">${fmtNum(row.value)}${unit}</b></div>`).join("")
             : `<div class="hint">${htmlesc(emptyText)}</div>`
           }
         </div>
@@ -3742,6 +3742,18 @@ function openRenderedTableModal(key){
       <button class="btn primary" data-action="hideSheet">Закрити</button>
     </div>
   `, {stack:true});
+
+  requestAnimationFrame(()=>{
+    document.querySelectorAll('.sheet .is-animated-donut[data-donut-gradient]').forEach((el, idx)=>{
+      el.classList.remove('donut-ready');
+      el.style.background = 'conic-gradient(#dfe6f6 0 360deg)';
+      const gradient = el.getAttribute('data-donut-gradient') || '';
+      setTimeout(()=>{
+        el.style.background = gradient || 'conic-gradient(#dfe6f6 0 360deg)';
+        el.classList.add('donut-ready');
+      }, 40 + (idx * 70));
+    });
+  });
 
 }
 

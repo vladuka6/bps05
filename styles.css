@@ -1260,6 +1260,14 @@
     .comparison-analytics-modal .eval-donut::after{
       inset:10px;
     }
+    .eval-donut.is-animated-donut{
+      transition: background .78s cubic-bezier(.22,.61,.36,1), transform .32s ease;
+      will-change: background, transform;
+      transform: scale(.96);
+    }
+    .eval-donut.is-animated-donut.donut-ready{
+      transform: scale(1);
+    }
     .comparison-analytics-modal .eval-legend-item{
       font-size:10px;
       gap:5px;
