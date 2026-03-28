@@ -2787,14 +2787,12 @@ function renderTaskDescWithTableToggle(text, label, opts={}){
       tables.length > 1 ? `${label || "Дані"} (${tables.length})` : (label || "Дані"),
       `<div class="rich-text">${tables.map(item=>renderStoredTableBlock(item.content)).join("")}</div>`
     );
-    parts.push(`
-
-      <div class="task-table-toggle task-table-toggle-actions">
-        <button class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${currentModalKey}">${tables.length > 1 ? `Показати дані (${tables.length})` : "Показати дані"}</button>
+    const actionBits = [`
+      <div class="task-table-action-group">
+        <button class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${currentModalKey}">${tables.length > 1 ? `Дані (${tables.length})` : "Дані"}</button>
         ${updatedShort ? `<span class="task-table-stamp mono">${htmlesc(updatedShort)}</span>` : ``}
       </div>
-
-    `);
+    `];
 
     if(diffMeta && diffMeta.changedCount){
       const diffModalKey = registerRenderedTableModal(
@@ -2802,16 +2800,22 @@ function renderTaskDescWithTableToggle(text, label, opts={}){
         `<div class="rich-text">${renderTableDiffBlock(currentTable.rows, previousTable.rows)}</div>`
       );
 
-      parts.push(`
-
-        <div class="task-table-toggle task-table-toggle-actions task-table-diff-toggle">
-          <button class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${diffModalKey}">Показати зміни</button>
+      actionBits.push(`
+        <div class="task-table-action-group">
+          <button class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${diffModalKey}">Зміни</button>
           <span class="task-table-diff-badge mono">${htmlesc(String(diffMeta.changedCount))}</span>
         </div>
-
       `);
 
       }
+
+    parts.push(`
+
+      <div class="task-table-toggle task-table-toggle-actions">
+        ${actionBits.join("")}
+      </div>
+
+    `);
 
   }
 
