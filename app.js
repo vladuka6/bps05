@@ -3243,6 +3243,10 @@ function detectComparisonColumns(headerRow){
 
   headers.forEach((header, idx)=>{
 
+    const hasWind = /вітр|вiтр/.test(header);
+    const hasDeploy = /розгортан/.test(header);
+    const hasFlight = /польот|тривалість польоту|час польоту/.test(header);
+
     if(result.vendor < 0 && /(виробник|компан|постачальник|бренд)/.test(header)){
       result.vendor = idx;
       return;
@@ -3288,12 +3292,17 @@ function detectComparisonColumns(headerRow){
       return;
     }
 
-    if(result.speed < 0 && /(швидкість|крейсерська швидкість|максимальна швидкість)/.test(header)){
+    if(result.wind < 0 && hasWind && /швидкіст/.test(header)){
+      result.wind = idx;
+      return;
+    }
+
+    if(result.speed < 0 && !hasWind && /(швидкість|крейсерська швидкість|максимальна швидкість)/.test(header)){
       result.speed = idx;
       return;
     }
 
-    if(result.flightTime < 0 && /(час польоту|тривалість польоту|хв)/.test(header)){
+    if(result.flightTime < 0 && hasFlight && !hasDeploy){
       result.flightTime = idx;
       return;
     }
@@ -3303,12 +3312,7 @@ function detectComparisonColumns(headerRow){
       return;
     }
 
-    if(result.wind < 0 && /(швидкість вітру|вітр|допустима швидкість вітру)/.test(header)){
-      result.wind = idx;
-      return;
-    }
-
-    if(result.deployTime < 0 && /(час розгортання|розгортання)/.test(header)){
+    if(result.deployTime < 0 && hasDeploy){
       result.deployTime = idx;
       return;
     }
