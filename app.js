@@ -2071,17 +2071,9 @@ function renderTableDiffBlock(currentRows, previousRows){
 
   }).join("");
 
-  const hint = meta.structureChanged
-
-    ? `<div class="task-table-diff-hint">Структура таблиці змінена, тому порівняння показано по позиції клітинок.</div>`
-
-    : `<div class="task-table-diff-hint">Жовтим підсвічені змінені клітинки відносно попередньої версії.</div>`;
-
   return `
 
     <div class="task-table-diff-meta">Змінено клітинок: <span class="mono">${meta.changedCount}</span></div>
-
-    ${hint}
 
     <div class="rt-table-wrap"><table class="rt-table rt-table-diff"><thead><tr>${headerCells}</tr></thead><tbody>${bodyHtml}</tbody></table></div>
 
