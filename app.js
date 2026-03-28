@@ -3347,6 +3347,38 @@ function pickTopComparisonRows(items, key, limit=5){
 
 }
 
+function buildComparisonMetricStats(items, keys){
+
+  const stats = {};
+
+  (keys || []).forEach(key=>{
+    const values = items.map(item=>Number(item?.[key])).filter(Number.isFinite);
+    if(!values.length){
+      stats[key] = null;
+      return;
+    }
+    stats[key] = {
+      min: Math.min(...values),
+      max: Math.max(...values),
+    };
+  });
+
+  return stats;
+
+}
+
+function normalizeComparisonMetric(value, stat, inverse=false){
+
+  const num = Number(value);
+  if(!Number.isFinite(num) || !stat) return null;
+
+  if(stat.max === stat.min) return 1;
+
+  const raw = (num - stat.min) / (stat.max - stat.min);
+  return inverse ? (1 - raw) : raw;
+
+}
+
 function buildComparisonAnalytics(rows){
 
   const grid = Array.isArray(rows) ? rows : [];
@@ -3403,13 +3435,62 @@ function buildComparisonAnalytics(rows){
   const maxDistance = pickTopComparisonRows(items, "distance", 1)[0] || null;
   const maxPayload = pickTopComparisonRows(items, "payload", 1)[0] || null;
   const maxSpeed = pickTopComparisonRows(items, "speed", 1)[0] || null;
+  const maxRadius = pickTopComparisonRows(items, "radius", 1)[0] || null;
+  const maxHeight = pickTopComparisonRows(items, "height", 1)[0] || null;
+  const maxWind = pickTopComparisonRows(items, "wind", 1)[0] || null;
   const topDistance = pickTopComparisonRows(items, "distance", 6);
   const topPayload = pickTopComparisonRows(items, "payload", 6);
   const topSpeed = pickTopComparisonRows(items, "speed", 6);
   const topFlightTime = pickTopComparisonRows(items, "flightTime", 6);
+  const topRadius = pickTopComparisonRows(items, "radius", 6);
+  const topHeight = pickTopComparisonRows(items, "height", 6);
+  const topWind = pickTopComparisonRows(items, "wind", 6);
+  const cheapestSystems = items
+    .filter(item=>Number.isFinite(item.systemPrice))
+    .slice()
+    .sort((a,b)=>(a.systemPrice || 0) - (b.systemPrice || 0))
+    .slice(0, 6);
+  const fastestDeploy = items
+    .filter(item=>Number.isFinite(item.deployTime))
+    .slice()
+    .sort((a,b)=>(a.deployTime || 0) - (b.deployTime || 0))
+    .slice(0, 6);
   const codifiedCount = items.filter(item=>item.codified).length;
   const thermalCount = items.filter(item=>item.thermal).length;
   const vendors = Array.from(new Set(items.map(item=>item.vendor).filter(Boolean)));
+  const metricStats = buildComparisonMetricStats(items, ["payload", "distance", "speed", "flightTime", "radius", "height", "wind", "systemPrice", "deployTime"]);
+
+  const overallWeights = [
+    {key:"payload", weight:0.18, inverse:false},
+    {key:"distance", weight:0.2, inverse:false},
+    {key:"speed", weight:0.12, inverse:false},
+    {key:"flightTime", weight:0.15, inverse:false},
+    {key:"radius", weight:0.1, inverse:false},
+    {key:"height", weight:0.07, inverse:false},
+    {key:"wind", weight:0.08, inverse:false},
+    {key:"systemPrice", weight:0.06, inverse:true},
+    {key:"deployTime", weight:0.04, inverse:true},
+  ];
+
+  items.forEach(item=>{
+    let weightedSum = 0;
+    let totalWeight = 0;
+
+    overallWeights.forEach(metric=>{
+      const score = normalizeComparisonMetric(item[metric.key], metricStats[metric.key], metric.inverse);
+      if(score == null) return;
+      weightedSum += score * metric.weight;
+      totalWeight += metric.weight;
+    });
+
+    item.overallScore = totalWeight > 0 ? Math.round((weightedSum / totalWeight) * 100) : 0;
+  });
+
+  const overallTop = items
+    .slice()
+    .sort((a,b)=>(b.overallScore || 0) - (a.overallScore || 0))
+    .slice(0, 8);
+  const bestOverall = overallTop[0] || null;
 
   const distanceDonut = buildEvalSlices(
     topDistance.slice(0, 5).map(item=>({label:item.name, value:item.distance || 0})),
@@ -3422,10 +3503,20 @@ function buildComparisonAnalytics(rows){
     maxDistance,
     maxPayload,
     maxSpeed,
+    maxRadius,
+    maxHeight,
+    maxWind,
     topDistance,
     topPayload,
     topSpeed,
     topFlightTime,
+    topRadius,
+    topHeight,
+    topWind,
+    cheapestSystems,
+    fastestDeploy,
+    overallTop,
+    bestOverall,
     codifiedCount,
     thermalCount,
     vendorCount: vendors.length,
@@ -3458,6 +3549,30 @@ function renderComparisonTopList(title, rows, metricKey, metricLabel, unit=""){
 
 }
 
+function renderComparisonTopListAsc(title, rows, metricKey, metricLabel, unit=""){
+
+  return `
+    <div class="item analytics-block staffing-analytics-list">
+      <div class="row"><div class="name">${htmlesc(title)}</div></div>
+      <ul class="report-list">
+        ${rows.length
+          ? rows.map(item=>`
+              <li>
+                <div class="report-line">
+                  <span class="report-strong">${htmlesc(item.name)}</span>
+                  <span class="badge b-ok mono">${fmtNum(item[metricKey])}${unit}</span>
+                </div>
+                <div class="report-meta">${metricLabel}: ${fmtNum(item[metricKey])}${unit}${item.vendor ? ` · Виробник: ${htmlesc(item.vendor)}` : ""}</div>
+              </li>
+            `).join("")
+          : `<li><div class="hint">Даних для цього рейтингу поки немає.</div></li>`
+        }
+      </ul>
+    </div>
+  `;
+
+}
+
 function buildComparisonAnalyticsModalHtml(rows, title=""){
 
   const analytics = buildComparisonAnalytics(rows);
@@ -3474,10 +3589,20 @@ function buildComparisonAnalyticsModalHtml(rows, title=""){
     maxDistance,
     maxPayload,
     maxSpeed,
+    maxRadius,
+    maxHeight,
+    maxWind,
     topDistance,
     topPayload,
     topSpeed,
     topFlightTime,
+    topRadius,
+    topHeight,
+    topWind,
+    cheapestSystems,
+    fastestDeploy,
+    overallTop,
+    bestOverall,
     codifiedCount,
     thermalCount,
     vendorCount,
@@ -3491,6 +3616,10 @@ function buildComparisonAnalyticsModalHtml(rows, title=""){
       <div class="report-tile"><div class="k">Макс. дальність</div><div class="v mono">${maxDistance ? fmtNum(maxDistance.distance) : "0"}</div><div class="s">${maxDistance ? htmlesc(maxDistance.name) : "—"}</div></div>
       <div class="report-tile"><div class="k">Макс. навантаження</div><div class="v mono">${maxPayload ? fmtNum(maxPayload.payload) : "0"}</div><div class="s">${maxPayload ? htmlesc(maxPayload.name) : "—"}</div></div>
       <div class="report-tile"><div class="k">Макс. швидкість</div><div class="v mono">${maxSpeed ? fmtNum(maxSpeed.speed) : "0"}</div><div class="s">${maxSpeed ? htmlesc(maxSpeed.name) : "—"}</div></div>
+      <div class="report-tile"><div class="k">Макс. радіус</div><div class="v mono">${maxRadius ? fmtNum(maxRadius.radius) : "0"}</div><div class="s">${maxRadius ? htmlesc(maxRadius.name) : "—"}</div></div>
+      <div class="report-tile"><div class="k">Макс. висота</div><div class="v mono">${maxHeight ? fmtNum(maxHeight.height) : "0"}</div><div class="s">${maxHeight ? htmlesc(maxHeight.name) : "—"}</div></div>
+      <div class="report-tile"><div class="k">Стійкість до вітру</div><div class="v mono">${maxWind ? fmtNum(maxWind.wind) : "0"}</div><div class="s">${maxWind ? htmlesc(maxWind.name) : "—"}</div></div>
+      <div class="report-tile"><div class="k">Загальний рейтинг</div><div class="v mono">${bestOverall ? fmtNum(bestOverall.overallScore) : "0"}</div><div class="s">${bestOverall ? htmlesc(bestOverall.name) : "—"}</div></div>
       <div class="report-tile"><div class="k">Кодифіковано</div><div class="v mono">${fmtNum(codifiedCount)}</div><div class="s">із ${fmtNum(items.length)}</div></div>
       <div class="report-tile"><div class="k">З тепловізором</div><div class="v mono">${fmtNum(thermalCount)}</div><div class="s">позицій</div></div>
       <div class="report-tile"><div class="k">Виробників</div><div class="v mono">${fmtNum(vendorCount)}</div><div class="s">у таблиці</div></div>
@@ -3516,6 +3645,30 @@ function buildComparisonAnalyticsModalHtml(rows, title=""){
   const payloadList = renderComparisonTopList("Найбільше навантаження", topPayload, "payload", "Навантаження", " кг");
   const speedList = renderComparisonTopList("Найвища швидкість", topSpeed, "speed", "Швидкість", " км/год");
   const flightTimeList = renderComparisonTopList("Найдовший час польоту", topFlightTime, "flightTime", "Час польоту", " хв");
+  const radiusList = renderComparisonTopList("Найбільший радіус", topRadius, "radius", "Радіус", " км");
+  const heightList = renderComparisonTopList("Найбільша висота", topHeight, "height", "Висота", " м");
+  const windList = renderComparisonTopList("Найкраща стійкість до вітру", topWind, "wind", "Вітер", " м/с");
+  const cheapestList = renderComparisonTopListAsc("Найдешевші комплекси", cheapestSystems, "systemPrice", "Ціна БпАК", " грн");
+  const deployList = renderComparisonTopListAsc("Найшвидше розгортання", fastestDeploy, "deployTime", "Час розгортання", " хв");
+  const overallList = `
+    <div class="item analytics-block staffing-analytics-list">
+      <div class="row"><div class="name">Загальний рейтинг моделей</div></div>
+      <ul class="report-list">
+        ${overallTop.length
+          ? overallTop.map(item=>`
+              <li>
+                <div class="report-line">
+                  <span class="report-strong">${htmlesc(item.name)}</span>
+                  <span class="badge b-blue mono">${fmtNum(item.overallScore)}</span>
+                </div>
+                <div class="report-meta">Інтегральний бал за дальністю, навантаженням, швидкістю, часом польоту, радіусом, висотою, вітром та базовою ефективністю по ціні.</div>
+              </li>
+            `).join("")
+          : `<li><div class="hint">Поки немає даних для загального рейтингу.</div></li>`
+        }
+      </ul>
+    </div>
+  `;
 
   return `
     <div class="staffing-analytics-modal">
@@ -3530,6 +3683,18 @@ function buildComparisonAnalyticsModalHtml(rows, title=""){
       <div class="control-grid staffing-analytics-sections">
         ${speedList}
         ${flightTimeList}
+      </div>
+      <div class="control-grid staffing-analytics-sections">
+        ${radiusList}
+        ${heightList}
+      </div>
+      <div class="control-grid staffing-analytics-sections">
+        ${windList}
+        ${deployList}
+      </div>
+      <div class="control-grid staffing-analytics-sections">
+        ${cheapestList}
+        ${overallList}
       </div>
     </div>
   `;
