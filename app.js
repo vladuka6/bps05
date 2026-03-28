@@ -316,6 +316,7 @@ function normalizeReferenceNotes(source){
         deptId: "",
         title: "",
         text: value.trim(),
+        tableType: "none",
         createdAt: nowIsoKyiv(),
         updatedAt: nowIsoKyiv(),
       };
@@ -328,6 +329,7 @@ function normalizeReferenceNotes(source){
       deptId: typeof item.deptId === "string" ? item.deptId : "",
       title: typeof item.title === "string" ? item.title.trim() : "",
       text: typeof item.text === "string" ? item.text.trim() : "",
+      tableType: normalizeReferenceTableType(item.tableType),
       createdAt: typeof item.createdAt === "string" && item.createdAt ? item.createdAt : nowIsoKyiv(),
       updatedAt: typeof item.updatedAt === "string" && item.updatedAt ? item.updatedAt : nowIsoKyiv(),
     };
@@ -374,6 +376,7 @@ function normalizeReferenceNotes(source){
         deptId: "",
         title: "Загальне",
         text: generalText,
+        tableType: "none",
         createdAt: nowIsoKyiv(),
         updatedAt: nowIsoKyiv(),
       });
@@ -387,6 +390,7 @@ function normalizeReferenceNotes(source){
         deptId,
         title: "",
         text: deptText,
+        tableType: "none",
         createdAt: nowIsoKyiv(),
         updatedAt: nowIsoKyiv(),
       });
@@ -409,6 +413,31 @@ function normalizeReferenceNotes(source){
     entries,
     attachments,
   };
+
+}
+
+const REFERENCE_TABLE_TYPE_OPTIONS = [
+  {id:"none", label:"Без аналітики"},
+  {id:"staffing", label:"Укомплектованість"},
+  {id:"planfact", label:"План / факт"},
+  {id:"compare", label:"Порівняння"},
+];
+
+function normalizeReferenceTableType(value){
+
+  const raw = String(value || "").trim().toLowerCase();
+
+  if(raw === "staffing") return "staffing";
+  if(raw === "planfact") return "planfact";
+  if(raw === "compare") return "compare";
+  return "none";
+
+}
+
+function getReferenceTableTypeLabel(value){
+
+  const typeId = normalizeReferenceTableType(value);
+  return REFERENCE_TABLE_TYPE_OPTIONS.find(x=>x.id===typeId)?.label || "Без аналітики";
 
 }
 
@@ -2775,6 +2804,13 @@ function renderTaskDescWithTableToggle(text, label, opts={}){
   const currentTable = findStoredTableBlock(raw);
 
   const previousTable = findPreviousStoredTableBlock(raw);
+  const analyticsType = normalizeReferenceTableType(opts.analyticsType || opts.tableType || "");
+  const analyticsModalKey = (analyticsType === "staffing" && currentTable?.rows?.length)
+    ? registerRenderedTableModal(
+        `Аналітика: ${opts.analyticsTitle || label || "Таблиця"}`,
+        buildStaffingAnalyticsModalHtml(currentTable.rows, opts.analyticsTitle || label || "Таблиця")
+      )
+    : "";
 
   const diffMeta = (currentTable && previousTable) ? tableDiffMeta(currentTable.rows, previousTable.rows) : null;
 
@@ -2807,6 +2843,7 @@ function renderTaskDescWithTableToggle(text, label, opts={}){
 
       <div class="task-table-toggle task-table-toggle-actions">
         <button class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${currentModalKey}">${tables.length > 1 ? `Показати дані (${tables.length})` : "Показати дані"}</button>
+        ${analyticsModalKey ? `<button class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${analyticsModalKey}">Аналітика</button>` : ``}
         ${updatedShort ? `<span class="task-table-stamp mono">${htmlesc(updatedShort)}</span>` : ``}
       </div>
 
@@ -2822,6 +2859,7 @@ function renderTaskDescWithTableToggle(text, label, opts={}){
 
         <div class="task-table-toggle task-table-toggle-actions task-table-diff-toggle">
           <button class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${diffModalKey}">Показати зміни</button>
+          ${analyticsModalKey ? `<button class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${analyticsModalKey}">Аналітика</button>` : ``}
           <span class="task-table-diff-badge mono">${htmlesc(String(diffMeta.changedCount))}</span>
         </div>
 
@@ -2849,6 +2887,301 @@ function registerRenderedTableModal(title, bodyHtml){
   };
 
   return key;
+
+}
+
+function parseAnalyticsNumber(value){
+
+  const raw = String(value ?? "")
+    .replace(/\u00A0/g, " ")
+    .replace(/\s+/g, "")
+    .replace(/,/g, ".");
+
+  const match = raw.match(/-?\d+(?:\.\d+)?/);
+  if(!match) return null;
+
+  const num = Number(match[0]);
+  return Number.isFinite(num) ? num : null;
+
+}
+
+function normalizeAnalyticsHeader(value){
+
+  return String(value || "")
+    .toLowerCase()
+    .replace(/\u00A0/g, " ")
+    .replace(/[^\p{L}\p{N}%]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+}
+
+function detectStaffingColumns(headerRow){
+
+  const headers = (headerRow || []).map(normalizeAnalyticsHeader);
+  const result = {dept:-1, plan:-1, fact:-1, shortage:-1, percent:-1, total:-1, modelIndexes:[]};
+
+  headers.forEach((header, idx)=>{
+
+    if(result.dept < 0 && /(орган дпсу|орган|підрозділ|відділ|загін|рота|баталь|взвод|екіпаж|підгруп|назва|unit)/.test(header)){
+      result.dept = idx;
+      return;
+    }
+
+    if(result.shortage < 0 && /(некомплект|нестач|браку|дефіцит|відсут)/.test(header)){
+      result.shortage = idx;
+      return;
+    }
+
+    if(result.percent < 0 && /(%|відсот|укомплектованіст)/.test(header)){
+      result.percent = idx;
+      return;
+    }
+
+    if(result.plan < 0 && /(штат|план|потреб|належ|потрібно)/.test(header)){
+      result.plan = idx;
+      return;
+    }
+
+    if(result.fact < 0 && /(список|факт|наяв|фактич|є |є$|у наявності|укомплектовано|наявність)/.test(header)){
+      result.fact = idx;
+      return;
+    }
+
+    if(result.total < 0 && /(всього|усього|итого|разом|сумарно|всего)/.test(header)){
+      result.total = idx;
+    }
+
+  });
+
+  if(result.dept < 0) result.dept = 0;
+
+  headers.forEach((header, idx)=>{
+    if(idx===result.dept || idx===result.plan || idx===result.fact || idx===result.shortage || idx===result.percent || idx===result.total) return;
+    if(!header) return;
+    if(/^(номер|№|no|n)$/.test(header)) return;
+    result.modelIndexes.push(idx);
+  });
+
+  return result;
+
+}
+
+function buildStaffingAnalytics(rows){
+
+  const grid = Array.isArray(rows) ? rows : [];
+  if(grid.length < 2) return null;
+
+  const columns = detectStaffingColumns(grid[0]);
+  const modelTotals = new Map();
+  const items = grid.slice(1).map((row, index)=>{
+    const name = String(row?.[columns.dept] || "").trim() || `Рядок ${index + 1}`;
+    let plan = columns.plan >= 0 ? parseAnalyticsNumber(row?.[columns.plan]) : null;
+    let fact = columns.fact >= 0 ? parseAnalyticsNumber(row?.[columns.fact]) : null;
+    let shortage = columns.shortage >= 0 ? parseAnalyticsNumber(row?.[columns.shortage]) : null;
+    let percent = columns.percent >= 0 ? parseAnalyticsNumber(row?.[columns.percent]) : null;
+    let total = columns.total >= 0 ? parseAnalyticsNumber(row?.[columns.total]) : null;
+
+    const modelBreakdown = columns.modelIndexes.map(colIdx=>{
+      const label = String(grid[0]?.[colIdx] || "").trim();
+      const value = parseAnalyticsNumber(row?.[colIdx]);
+      return {
+        label,
+        value: Number.isFinite(value) ? Number(value) : 0,
+      };
+    }).filter(item=>item.label);
+
+    modelBreakdown.forEach(item=>{
+      const prev = modelTotals.get(item.label) || 0;
+      modelTotals.set(item.label, prev + item.value);
+    });
+
+    if(shortage == null && plan != null && fact != null) shortage = Math.max(plan - fact, 0);
+    if(fact == null && plan != null && shortage != null) fact = Math.max(plan - shortage, 0);
+    if(plan == null && fact != null && shortage != null) plan = fact + shortage;
+    if(fact == null && total != null) fact = total;
+    if(total == null && fact != null) total = fact;
+    if(percent == null && plan && fact != null) percent = Math.round((fact / plan) * 100);
+
+    const hasData = [plan, fact, shortage, percent, total].some(v=>Number.isFinite(v)) || modelBreakdown.some(item=>item.value > 0);
+    if(!hasData) return null;
+
+    return {
+      name,
+      plan: Number.isFinite(plan) ? Number(plan) : 0,
+      fact: Number.isFinite(fact) ? Number(fact) : 0,
+      total: Number.isFinite(total) ? Number(total) : 0,
+      shortage: Number.isFinite(shortage) ? Math.max(Number(shortage), 0) : 0,
+      percent: Number.isFinite(percent) ? Number(percent) : 0,
+      modelBreakdown,
+    };
+  }).filter(Boolean);
+
+  if(!items.length) return null;
+
+  const totalPlan = items.reduce((sum, item)=>sum + item.plan, 0);
+  const totalFact = items.reduce((sum, item)=>sum + item.fact, 0);
+  const totalAssets = items.reduce((sum, item)=>sum + item.total, 0);
+  const totalShortage = items.reduce((sum, item)=>sum + item.shortage, 0);
+  const completion = totalPlan > 0 ? Math.round((totalFact / totalPlan) * 100) : 0;
+  const topShortage = items.slice().sort((a,b)=>b.shortage-a.shortage).slice(0, 8);
+  const bestFilled = items.slice().sort((a,b)=>(b.percent || 0)-(a.percent || 0)).slice(0, 5);
+  const topModels = Array.from(modelTotals.entries())
+    .map(([name, value])=>({name, value:Number(value || 0)}))
+    .filter(item=>item.value > 0)
+    .sort((a,b)=>b.value-a.value)
+    .slice(0, 10);
+  const donut = buildEvalSlices([
+    {label:"Укомплектовано", value: totalFact},
+    {label:"Нестача", value: totalShortage},
+  ], ["#5f8ef5", "#ffcc66"]);
+  const shortageDonut = buildEvalSlices(
+    topShortage.filter(item=>item.shortage > 0).slice(0, 5).map(item=>({label:item.name, value:item.shortage})),
+    ["#ff9f43", "#ff6b8b", "#5f8ef5", "#6fbf73", "#b783ff"]
+  );
+
+  return {
+    columns,
+    items,
+    totalPlan,
+    totalFact,
+    totalAssets,
+    totalShortage,
+    completion,
+    topShortage,
+    bestFilled,
+    topModels,
+    donut,
+    shortageDonut,
+  };
+
+}
+
+function buildStaffingAnalyticsModalHtml(rows, title=""){
+
+  const analytics = buildStaffingAnalytics(rows);
+
+  if(!analytics){
+    return `
+      <div class="hint">Не вдалося розпізнати таблицю укомплектованості. Очікуються колонки на кшталт: підрозділ, план/штат, факт/наявні, некомплект.</div>
+    `;
+  }
+
+  const {items, totalPlan, totalFact, totalAssets, totalShortage, completion, topShortage, bestFilled, topModels, donut, shortageDonut} = analytics;
+
+  const summaryGrid = `
+    <div class="report-grid staffing-analytics-kpis">
+      <div class="report-tile"><div class="k">Таблиця</div><div class="v">${htmlesc(title || "Укомплектованість")}</div><div class="s">${items.length} рядків</div></div>
+      <div class="report-tile"><div class="k">План</div><div class="v mono">${fmtNum(totalPlan)}</div><div class="s">За таблицею</div></div>
+      <div class="report-tile"><div class="k">Факт</div><div class="v mono">${fmtNum(totalFact)}</div><div class="s">Наявні</div></div>
+      <div class="report-tile"><div class="k">Нестача</div><div class="v mono">${fmtNum(totalShortage)}</div><div class="s">${completion}% укомплектовано</div></div>
+      <div class="report-tile"><div class="k">Всього засобів</div><div class="v mono">${fmtNum(totalAssets)}</div><div class="s">За колонкою “Всього”</div></div>
+    </div>
+  `;
+
+  const totalDonutCard = `
+    <div class="item analytics-block eval-donut-card">
+      <div class="row"><div class="name">Загальна укомплектованість</div></div>
+      <div class="eval-donut-wrap">
+        <div class="eval-donut" style="background:${donut.gradient};"></div>
+        <div>
+          ${donut.legendRows.map(row=>`<div class="eval-legend-item"><span class="eval-legend-dot" style="background:${row.color}"></span><span>${htmlesc(row.label)}</span><b class="mono">${fmtNum(row.value)}</b><span class="mono">${row.percent}%</span></div>`).join("")}
+        </div>
+      </div>
+    </div>
+  `;
+
+  const shortageDonutCard = `
+    <div class="item analytics-block eval-donut-card">
+      <div class="row"><div class="name">Найбільший некомплект</div></div>
+      <div class="eval-donut-wrap">
+        <div class="eval-donut" style="background:${shortageDonut.gradient};"></div>
+        <div>
+          ${shortageDonut.legendRows.length
+            ? shortageDonut.legendRows.map(row=>`<div class="eval-legend-item"><span class="eval-legend-dot" style="background:${row.color}"></span><span>${htmlesc(row.label)}</span><b class="mono">${fmtNum(row.value)}</b><span class="mono">${row.percent}%</span></div>`).join("")
+            : `<div class="hint">Некомплект не виявлено.</div>`
+          }
+        </div>
+      </div>
+    </div>
+  `;
+
+  const shortageList = `
+    <div class="item analytics-block staffing-analytics-list">
+      <div class="row"><div class="name">Підрозділи з найбільшою нестачею</div></div>
+      <ul class="report-list">
+        ${topShortage.length
+          ? topShortage.map(item=>`
+              <li>
+                <div class="report-line">
+                  <span class="report-strong">${htmlesc(item.name)}</span>
+                  <span class="badge b-warn">Нестача ${fmtNum(item.shortage)}</span>
+                  <span class="badge b-blue">Факт ${fmtNum(item.fact)}</span>
+                  <span class="badge">${fmtNum(item.percent)}%</span>
+                </div>
+                <div class="report-meta">План: ${fmtNum(item.plan)} · Факт: ${fmtNum(item.fact)} · Нестача: ${fmtNum(item.shortage)}</div>
+              </li>
+            `).join("")
+          : `<li><div class="hint">Некомплекту в таблиці не знайдено.</div></li>`
+        }
+      </ul>
+    </div>
+  `;
+
+  const bestList = `
+    <div class="item analytics-block staffing-analytics-list">
+      <div class="row"><div class="name">Найкраща укомплектованість</div></div>
+      <ul class="report-list">
+        ${bestFilled.length
+          ? bestFilled.map(item=>`
+              <li>
+                <div class="report-line">
+                  <span class="report-strong">${htmlesc(item.name)}</span>
+                  <span class="badge b-ok">${fmtNum(item.percent)}%</span>
+                  <span class="badge b-blue">Факт ${fmtNum(item.fact)}</span>
+                </div>
+                <div class="report-meta">План: ${fmtNum(item.plan)} · Нестача: ${fmtNum(item.shortage)}</div>
+              </li>
+            `).join("")
+          : `<li><div class="hint">Даних для рейтингу поки недостатньо.</div></li>`
+        }
+      </ul>
+    </div>
+  `;
+
+  const modelsList = `
+    <div class="item analytics-block staffing-analytics-list">
+      <div class="row"><div class="name">Найпоширеніші моделі / позиції</div></div>
+      <ul class="report-list">
+        ${topModels.length
+          ? topModels.map(item=>`
+              <li>
+                <div class="report-line">
+                  <span class="report-strong">${htmlesc(item.name)}</span>
+                  <span class="badge b-blue mono">${fmtNum(item.value)}</span>
+                </div>
+              </li>
+            `).join("")
+          : `<li><div class="hint">По моделях поки немає заповнених даних.</div></li>`
+        }
+      </ul>
+    </div>
+  `;
+
+  return `
+    <div class="staffing-analytics-modal">
+      ${summaryGrid}
+      <div class="eval-donut-grid">
+        ${totalDonutCard}
+        ${shortageDonutCard}
+      </div>
+      <div class="control-grid staffing-analytics-sections">
+        ${shortageList}
+        ${bestList}
+      </div>
+      ${modelsList}
+    </div>
+  `;
 
 }
 
@@ -6965,6 +7298,8 @@ function openReferenceEntry(entryId=""){
   const notes = normalizeReferenceNotes(STATE.referenceNotes);
   const entry = (notes.entries || []).find(x=>x && x.id===entryId) || null;
   const deptOptions = [`<option value="">Загальне</option>`, ...STATE.departments.map(dept=>`<option value="${dept.id}" ${(entry?.deptId || "")===dept.id ? "selected" : ""}>${htmlesc(dept.name)}</option>`)].join("");
+  const tableType = normalizeReferenceTableType(entry?.tableType);
+  const tableTypeOptions = REFERENCE_TABLE_TYPE_OPTIONS.map(item=>`<option value="${item.id}" ${tableType===item.id ? "selected" : ""}>${htmlesc(item.label)}</option>`).join("");
 
   showSheet(readOnly ? "Перегляд запису" : (entry ? "Редагувати запис" : "Новий запис"), `
 
@@ -6978,10 +7313,17 @@ function openReferenceEntry(entryId=""){
       <label>Назва запису</label>
       <input id="referenceEntryTitle" type="text" value="${htmlesc(entry?.title || "")}" placeholder="Коротка назва запису" ${readOnly ? "readonly" : ""} />
     </div>
+    <div class="field">
+      <label>Тип таблиці</label>
+      <select id="referenceEntryTableType" ${readOnly ? "disabled" : ""}>
+        ${tableTypeOptions}
+      </select>
+      <div class="hint">Поки що це підготовка під аналітику для таблиць у записі.</div>
+    </div>
     ${readOnly ? `
       <div class="field">
         <label>Текст</label>
-        <div class="task-desc-input ref-entry-preview">${renderTaskDescWithTableToggle(entry?.text || "", "Текст", {showEmpty:true, updatedAt:entry?.updatedAt, className:"ref-entry-preview rich-text"})}</div>
+        <div class="task-desc-input ref-entry-preview">${renderTaskDescWithTableToggle(entry?.text || "", "Текст", {showEmpty:true, updatedAt:entry?.updatedAt, className:"ref-entry-preview rich-text", analyticsType: tableType, analyticsTitle: entry?.title || "Запис"})}</div>
       </div>
     ` : `
       <div class="field">
@@ -7015,6 +7357,7 @@ function saveReferenceEntryNow(entryId=""){
 
   const deptId = document.getElementById("referenceEntryDept")?.value || "";
   const title = (document.getElementById("referenceEntryTitle")?.value || "").trim();
+  const tableType = normalizeReferenceTableType(document.getElementById("referenceEntryTableType")?.value || "none");
   if(document.querySelector('.text-table-editor[data-for="referenceEntryText"]')){
     writeTextTableToTextarea("referenceEntryText", readTextTableEditorRows("referenceEntryText"));
   }
@@ -7036,6 +7379,7 @@ function saveReferenceEntryNow(entryId=""){
       deptId,
       title,
       text,
+      tableType,
       updatedAt: now,
     };
   } else {
@@ -7044,6 +7388,7 @@ function saveReferenceEntryNow(entryId=""){
       deptId,
       title,
       text,
+      tableType,
       createdAt: now,
       updatedAt: now,
     });
@@ -7103,7 +7448,7 @@ function viewControl(){
       if(deptFilter !== "all" && deptFilter !== "general" && entry.deptId !== deptFilter) return false;
       return true;
     }
-    const haystack = `${entry.title || ""} ${stripStoredTables(entry.text || "")} ${getReferenceEntryDeptLabel(entry.deptId)}`.toLowerCase();
+    const haystack = `${entry.title || ""} ${stripStoredTables(entry.text || "")} ${getReferenceEntryDeptLabel(entry.deptId)} ${getReferenceTableTypeLabel(entry.tableType)}`.toLowerCase();
     return haystack.includes(refSearch);
   });
 
@@ -7116,7 +7461,10 @@ function viewControl(){
     const tableOnlyText = [currentTable?.raw || "", previousTable?.raw || ""].filter(Boolean).join("\n\n");
     const bodyHtml = refSearch ? highlightReferenceText(plainText, refSearch) : richText(plainText);
     const tableHtml = tableOnlyText
-      ? renderTaskDescWithTableToggle(tableOnlyText, "Дані", {updatedAt:entry.updatedAt, showEmpty:false, className:"ref-note-body rich-text"})
+      ? renderTaskDescWithTableToggle(tableOnlyText, "Дані", {updatedAt:entry.updatedAt, showEmpty:false, className:"ref-note-body rich-text", analyticsType: entry.tableType, analyticsTitle: title})
+      : "";
+    const tableTypeBadge = currentTable
+      ? `<span class="badge b-blue">${htmlesc(getReferenceTableTypeLabel(entry.tableType))}</span>`
       : "";
     const isExpanded = !!refSearch || !!UI.refExpandedEntries?.[entry.id];
     const entryAttachments = (notes.attachments || []).filter(item=>item && item.url && item.entryId===entry.id);
@@ -7136,6 +7484,7 @@ function viewControl(){
             <span class="ref-note-caret"></span>
           </button>
           <button class="ref-note-link" data-action="openReferenceEntry" data-arg1="${entry.id}">${refSearch ? highlightReferenceText(numberedTitle, refSearch) : htmlesc(numberedTitle)}</button>
+          ${tableTypeBadge}
         </div>
         ${isExpanded ? `
           <div class="ref-note-body rich-text">${bodyHtml || (!tableHtml ? "Без тексту" : "")}</div>

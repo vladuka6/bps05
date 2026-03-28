@@ -899,9 +899,13 @@
       background: rgba(236,242,255,.9);
       color: var(--text);
       font-weight:800;
+      position: sticky;
+      top: 0;
+      z-index: 2;
       white-space:normal !important;
       word-break:break-word;
       overflow-wrap:anywhere;
+      box-shadow: inset 0 -1px 0 rgba(126,146,182,.72);
     }
       .rich-text .rt-table td{
         color: var(--muted);
@@ -1197,6 +1201,17 @@
       font-size:11px;
       line-height:1.35;
       color:var(--text-soft);
+    }
+    .staffing-analytics-modal{
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+    }
+    .staffing-analytics-sections{
+      align-items:start;
+    }
+    .staffing-analytics-list .report-list{
+      margin-top:8px;
     }
     .table-modal-body{
       min-width:0;
