@@ -3629,6 +3629,14 @@ function buildComparisonAnalytics(rows, title=""){
     top: profileRankings[profileId] || [],
     best: (profileRankings[profileId] || [])[0] || null,
   })).filter(item=>item?.config);
+  const priceSlices = buildComparisonRangeSliceRows(items, "systemPrice", " грн");
+  const payloadSlices = buildComparisonRangeSliceRows(items, "payload", " кг");
+  const distanceSlices = buildComparisonRangeSliceRows(items, "distance", " км");
+  const flightTimeSlices = buildComparisonRangeSliceRows(items, "flightTime", " хв");
+  const cameraSlices = [
+    {label:"З тепловізором", value: thermalCount},
+    {label:"Без тепловізора", value: Math.max(0, items.length - thermalCount)},
+  ].filter(item=>item.value > 0);
 
   return {
     items,
@@ -3656,6 +3664,11 @@ function buildComparisonAnalytics(rows, title=""){
     codifiedCount,
     thermalCount,
     vendorCount: vendors.length,
+    priceSlices,
+    payloadSlices,
+    distanceSlices,
+    flightTimeSlices,
+    cameraSlices,
   };
 
 }
@@ -3731,6 +3744,68 @@ function renderComparisonDonutCard(title, rows, metricKey, unit="", emptyText="�
       </div>
     </div>
   `;
+
+}
+
+function renderComparisonSliceDonutCard(title, slices, emptyText="Поки немає даних.", colors=null){
+
+  const donut = buildEvalSlices(
+    slices || [],
+    colors || ["#5f8ef5", "#6fbf73", "#ff9f43", "#b783ff", "#ff6b8b"]
+  );
+
+  return `
+    <div class="item analytics-block eval-donut-card comparison-donut-card">
+      <div class="row"><div class="name">${htmlesc(title)}</div></div>
+      <div class="eval-donut-wrap">
+        <div class="eval-donut is-animated-donut" data-donut-gradient="${htmlesc(donut.gradient)}" style="background:conic-gradient(#dfe6f6 0 360deg);"></div>
+        <div>
+          ${donut.legendRows.length
+            ? donut.legendRows.map(row=>`<div class="eval-legend-item"><span class="eval-legend-dot" style="background:${row.color}"></span><span>${htmlesc(row.label)}</span><b class="mono">${fmtNum(row.value)}</b></div>`).join("")
+            : `<div class="hint">${htmlesc(emptyText)}</div>`
+          }
+        </div>
+      </div>
+    </div>
+  `;
+
+}
+
+function buildComparisonRangeSliceRows(items, key, unit=""){
+
+  const rows = (items || []).filter(item=>Number.isFinite(item?.[key]));
+  if(!rows.length) return [];
+
+  const values = rows.map(item=>Number(item[key]));
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+
+  if(min === max){
+    return [{label:`Усі: ${fmtNum(min)}${unit}`, value: rows.length}];
+  }
+
+  const step = (max - min) / 3;
+  const limit1 = min + step;
+  const limit2 = min + step * 2;
+
+  const bins = [
+    {label:`до ${fmtNum(limit1)}${unit}`, value:0},
+    {label:`${fmtNum(limit1)}–${fmtNum(limit2)}${unit}`, value:0},
+    {label:`від ${fmtNum(limit2)}${unit}`, value:0},
+  ];
+
+  rows.forEach(item=>{
+    const value = Number(item[key]);
+    if(value < limit1){
+      bins[0].value += 1;
+    } else if(value < limit2){
+      bins[1].value += 1;
+    } else {
+      bins[2].value += 1;
+    }
+  });
+
+  return bins.filter(item=>item.value > 0);
 
 }
 
@@ -3824,6 +3899,11 @@ function buildComparisonAnalyticsModalHtml(rows, title=""){
       codifiedCount,
       thermalCount,
       vendorCount,
+      priceSlices,
+      payloadSlices,
+      distanceSlices,
+      flightTimeSlices,
+      cameraSlices,
     } = analytics;
 
     const primaryProfile = featuredProfiles[0] || null;
@@ -3861,6 +3941,17 @@ function buildComparisonAnalyticsModalHtml(rows, title=""){
     primaryProfile?.best ? {label:primaryProfile.config.label, item:primaryProfile.best, value:primaryProfile.best[primaryProfile.scoreKey], metricLabel:primaryProfile.config.label, unit:"", tone:primaryProfile.config.tone || "blue"} : null,
     secondaryProfile?.best ? {label:secondaryProfile.config.label, item:secondaryProfile.best, value:secondaryProfile.best[secondaryProfile.scoreKey], metricLabel:secondaryProfile.config.label, unit:"", tone:secondaryProfile.config.tone || "blue"} : null,
     ]);
+  const overviewDonuts = `
+    <div class="comparison-donut-grid">
+      ${renderComparisonSliceDonutCard("Цінові сегменти", priceSlices, "Немає цінових даних.", ["#6fbf73", "#ffcc66", "#ff8f5a"])}
+      ${renderComparisonSliceDonutCard("Клас навантаження", payloadSlices, "Немає даних по навантаженню.", ["#5f8ef5", "#7bc67f", "#ff9f43"])}
+      ${renderComparisonSliceDonutCard("Клас дальності", distanceSlices, "Немає даних по дальності.", ["#7bc67f", "#5f8ef5", "#b783ff"])}
+      ${renderComparisonSliceDonutCard("Камери", cameraSlices, "Немає даних по камерах.", ["#5f8ef5", "#d7dfef"])}
+    </div>
+  `;
+  const enduranceDonut = flightTimeSlices.length
+    ? renderComparisonSliceDonutCard("Тривалість польоту", flightTimeSlices, "Немає даних по часу польоту.", ["#67b4ff", "#7bc67f", "#ffb14d"])
+    : "";
   const profileCards = featuredProfiles.slice(0, 2).map(profile=>
     renderComparisonCompactCards(
       `Ще моделі: ${profile.config.label}`,
@@ -3875,11 +3966,13 @@ function buildComparisonAnalyticsModalHtml(rows, title=""){
     return `
       <div class="staffing-analytics-modal comparison-analytics-modal">
         ${summaryGrid}
+        ${overviewDonuts}
         ${technicalLeaders}
         ${practicalLeaders}
         <div class="control-grid staffing-analytics-sections">
           ${profileCards}
         </div>
+        ${enduranceDonut}
         ${overallCards}
       </div>
     `;
