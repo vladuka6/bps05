@@ -3245,7 +3245,9 @@ function detectComparisonColumns(headerRow){
 
     const hasWind = /вітр|вiтр/.test(header);
     const hasDeploy = /розгортан/.test(header);
-    const hasFlight = /польот|тривалість польоту|час польоту/.test(header);
+    const hasFlightTime = /((час|тривалість).*(польот|польоту))|((польот|польоту).*(час|тривалість))/.test(header);
+    const hasFlightHeight = /((висот|стеля).*(польот|польоту))|((польот|польоту).*(висот|стеля))/.test(header);
+    const hasFlightDistance = /((дальн|радіус).*(польот|польоту))|((польот|польоту).*(дальн|радіус))/.test(header);
 
     if(result.vendor < 0 && /(виробник|компан|постачальник|бренд)/.test(header)){
       result.vendor = idx;
@@ -3282,7 +3284,7 @@ function detectComparisonColumns(headerRow){
       return;
     }
 
-    if(result.distance < 0 && /(дальність польоту|дальність корисним|макс дальність|дальність км)/.test(header)){
+    if(result.distance < 0 && (hasFlightDistance || /(дальність корисним|макс дальність|дальність км)/.test(header))){
       result.distance = idx;
       return;
     }
@@ -3302,12 +3304,12 @@ function detectComparisonColumns(headerRow){
       return;
     }
 
-    if(result.flightTime < 0 && hasFlight && !hasDeploy){
+    if(result.flightTime < 0 && hasFlightTime && !hasDeploy){
       result.flightTime = idx;
       return;
     }
 
-    if(result.height < 0 && /(висота польоту|стеля|висота)/.test(header)){
+    if(result.height < 0 && (hasFlightHeight || /(висота польоту|стеля)/.test(header))){
       result.height = idx;
       return;
     }
