@@ -3528,22 +3528,23 @@ function buildComparisonAnalytics(rows){
 function renderComparisonTopList(title, rows, metricKey, metricLabel, unit=""){
 
   return `
-    <div class="item analytics-block staffing-analytics-list">
+    <div class="item analytics-block comparison-compact-section">
       <div class="row"><div class="name">${htmlesc(title)}</div></div>
-      <ul class="report-list">
+      <div class="comparison-compact-grid">
         ${rows.length
-          ? rows.map(item=>`
-              <li>
-                <div class="report-line">
-                  <span class="report-strong">${htmlesc(item.name)}</span>
-                  <span class="badge b-blue mono">${fmtNum(item[metricKey])}${unit}</span>
+          ? rows.slice(0, 5).map((item, index)=>`
+              <div class="comparison-compact-card">
+                <div class="comparison-compact-rank mono">${index + 1}</div>
+                <div class="comparison-compact-main">
+                  <div class="comparison-compact-title">${htmlesc(item.name)}</div>
+                  <div class="comparison-compact-meta">${metricLabel}: ${fmtNum(item[metricKey])}${unit}${item.vendor ? ` · ${htmlesc(item.vendor)}` : ""}</div>
                 </div>
-                <div class="report-meta">${metricLabel}: ${fmtNum(item[metricKey])}${unit}${item.vendor ? ` · Виробник: ${htmlesc(item.vendor)}` : ""}</div>
-              </li>
+                <div class="badge b-blue mono">${fmtNum(item[metricKey])}${unit}</div>
+              </div>
             `).join("")
-          : `<li><div class="hint">Даних для цього рейтингу поки немає.</div></li>`
+          : `<div class="hint">Даних для цього рейтингу поки немає.</div>`
         }
-      </ul>
+      </div>
     </div>
   `;
 
@@ -3552,22 +3553,23 @@ function renderComparisonTopList(title, rows, metricKey, metricLabel, unit=""){
 function renderComparisonTopListAsc(title, rows, metricKey, metricLabel, unit=""){
 
   return `
-    <div class="item analytics-block staffing-analytics-list">
+    <div class="item analytics-block comparison-compact-section">
       <div class="row"><div class="name">${htmlesc(title)}</div></div>
-      <ul class="report-list">
+      <div class="comparison-compact-grid">
         ${rows.length
-          ? rows.map(item=>`
-              <li>
-                <div class="report-line">
-                  <span class="report-strong">${htmlesc(item.name)}</span>
-                  <span class="badge b-ok mono">${fmtNum(item[metricKey])}${unit}</span>
+          ? rows.slice(0, 5).map((item, index)=>`
+              <div class="comparison-compact-card">
+                <div class="comparison-compact-rank mono">${index + 1}</div>
+                <div class="comparison-compact-main">
+                  <div class="comparison-compact-title">${htmlesc(item.name)}</div>
+                  <div class="comparison-compact-meta">${metricLabel}: ${fmtNum(item[metricKey])}${unit}${item.vendor ? ` · ${htmlesc(item.vendor)}` : ""}</div>
                 </div>
-                <div class="report-meta">${metricLabel}: ${fmtNum(item[metricKey])}${unit}${item.vendor ? ` · Виробник: ${htmlesc(item.vendor)}` : ""}</div>
-              </li>
+                <div class="badge b-ok mono">${fmtNum(item[metricKey])}${unit}</div>
+              </div>
             `).join("")
-          : `<li><div class="hint">Даних для цього рейтингу поки немає.</div></li>`
+          : `<div class="hint">Даних для цього рейтингу поки немає.</div>`
         }
-      </ul>
+      </div>
     </div>
   `;
 
@@ -3662,7 +3664,6 @@ function buildComparisonAnalyticsModalHtml(rows, title=""){
 
   const summaryGrid = `
     <div class="report-grid staffing-analytics-kpis">
-      <div class="report-tile"><div class="k">Таблиця</div><div class="v">${htmlesc(title || "Порівняння")}</div><div class="s">${items.length} позицій</div></div>
       <div class="report-tile"><div class="k">Сер. ціна БпАК</div><div class="v mono">${fmtNum(avgSystemPrice)}</div><div class="s">грн</div></div>
       <div class="report-tile"><div class="k">Макс. дальність</div><div class="v mono">${maxDistance ? fmtNum(maxDistance.distance) : "0"}</div><div class="s">${maxDistance ? htmlesc(maxDistance.name) : "—"}</div></div>
       <div class="report-tile"><div class="k">Макс. навантаження</div><div class="v mono">${maxPayload ? fmtNum(maxPayload.payload) : "0"}</div><div class="s">${maxPayload ? htmlesc(maxPayload.name) : "—"}</div></div>
