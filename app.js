@@ -3376,7 +3376,154 @@ function normalizeComparisonMetric(value, stat, inverse=false){
 
 }
 
-function buildComparisonAnalytics(rows){
+function calculateComparisonProfileScore(item, metricStats, weights){
+
+  let weightedSum = 0;
+  let totalWeight = 0;
+
+  (weights || []).forEach(metric=>{
+    if(metric.kind === "flag"){
+      weightedSum += (item?.[metric.key] ? 1 : 0) * metric.weight;
+      totalWeight += metric.weight;
+      return;
+    }
+
+    const score = normalizeComparisonMetric(item?.[metric.key], metricStats?.[metric.key], !!metric.inverse);
+    if(score == null) return;
+    weightedSum += score * metric.weight;
+    totalWeight += metric.weight;
+  });
+
+  return totalWeight > 0 ? Math.round((weightedSum / totalWeight) * 100) : 0;
+
+}
+
+const COMPARISON_PROFILE_CONFIG = {
+  universal: {
+    label: "Універсальний профіль",
+    shortLabel: "Універсальний",
+    tone: "blue",
+    weights: [
+      {key:"payload", weight:0.18, inverse:false},
+      {key:"distance", weight:0.2, inverse:false},
+      {key:"speed", weight:0.12, inverse:false},
+      {key:"flightTime", weight:0.15, inverse:false},
+      {key:"radius", weight:0.1, inverse:false},
+      {key:"height", weight:0.07, inverse:false},
+      {key:"wind", weight:0.08, inverse:false},
+      {key:"systemPrice", weight:0.06, inverse:true},
+      {key:"deployTime", weight:0.04, inverse:true},
+    ],
+  },
+  strike_multirotor: {
+    label: "Ударний профіль",
+    shortLabel: "Ударний",
+    tone: "warn",
+    weights: [
+      {key:"payload", weight:0.24, inverse:false},
+      {key:"distance", weight:0.18, inverse:false},
+      {key:"speed", weight:0.12, inverse:false},
+      {key:"radius", weight:0.12, inverse:false},
+      {key:"flightTime", weight:0.08, inverse:false},
+      {key:"wind", weight:0.08, inverse:false},
+      {key:"height", weight:0.04, inverse:false},
+      {key:"deployTime", weight:0.06, inverse:true},
+      {key:"systemPrice", weight:0.04, inverse:true},
+      {kind:"flag", key:"codified", weight:0.02},
+      {kind:"flag", key:"thermal", weight:0.02},
+    ],
+  },
+  recon_fixed_wing: {
+    label: "Розвідник літакового типу",
+    shortLabel: "Розвідка",
+    tone: "blue",
+    weights: [
+      {key:"flightTime", weight:0.24, inverse:false},
+      {key:"distance", weight:0.2, inverse:false},
+      {key:"radius", weight:0.18, inverse:false},
+      {key:"speed", weight:0.08, inverse:false},
+      {key:"wind", weight:0.08, inverse:false},
+      {key:"height", weight:0.06, inverse:false},
+      {key:"deployTime", weight:0.05, inverse:true},
+      {key:"systemPrice", weight:0.05, inverse:true},
+      {kind:"flag", key:"thermal", weight:0.04},
+      {kind:"flag", key:"codified", weight:0.02},
+    ],
+  },
+  interceptor: {
+    label: "Профіль перехоплення",
+    shortLabel: "Перехоплення",
+    tone: "warn",
+    weights: [
+      {key:"speed", weight:0.24, inverse:false},
+      {key:"distance", weight:0.18, inverse:false},
+      {key:"radius", weight:0.16, inverse:false},
+      {key:"flightTime", weight:0.1, inverse:false},
+      {key:"height", weight:0.1, inverse:false},
+      {key:"wind", weight:0.08, inverse:false},
+      {key:"deployTime", weight:0.06, inverse:true},
+      {key:"systemPrice", weight:0.04, inverse:true},
+      {kind:"flag", key:"codified", weight:0.02},
+      {kind:"flag", key:"thermal", weight:0.02},
+    ],
+  },
+  logistics: {
+    label: "Логістичний профіль",
+    shortLabel: "Логістика",
+    tone: "ok",
+    weights: [
+      {key:"payload", weight:0.28, inverse:false},
+      {key:"distance", weight:0.16, inverse:false},
+      {key:"flightTime", weight:0.14, inverse:false},
+      {key:"radius", weight:0.1, inverse:false},
+      {key:"wind", weight:0.08, inverse:false},
+      {key:"deployTime", weight:0.08, inverse:true},
+      {key:"systemPrice", weight:0.12, inverse:true},
+      {kind:"flag", key:"codified", weight:0.02},
+      {kind:"flag", key:"thermal", weight:0.02},
+    ],
+  },
+  value: {
+    label: "Ціна / можливості",
+    shortLabel: "Ціна / можливості",
+    tone: "ok",
+    weights: [
+      {key:"payload", weight:0.16, inverse:false},
+      {key:"distance", weight:0.16, inverse:false},
+      {key:"speed", weight:0.08, inverse:false},
+      {key:"flightTime", weight:0.12, inverse:false},
+      {key:"radius", weight:0.08, inverse:false},
+      {key:"wind", weight:0.06, inverse:false},
+      {key:"systemPrice", weight:0.24, inverse:true},
+      {key:"deployTime", weight:0.06, inverse:true},
+      {kind:"flag", key:"codified", weight:0.02},
+      {kind:"flag", key:"thermal", weight:0.02},
+    ],
+  },
+};
+
+const COMPARISON_SCENARIO_PROFILES = {
+  default: ["universal", "value"],
+  strike_multirotor: ["strike_multirotor", "value", "universal"],
+  recon_fixed_wing: ["recon_fixed_wing", "value", "universal"],
+  interceptor: ["interceptor", "value", "universal"],
+  logistics: ["logistics", "value", "universal"],
+};
+
+function detectComparisonScenario(title="", items=[]){
+
+  const source = `${title || ""} ${(items || []).map(item=>item?.name || "").join(" ")}`.toLowerCase();
+
+  if(/перехоп|шахед|інтерцеп|intercept/.test(source)) return "interceptor";
+  if(/розвід|літаков|крил|fixed wing|fw\b/.test(source)) return "recon_fixed_wing";
+  if(/логіст|транспорт|вантаж/.test(source)) return "logistics";
+  if(/удар|бомбер|мультиротор|multirotor/.test(source)) return "strike_multirotor";
+
+  return "default";
+
+}
+
+function buildComparisonAnalytics(rows, title=""){
 
   const grid = Array.isArray(rows) ? rows : [];
   if(grid.length < 2) return null;
@@ -3456,46 +3603,38 @@ function buildComparisonAnalytics(rows){
   const thermalCount = items.filter(item=>item.thermal).length;
   const vendors = Array.from(new Set(items.map(item=>item.vendor).filter(Boolean)));
   const metricStats = buildComparisonMetricStats(items, ["payload", "distance", "speed", "flightTime", "radius", "height", "wind", "systemPrice", "deployTime"]);
+  const scenario = detectComparisonScenario(title, items);
+  const scenarioProfiles = COMPARISON_SCENARIO_PROFILES[scenario] || COMPARISON_SCENARIO_PROFILES.default;
+  const profileScores = {};
+  const profileRankings = {};
 
-  const overallWeights = [
-    {key:"payload", weight:0.18, inverse:false},
-    {key:"distance", weight:0.2, inverse:false},
-    {key:"speed", weight:0.12, inverse:false},
-    {key:"flightTime", weight:0.15, inverse:false},
-    {key:"radius", weight:0.1, inverse:false},
-    {key:"height", weight:0.07, inverse:false},
-    {key:"wind", weight:0.08, inverse:false},
-    {key:"systemPrice", weight:0.06, inverse:true},
-    {key:"deployTime", weight:0.04, inverse:true},
-  ];
-
-  items.forEach(item=>{
-    let weightedSum = 0;
-    let totalWeight = 0;
-
-    overallWeights.forEach(metric=>{
-      const score = normalizeComparisonMetric(item[metric.key], metricStats[metric.key], metric.inverse);
-      if(score == null) return;
-      weightedSum += score * metric.weight;
-      totalWeight += metric.weight;
+  Object.entries(COMPARISON_PROFILE_CONFIG).forEach(([profileId, profile])=>{
+    const scoreKey = `${profileId}Score`;
+    items.forEach(item=>{
+      item[scoreKey] = calculateComparisonProfileScore(item, metricStats, profile.weights);
     });
-
-    item.overallScore = totalWeight > 0 ? Math.round((weightedSum / totalWeight) * 100) : 0;
+    profileScores[profileId] = scoreKey;
+    profileRankings[profileId] = items
+      .slice()
+      .sort((a,b)=>(b[scoreKey] || 0) - (a[scoreKey] || 0))
+      .slice(0, 8);
   });
 
-  const overallTop = items
-    .slice()
-    .sort((a,b)=>(b.overallScore || 0) - (a.overallScore || 0))
-    .slice(0, 8);
+  const overallTop = profileRankings.universal || [];
   const bestOverall = overallTop[0] || null;
-
-  const distanceDonut = buildEvalSlices(
-    topDistance.slice(0, 5).map(item=>({label:item.name, value:item.distance || 0})),
-    ["#5f8ef5", "#6fbf73", "#ff9f43", "#b783ff", "#ff6b8b"]
-  );
+  const featuredProfiles = scenarioProfiles.map(profileId=>({
+    id: profileId,
+    config: COMPARISON_PROFILE_CONFIG[profileId],
+    scoreKey: profileScores[profileId],
+    top: profileRankings[profileId] || [],
+    best: (profileRankings[profileId] || [])[0] || null,
+  })).filter(item=>item?.config);
 
   return {
     items,
+    scenario,
+    scenarioProfiles,
+    featuredProfiles,
     avgSystemPrice,
     maxDistance,
     maxPayload,
@@ -3517,7 +3656,6 @@ function buildComparisonAnalytics(rows){
     codifiedCount,
     thermalCount,
     vendorCount: vendors.length,
-    distanceDonut,
   };
 
 }
@@ -3623,9 +3761,38 @@ function renderComparisonCompactCards(title, rows, metricKey, unit="", tone="blu
 
 }
 
+function renderComparisonLeaderCards(title, cards){
+
+  return `
+    <div class="item analytics-block comparison-compact-section">
+      <div class="row"><div class="name">${htmlesc(title)}</div></div>
+      <div class="comparison-leader-grid">
+        ${cards.filter(card=>card && card.item).map(card=>{
+          const item = card.item;
+          const value = Number.isFinite(card.value) ? fmtNum(card.value) : "—";
+          const unit = card.unit || "";
+          const tone = ["blue","ok","warn"].includes(card.tone) ? card.tone : "blue";
+          const meta = card.meta || `${card.metricLabel}: ${value}${unit}${item.vendor ? ` · ${htmlesc(item.vendor)}` : ""}`;
+          return `
+            <div class="comparison-leader-card">
+              <div class="comparison-leader-head">
+                <div class="comparison-leader-label">${htmlesc(card.label)}</div>
+                <div class="badge b-${tone} mono">${value}${unit}</div>
+              </div>
+              <div class="comparison-leader-title">${htmlesc(item.name)}</div>
+              <div class="comparison-leader-meta">${meta}</div>
+            </div>
+          `;
+        }).join("") || `<div class="hint">Даних для цього блоку поки немає.</div>`}
+      </div>
+    </div>
+  `;
+
+}
+
 function buildComparisonAnalyticsModalHtml(rows, title=""){
 
-  const analytics = buildComparisonAnalytics(rows);
+  const analytics = buildComparisonAnalytics(rows, title);
 
   if(!analytics){
     return `
@@ -3633,9 +3800,9 @@ function buildComparisonAnalyticsModalHtml(rows, title=""){
     `;
   }
 
-  const {
-    items,
-    avgSystemPrice,
+    const {
+      items,
+      avgSystemPrice,
     maxDistance,
     maxPayload,
     maxSpeed,
@@ -3649,81 +3816,75 @@ function buildComparisonAnalyticsModalHtml(rows, title=""){
     topRadius,
     topHeight,
     topWind,
-    cheapestSystems,
-    fastestDeploy,
-    overallTop,
-    bestOverall,
-    codifiedCount,
-    thermalCount,
-    vendorCount,
-    distanceDonut,
-  } = analytics;
+      cheapestSystems,
+      fastestDeploy,
+      overallTop,
+      bestOverall,
+      featuredProfiles,
+      codifiedCount,
+      thermalCount,
+      vendorCount,
+    } = analytics;
 
-  const summaryGrid = `
-    <div class="report-grid staffing-analytics-kpis">
-      <div class="report-tile"><div class="k">Сер. ціна БпАК</div><div class="v mono">${fmtNum(avgSystemPrice)}</div><div class="s">грн</div></div>
+    const primaryProfile = featuredProfiles[0] || null;
+    const secondaryProfile = featuredProfiles[1] || null;
+
+    const summaryGrid = `
+      <div class="report-grid staffing-analytics-kpis">
+        <div class="report-tile"><div class="k">Сер. ціна БпАК</div><div class="v mono">${fmtNum(avgSystemPrice)}</div><div class="s">грн</div></div>
       <div class="report-tile"><div class="k">Макс. дальність</div><div class="v mono">${maxDistance ? fmtNum(maxDistance.distance) : "0"}</div><div class="s">${maxDistance ? htmlesc(maxDistance.name) : "—"}</div></div>
-      <div class="report-tile"><div class="k">Макс. навантаження</div><div class="v mono">${maxPayload ? fmtNum(maxPayload.payload) : "0"}</div><div class="s">${maxPayload ? htmlesc(maxPayload.name) : "—"}</div></div>
-      <div class="report-tile"><div class="k">Макс. швидкість</div><div class="v mono">${maxSpeed ? fmtNum(maxSpeed.speed) : "0"}</div><div class="s">${maxSpeed ? htmlesc(maxSpeed.name) : "—"}</div></div>
-      <div class="report-tile"><div class="k">Макс. радіус</div><div class="v mono">${maxRadius ? fmtNum(maxRadius.radius) : "0"}</div><div class="s">${maxRadius ? htmlesc(maxRadius.name) : "—"}</div></div>
-      <div class="report-tile"><div class="k">Макс. висота</div><div class="v mono">${maxHeight ? fmtNum(maxHeight.height) : "0"}</div><div class="s">${maxHeight ? htmlesc(maxHeight.name) : "—"}</div></div>
-      <div class="report-tile"><div class="k">Стійкість до вітру</div><div class="v mono">${maxWind ? fmtNum(maxWind.wind) : "0"}</div><div class="s">${maxWind ? htmlesc(maxWind.name) : "—"}</div></div>
-      <div class="report-tile"><div class="k">Загальний рейтинг</div><div class="v mono">${bestOverall ? fmtNum(bestOverall.overallScore) : "0"}</div><div class="s">${bestOverall ? htmlesc(bestOverall.name) : "—"}</div></div>
-      <div class="report-tile"><div class="k">Кодифіковано</div><div class="v mono">${fmtNum(codifiedCount)}</div><div class="s">із ${fmtNum(items.length)}</div></div>
-      <div class="report-tile"><div class="k">З тепловізором</div><div class="v mono">${fmtNum(thermalCount)}</div><div class="s">позицій</div></div>
-      <div class="report-tile"><div class="k">Виробників</div><div class="v mono">${fmtNum(vendorCount)}</div><div class="s">у таблиці</div></div>
-    </div>
-  `;
+        <div class="report-tile"><div class="k">Макс. навантаження</div><div class="v mono">${maxPayload ? fmtNum(maxPayload.payload) : "0"}</div><div class="s">${maxPayload ? htmlesc(maxPayload.name) : "—"}</div></div>
+        <div class="report-tile"><div class="k">Макс. швидкість</div><div class="v mono">${maxSpeed ? fmtNum(maxSpeed.speed) : "0"}</div><div class="s">${maxSpeed ? htmlesc(maxSpeed.name) : "—"}</div></div>
+        <div class="report-tile"><div class="k">Макс. радіус</div><div class="v mono">${maxRadius ? fmtNum(maxRadius.radius) : "0"}</div><div class="s">${maxRadius ? htmlesc(maxRadius.name) : "—"}</div></div>
+        <div class="report-tile"><div class="k">Макс. висота</div><div class="v mono">${maxHeight ? fmtNum(maxHeight.height) : "0"}</div><div class="s">${maxHeight ? htmlesc(maxHeight.name) : "—"}</div></div>
+        <div class="report-tile"><div class="k">Стійкість до вітру</div><div class="v mono">${maxWind ? fmtNum(maxWind.wind) : "0"}</div><div class="s">${maxWind ? htmlesc(maxWind.name) : "—"}</div></div>
+        <div class="report-tile"><div class="k">${primaryProfile ? htmlesc(primaryProfile.config.shortLabel) : "Профіль 1"}</div><div class="v mono">${primaryProfile?.best ? fmtNum(primaryProfile.best[primaryProfile.scoreKey]) : "0"}</div><div class="s">${primaryProfile?.best ? htmlesc(primaryProfile.best.name) : "—"}</div></div>
+        <div class="report-tile"><div class="k">${secondaryProfile ? htmlesc(secondaryProfile.config.shortLabel) : "Профіль 2"}</div><div class="v mono">${secondaryProfile?.best ? fmtNum(secondaryProfile.best[secondaryProfile.scoreKey]) : "0"}</div><div class="s">${secondaryProfile?.best ? htmlesc(secondaryProfile.best.name) : "—"}</div></div>
+        <div class="report-tile"><div class="k">Кодифіковано</div><div class="v mono">${fmtNum(codifiedCount)}</div><div class="s">із ${fmtNum(items.length)}</div></div>
+        <div class="report-tile"><div class="k">З тепловізором</div><div class="v mono">${fmtNum(thermalCount)}</div><div class="s">позицій</div></div>
+        <div class="report-tile"><div class="k">Виробників</div><div class="v mono">${fmtNum(vendorCount)}</div><div class="s">у таблиці</div></div>
+      </div>
+    `;
 
-  const distanceDonutCard = renderComparisonDonutCard("Топ по дальності", topDistance, "distance", " км", "Поки немає даних по дальності.");
-  const payloadDonutCard = renderComparisonDonutCard("Топ по навантаженню", topPayload, "payload", " кг", "Поки немає даних по навантаженню.");
-  const speedDonutCard = renderComparisonDonutCard("Топ по швидкості", topSpeed, "speed", " км/год", "Поки немає даних по швидкості.");
-  const flightTimeDonutCard = renderComparisonDonutCard("Топ по часу польоту", topFlightTime, "flightTime", " хв", "Поки немає даних по часу польоту.");
+    const technicalLeaders = renderComparisonLeaderCards("Лідери за технічними критеріями", [
+    maxDistance ? {label:"Дальність", item:maxDistance, value:maxDistance.distance, metricLabel:"Дальність", unit:" км"} : null,
+    maxPayload ? {label:"Навантаження", item:maxPayload, value:maxPayload.payload, metricLabel:"Навантаження", unit:" кг"} : null,
+    maxSpeed ? {label:"Швидкість", item:maxSpeed, value:maxSpeed.speed, metricLabel:"Швидкість", unit:" км/год"} : null,
+    topFlightTime[0] ? {label:"Час польоту", item:topFlightTime[0], value:topFlightTime[0].flightTime, metricLabel:"Час польоту", unit:" хв"} : null,
+    maxRadius ? {label:"Радіус", item:maxRadius, value:maxRadius.radius, metricLabel:"Радіус", unit:" км"} : null,
+    maxHeight ? {label:"Висота", item:maxHeight, value:maxHeight.height, metricLabel:"Висота", unit:" м"} : null,
+    maxWind ? {label:"Стійкість до вітру", item:maxWind, value:maxWind.wind, metricLabel:"Вітер", unit:" м/с"} : null,
+    ]);
+    const practicalLeaders = renderComparisonLeaderCards("Практичні орієнтири", [
+    cheapestSystems[0] ? {label:"Найдешевший комплекс", item:cheapestSystems[0], value:cheapestSystems[0].systemPrice, metricLabel:"Ціна", unit:" грн", tone:"ok"} : null,
+    fastestDeploy[0] ? {label:"Найшвидше розгортання", item:fastestDeploy[0], value:fastestDeploy[0].deployTime, metricLabel:"Розгортання", unit:" хв", tone:"ok"} : null,
+    primaryProfile?.best ? {label:primaryProfile.config.label, item:primaryProfile.best, value:primaryProfile.best[primaryProfile.scoreKey], metricLabel:primaryProfile.config.label, unit:"", tone:primaryProfile.config.tone || "blue"} : null,
+    secondaryProfile?.best ? {label:secondaryProfile.config.label, item:secondaryProfile.best, value:secondaryProfile.best[secondaryProfile.scoreKey], metricLabel:secondaryProfile.config.label, unit:"", tone:secondaryProfile.config.tone || "blue"} : null,
+    ]);
+  const profileCards = featuredProfiles.slice(0, 2).map(profile=>
+    renderComparisonCompactCards(
+      `Ще моделі: ${profile.config.label}`,
+      profile.top.slice(1, 5),
+      profile.scoreKey,
+      "",
+      profile.config.tone || "blue"
+    )
+  ).join("");
+  const overallCards = renderComparisonCompactCards("Ще сильні моделі для розгляду", overallTop.slice(0, 4), "universalScore", "", "blue");
 
-  const distanceList = renderComparisonTopList("Найбільша дальність", topDistance, "distance", "Дальність", " км");
-  const payloadList = renderComparisonTopList("Найбільше навантаження", topPayload, "payload", "Навантаження", " кг");
-  const speedList = renderComparisonTopList("Найвища швидкість", topSpeed, "speed", "Швидкість", " км/год");
-  const flightTimeList = renderComparisonTopList("Найдовший час польоту", topFlightTime, "flightTime", "Час польоту", " хв");
-  const radiusList = renderComparisonTopList("Найбільший радіус", topRadius, "radius", "Радіус", " км");
-  const heightList = renderComparisonTopList("Найбільша висота", topHeight, "height", "Висота", " м");
-  const windList = renderComparisonTopList("Найкраща стійкість до вітру", topWind, "wind", "Вітер", " м/с");
-  const cheapestCards = renderComparisonCompactCards("Найдешевші комплекси", cheapestSystems, "systemPrice", " грн", "ok");
-  const deployCards = renderComparisonCompactCards("Найшвидше розгортання", fastestDeploy, "deployTime", " хв", "ok");
-  const overallCards = renderComparisonCompactCards("Загальний рейтинг моделей", overallTop, "overallScore", "", "blue");
-
-  return `
-    <div class="staffing-analytics-modal comparison-analytics-modal">
-      ${summaryGrid}
-      <div class="comparison-donut-grid">
-        ${distanceDonutCard}
-        ${payloadDonutCard}
-        ${speedDonutCard}
-        ${flightTimeDonutCard}
-      </div>
-      <div class="control-grid staffing-analytics-sections">
-        ${distanceList}
-        ${payloadList}
-      </div>
-      <div class="control-grid staffing-analytics-sections">
-        ${speedList}
-        ${flightTimeList}
-      </div>
-      <div class="control-grid staffing-analytics-sections">
-        ${radiusList}
-        ${heightList}
-      </div>
-      <div class="control-grid staffing-analytics-sections">
-        ${windList}
-        ${deployCards}
-      </div>
-      <div class="control-grid staffing-analytics-sections">
-        ${cheapestCards}
+    return `
+      <div class="staffing-analytics-modal comparison-analytics-modal">
+        ${summaryGrid}
+        ${technicalLeaders}
+        ${practicalLeaders}
+        <div class="control-grid staffing-analytics-sections">
+          ${profileCards}
+        </div>
         ${overallCards}
       </div>
-    </div>
-  `;
+    `;
 
-}
+  }
 
 function openRenderedTableModal(key){
 
