@@ -2805,12 +2805,23 @@ function renderTaskDescWithTableToggle(text, label, opts={}){
 
   const previousTable = findPreviousStoredTableBlock(raw);
   const analyticsType = normalizeReferenceTableType(opts.analyticsType || opts.tableType || "");
-  const analyticsModalKey = (analyticsType === "staffing" && currentTable?.rows?.length)
-    ? registerRenderedTableModal(
+  let analyticsModalKey = "";
+
+  if(currentTable?.rows?.length){
+
+    if(analyticsType === "staffing"){
+      analyticsModalKey = registerRenderedTableModal(
         `Аналітика: ${opts.analyticsTitle || label || "Таблиця"}`,
         buildStaffingAnalyticsModalHtml(currentTable.rows, opts.analyticsTitle || label || "Таблиця")
-      )
-    : "";
+      );
+    } else if(analyticsType === "compare"){
+      analyticsModalKey = registerRenderedTableModal(
+        `Аналітика: ${opts.analyticsTitle || label || "Таблиця"}`,
+        buildComparisonAnalyticsModalHtml(currentTable.rows, opts.analyticsTitle || label || "Таблиця")
+      );
+    }
+
+  }
 
   const diffMeta = (currentTable && previousTable) ? tableDiffMeta(currentTable.rows, previousTable.rows) : null;
 
@@ -3203,6 +3214,317 @@ function buildStaffingAnalyticsModalHtml(rows, title=""){
         ${bestList}
       </div>
       ${modelsList}
+    </div>
+  `;
+
+}
+
+function detectComparisonColumns(headerRow){
+
+  const headers = (headerRow || []).map(normalizeAnalyticsHeader);
+  const result = {
+    name:-1,
+    model:-1,
+    vendor:-1,
+    systemPrice:-1,
+    unitPrice:-1,
+    quantity:-1,
+    payload:-1,
+    speed:-1,
+    radius:-1,
+    distance:-1,
+    flightTime:-1,
+    height:-1,
+    wind:-1,
+    deployTime:-1,
+    cameraType:-1,
+    codified:-1,
+  };
+
+  headers.forEach((header, idx)=>{
+
+    if(result.vendor < 0 && /(виробник|компан|постачальник|бренд)/.test(header)){
+      result.vendor = idx;
+      return;
+    }
+
+    if(result.name < 0 && /(найменування|назва виробу|назва бпак|назва моделі|модель|виріб)/.test(header)){
+      result.name = idx;
+      return;
+    }
+
+    if(result.model < 0 && /(найменування|назва виробу|назва бпак|назва моделі|модель|виріб)/.test(header)){
+      result.model = idx;
+      return;
+    }
+
+    if(result.systemPrice < 0 && /(орієнтовна вартість бпак|вартість бпак|ціна бпак|вартість комплексу|ціна комплексу)/.test(header)){
+      result.systemPrice = idx;
+      return;
+    }
+
+    if(result.unitPrice < 0 && /(орієнтовна вартість бпла|вартість бпла|ціна бпла)/.test(header)){
+      result.unitPrice = idx;
+      return;
+    }
+
+    if(result.quantity < 0 && /(кількість бпла|кількість у комплексі|кількість апаратів)/.test(header)){
+      result.quantity = idx;
+      return;
+    }
+
+    if(result.payload < 0 && /(корисне навантаження|вантаж|навантаження кг)/.test(header)){
+      result.payload = idx;
+      return;
+    }
+
+    if(result.distance < 0 && /(дальність польоту|дальність корисним|макс дальність|дальність км)/.test(header)){
+      result.distance = idx;
+      return;
+    }
+
+    if(result.radius < 0 && /(тактичний радіус|робочий радіус|радіус дії)/.test(header)){
+      result.radius = idx;
+      return;
+    }
+
+    if(result.speed < 0 && /(швидкість|крейсерська швидкість|максимальна швидкість)/.test(header)){
+      result.speed = idx;
+      return;
+    }
+
+    if(result.flightTime < 0 && /(час польоту|тривалість польоту|хв)/.test(header)){
+      result.flightTime = idx;
+      return;
+    }
+
+    if(result.height < 0 && /(висота польоту|стеля|висота)/.test(header)){
+      result.height = idx;
+      return;
+    }
+
+    if(result.wind < 0 && /(швидкість вітру|вітр|допустима швидкість вітру)/.test(header)){
+      result.wind = idx;
+      return;
+    }
+
+    if(result.deployTime < 0 && /(час розгортання|розгортання)/.test(header)){
+      result.deployTime = idx;
+      return;
+    }
+
+    if(result.cameraType < 0 && /(тип камери|камера|тепловіз|дневна|денна)/.test(header)){
+      result.cameraType = idx;
+      return;
+    }
+
+    if(result.codified < 0 && /(кодифікація|кодифік)/.test(header)){
+      result.codified = idx;
+    }
+
+  });
+
+  if(result.name < 0) result.name = result.model >= 0 ? result.model : 0;
+  if(result.model < 0) result.model = result.name;
+
+  return result;
+
+}
+
+function pickTopComparisonRows(items, key, limit=5){
+
+  return items
+    .filter(item=>Number.isFinite(item?.[key]))
+    .slice()
+    .sort((a,b)=>(b[key] || 0) - (a[key] || 0))
+    .slice(0, limit);
+
+}
+
+function buildComparisonAnalytics(rows){
+
+  const grid = Array.isArray(rows) ? rows : [];
+  if(grid.length < 2) return null;
+
+  const columns = detectComparisonColumns(grid[0]);
+
+  const items = grid.slice(1).map((row, index)=>{
+    const model = String(row?.[columns.model] || row?.[columns.name] || "").trim();
+    const vendor = columns.vendor >= 0 ? String(row?.[columns.vendor] || "").trim() : "";
+    const name = model || vendor || `Позиція ${index + 1}`;
+
+    if(isAnalyticsSummaryLabel(name)) return null;
+
+    const item = {
+      name,
+      vendor,
+      model,
+      systemPrice: columns.systemPrice >= 0 ? parseAnalyticsNumber(row?.[columns.systemPrice]) : null,
+      unitPrice: columns.unitPrice >= 0 ? parseAnalyticsNumber(row?.[columns.unitPrice]) : null,
+      quantity: columns.quantity >= 0 ? parseAnalyticsNumber(row?.[columns.quantity]) : null,
+      payload: columns.payload >= 0 ? parseAnalyticsNumber(row?.[columns.payload]) : null,
+      speed: columns.speed >= 0 ? parseAnalyticsNumber(row?.[columns.speed]) : null,
+      radius: columns.radius >= 0 ? parseAnalyticsNumber(row?.[columns.radius]) : null,
+      distance: columns.distance >= 0 ? parseAnalyticsNumber(row?.[columns.distance]) : null,
+      flightTime: columns.flightTime >= 0 ? parseAnalyticsNumber(row?.[columns.flightTime]) : null,
+      height: columns.height >= 0 ? parseAnalyticsNumber(row?.[columns.height]) : null,
+      wind: columns.wind >= 0 ? parseAnalyticsNumber(row?.[columns.wind]) : null,
+      deployTime: columns.deployTime >= 0 ? parseAnalyticsNumber(row?.[columns.deployTime]) : null,
+      cameraType: columns.cameraType >= 0 ? String(row?.[columns.cameraType] || "").trim() : "",
+      codifiedRaw: columns.codified >= 0 ? String(row?.[columns.codified] || "").trim().toLowerCase() : "",
+    };
+
+    const hasData = [
+      item.systemPrice, item.unitPrice, item.quantity, item.payload, item.speed, item.radius,
+      item.distance, item.flightTime, item.height, item.wind, item.deployTime
+    ].some(v=>Number.isFinite(v)) || !!item.cameraType || !!item.vendor || !!item.model;
+
+    if(!hasData) return null;
+
+    item.codified = /^(так|є|yes|true|1)$/i.test(item.codifiedRaw);
+    item.thermal = /тепловіз|thermal|ir/i.test(item.cameraType);
+
+    return item;
+  }).filter(Boolean);
+
+  if(!items.length) return null;
+
+  const avgSystemPriceRows = items.filter(item=>Number.isFinite(item.systemPrice));
+  const avgSystemPrice = avgSystemPriceRows.length
+    ? avgSystemPriceRows.reduce((sum, item)=>sum + item.systemPrice, 0) / avgSystemPriceRows.length
+    : 0;
+
+  const maxDistance = pickTopComparisonRows(items, "distance", 1)[0] || null;
+  const maxPayload = pickTopComparisonRows(items, "payload", 1)[0] || null;
+  const maxSpeed = pickTopComparisonRows(items, "speed", 1)[0] || null;
+  const topDistance = pickTopComparisonRows(items, "distance", 6);
+  const topPayload = pickTopComparisonRows(items, "payload", 6);
+  const topSpeed = pickTopComparisonRows(items, "speed", 6);
+  const topFlightTime = pickTopComparisonRows(items, "flightTime", 6);
+  const codifiedCount = items.filter(item=>item.codified).length;
+  const thermalCount = items.filter(item=>item.thermal).length;
+  const vendors = Array.from(new Set(items.map(item=>item.vendor).filter(Boolean)));
+
+  const distanceDonut = buildEvalSlices(
+    topDistance.slice(0, 5).map(item=>({label:item.name, value:item.distance || 0})),
+    ["#5f8ef5", "#6fbf73", "#ff9f43", "#b783ff", "#ff6b8b"]
+  );
+
+  return {
+    items,
+    avgSystemPrice,
+    maxDistance,
+    maxPayload,
+    maxSpeed,
+    topDistance,
+    topPayload,
+    topSpeed,
+    topFlightTime,
+    codifiedCount,
+    thermalCount,
+    vendorCount: vendors.length,
+    distanceDonut,
+  };
+
+}
+
+function renderComparisonTopList(title, rows, metricKey, metricLabel, unit=""){
+
+  return `
+    <div class="item analytics-block staffing-analytics-list">
+      <div class="row"><div class="name">${htmlesc(title)}</div></div>
+      <ul class="report-list">
+        ${rows.length
+          ? rows.map(item=>`
+              <li>
+                <div class="report-line">
+                  <span class="report-strong">${htmlesc(item.name)}</span>
+                  <span class="badge b-blue mono">${fmtNum(item[metricKey])}${unit}</span>
+                </div>
+                <div class="report-meta">${metricLabel}: ${fmtNum(item[metricKey])}${unit}${item.vendor ? ` · Виробник: ${htmlesc(item.vendor)}` : ""}</div>
+              </li>
+            `).join("")
+          : `<li><div class="hint">Даних для цього рейтингу поки немає.</div></li>`
+        }
+      </ul>
+    </div>
+  `;
+
+}
+
+function buildComparisonAnalyticsModalHtml(rows, title=""){
+
+  const analytics = buildComparisonAnalytics(rows);
+
+  if(!analytics){
+    return `
+      <div class="hint">Не вдалося розпізнати таблицю порівняння. Очікуються колонки на кшталт: найменування, виробник, ціна, дальність, навантаження, швидкість.</div>
+    `;
+  }
+
+  const {
+    items,
+    avgSystemPrice,
+    maxDistance,
+    maxPayload,
+    maxSpeed,
+    topDistance,
+    topPayload,
+    topSpeed,
+    topFlightTime,
+    codifiedCount,
+    thermalCount,
+    vendorCount,
+    distanceDonut,
+  } = analytics;
+
+  const summaryGrid = `
+    <div class="report-grid staffing-analytics-kpis">
+      <div class="report-tile"><div class="k">Таблиця</div><div class="v">${htmlesc(title || "Порівняння")}</div><div class="s">${items.length} позицій</div></div>
+      <div class="report-tile"><div class="k">Сер. ціна БпАК</div><div class="v mono">${fmtNum(avgSystemPrice)}</div><div class="s">грн</div></div>
+      <div class="report-tile"><div class="k">Макс. дальність</div><div class="v mono">${maxDistance ? fmtNum(maxDistance.distance) : "0"}</div><div class="s">${maxDistance ? htmlesc(maxDistance.name) : "—"}</div></div>
+      <div class="report-tile"><div class="k">Макс. навантаження</div><div class="v mono">${maxPayload ? fmtNum(maxPayload.payload) : "0"}</div><div class="s">${maxPayload ? htmlesc(maxPayload.name) : "—"}</div></div>
+      <div class="report-tile"><div class="k">Макс. швидкість</div><div class="v mono">${maxSpeed ? fmtNum(maxSpeed.speed) : "0"}</div><div class="s">${maxSpeed ? htmlesc(maxSpeed.name) : "—"}</div></div>
+      <div class="report-tile"><div class="k">Кодифіковано</div><div class="v mono">${fmtNum(codifiedCount)}</div><div class="s">із ${fmtNum(items.length)}</div></div>
+      <div class="report-tile"><div class="k">З тепловізором</div><div class="v mono">${fmtNum(thermalCount)}</div><div class="s">позицій</div></div>
+      <div class="report-tile"><div class="k">Виробників</div><div class="v mono">${fmtNum(vendorCount)}</div><div class="s">у таблиці</div></div>
+    </div>
+  `;
+
+  const distanceDonutCard = `
+    <div class="item analytics-block eval-donut-card">
+      <div class="row"><div class="name">Топ по дальності</div></div>
+      <div class="eval-donut-wrap">
+        <div class="eval-donut" style="background:${distanceDonut.gradient};"></div>
+        <div>
+          ${distanceDonut.legendRows.length
+            ? distanceDonut.legendRows.map(row=>`<div class="eval-legend-item"><span class="eval-legend-dot" style="background:${row.color}"></span><span>${htmlesc(row.label)}</span><b class="mono">${fmtNum(row.value)}</b><span class="mono">${row.percent}%</span></div>`).join("")
+            : `<div class="hint">Поки немає даних по дальності.</div>`
+          }
+        </div>
+      </div>
+    </div>
+  `;
+
+  const distanceList = renderComparisonTopList("Найбільша дальність", topDistance, "distance", "Дальність", " км");
+  const payloadList = renderComparisonTopList("Найбільше навантаження", topPayload, "payload", "Навантаження", " кг");
+  const speedList = renderComparisonTopList("Найвища швидкість", topSpeed, "speed", "Швидкість", " км/год");
+  const flightTimeList = renderComparisonTopList("Найдовший час польоту", topFlightTime, "flightTime", "Час польоту", " хв");
+
+  return `
+    <div class="staffing-analytics-modal">
+      ${summaryGrid}
+      <div class="eval-donut-grid eval-donut-grid-single">
+        ${distanceDonutCard}
+      </div>
+      <div class="control-grid staffing-analytics-sections">
+        ${distanceList}
+        ${payloadList}
+      </div>
+      <div class="control-grid staffing-analytics-sections">
+        ${speedList}
+        ${flightTimeList}
+      </div>
     </div>
   `;
 
