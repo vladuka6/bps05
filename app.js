@@ -4149,21 +4149,21 @@ function getTaskSourceForView(){
 
     if(deletedIds.has(String(dbTask?.id || ""))) continue;
 
-    if(!dbTask || !stateById.has(dbTask.id) || seen.has(dbTask.id)) continue;
+    if(!dbTask || seen.has(dbTask.id)) continue;
 
-    const stateTask = stateById.get(dbTask.id);
+    const stateTask = stateById.get(dbTask.id) || null;
 
     merged.push({
 
       ...dbTask,
 
-      ...stateTask,
+      ...(stateTask || {}),
 
-      category: stateTask.category || dbTask.category || null,
+      category: stateTask?.category || dbTask.category || null,
 
-      audience: stateTask.audience || dbTask.audience || null,
+      audience: stateTask?.audience || dbTask.audience || null,
 
-      annOrder: stateTask.annOrder ?? dbTask.annOrder ?? null,
+      annOrder: stateTask?.annOrder ?? dbTask.annOrder ?? null,
 
     });
 
