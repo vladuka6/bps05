@@ -2787,12 +2787,14 @@ function renderTaskDescWithTableToggle(text, label, opts={}){
       tables.length > 1 ? `${label || "Дані"} (${tables.length})` : (label || "Дані"),
       `<div class="rich-text">${tables.map(item=>renderStoredTableBlock(item.content)).join("")}</div>`
     );
-    const actionBits = [`
-      <div class="task-table-action-group">
-        <button class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${currentModalKey}">${tables.length > 1 ? `Дані (${tables.length})` : "Дані"}</button>
+    parts.push(`
+
+      <div class="task-table-toggle task-table-toggle-actions">
+        <button class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${currentModalKey}">${tables.length > 1 ? `Показати дані (${tables.length})` : "Показати дані"}</button>
         ${updatedShort ? `<span class="task-table-stamp mono">${htmlesc(updatedShort)}</span>` : ``}
       </div>
-    `];
+
+    `);
 
     if(diffMeta && diffMeta.changedCount){
       const diffModalKey = registerRenderedTableModal(
@@ -2800,22 +2802,16 @@ function renderTaskDescWithTableToggle(text, label, opts={}){
         `<div class="rich-text">${renderTableDiffBlock(currentTable.rows, previousTable.rows)}</div>`
       );
 
-      actionBits.push(`
-        <div class="task-table-action-group">
-          <button class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${diffModalKey}">Зміни</button>
+      parts.push(`
+
+        <div class="task-table-toggle task-table-toggle-actions task-table-diff-toggle">
+          <button class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${diffModalKey}">Показати зміни</button>
           <span class="task-table-diff-badge mono">${htmlesc(String(diffMeta.changedCount))}</span>
         </div>
+
       `);
 
       }
-
-    parts.push(`
-
-      <div class="task-table-toggle task-table-toggle-actions">
-        ${actionBits.join("")}
-      </div>
-
-    `);
 
   }
 
@@ -4149,21 +4145,21 @@ function getTaskSourceForView(){
 
     if(deletedIds.has(String(dbTask?.id || ""))) continue;
 
-    if(!dbTask || seen.has(dbTask.id)) continue;
+    if(!dbTask || !stateById.has(dbTask.id) || seen.has(dbTask.id)) continue;
 
-    const stateTask = stateById.get(dbTask.id) || null;
+    const stateTask = stateById.get(dbTask.id);
 
     merged.push({
 
       ...dbTask,
 
-      ...(stateTask || {}),
+      ...stateTask,
 
-      category: stateTask?.category || dbTask.category || null,
+      category: stateTask.category || dbTask.category || null,
 
-      audience: stateTask?.audience || dbTask.audience || null,
+      audience: stateTask.audience || dbTask.audience || null,
 
-      annOrder: stateTask?.annOrder ?? dbTask.annOrder ?? null,
+      annOrder: stateTask.annOrder ?? dbTask.annOrder ?? null,
 
     });
 
@@ -4469,7 +4465,7 @@ function canSeeAnnouncement(u, t){
 
   if(!u || !isAnnouncement(t)) return false;
 
-  if(u.role === "boss") return true;
+  if(u.role === "boss") return !(u.readOnly && t.audience === "staff");
 
   if(t.audience === "staff") return true;
 
@@ -5949,8 +5945,6 @@ const READ_ONLY_ALLOWED_TABS = new Set([
 
   ROUTES.CONTROL,
 
-  ROUTES.REPORTS,
-
   ROUTES.TASKS,
 
   ROUTES.WEEKLY,
@@ -5979,12 +5973,7 @@ function enforceReadOnlyNavigation(u){
 
   if(UI.route === ROUTES.PROFILE) UI.route = ROUTES.TASKS;
 
-  if(UI.tab === ROUTES.TASKS && UI.taskDeptFilter === "personal"){
-    UI.taskDeptFilter = "all";
-    UI.taskPersonalFilter = "tasks";
-  }
-
-  if(!READ_ONLY_ALLOWED_TABS.has(UI.tab)) {
+  if(UI.tab === ROUTES.CONTROL || UI.tab === ROUTES.REPORTS || !READ_ONLY_ALLOWED_TABS.has(UI.tab)) {
 
     UI.tab = ROUTES.TASKS;
 
@@ -12127,7 +12116,6 @@ function viewTasks(){
   const filter = UI.taskFilter;
 
   const deptFilter = UI.taskDeptFilter || "all";
-  const effectiveDeptFilter = (u.readOnly && deptFilter==="personal") ? "all" : deptFilter;
 
   const taskSearch = UI.taskSearch || "";
 
@@ -12135,9 +12123,9 @@ function viewTasks(){
 
   const annAudience = UI.taskAnnAudienceFilter || "all";
 
-  const showAnnouncementsScope = (u.role!=="boss") || (u.role==="boss" && effectiveDeptFilter==="personal");
+  const showAnnouncementsScope = (u.role!=="boss") || (u.role==="boss" && deptFilter==="personal");
 
-  const isPersonalScope = (u.role==="boss" && effectiveDeptFilter==="personal");
+  const isPersonalScope = (u.role==="boss" && deptFilter==="personal");
 
   const effectivePersonalFilter = showAnnouncementsScope ? personalFilter : "tasks";
 
@@ -12205,13 +12193,13 @@ function viewTasks(){
 
   if(u.role === "boss"){
 
-    if(effectiveDeptFilter === "personal"){
+    if(deptFilter === "personal"){
 
       tasks = tasks.filter(t=>t.type==="personal" || t.status==="на_перевірці");
 
-    } else if(effectiveDeptFilter !== "all"){
+    } else if(deptFilter !== "all"){
 
-      tasks = tasks.filter(t=>t.departmentId === effectiveDeptFilter);
+      tasks = tasks.filter(t=>t.departmentId === deptFilter);
 
     }
 
@@ -12219,7 +12207,7 @@ function viewTasks(){
 
 
 
-  const isDeptScope = (u.role!=="boss") || (u.role==="boss" && effectiveDeptFilter!=="all" && effectiveDeptFilter!=="personal");
+  const isDeptScope = (u.role!=="boss") || (u.role==="boss" && deptFilter!=="all" && deptFilter!=="personal");
 
   const taskSort = (a,b)=>{
 
@@ -12249,7 +12237,7 @@ function viewTasks(){
 
     };
 
-    if(u.role==="boss" && effectiveDeptFilter==="all"){
+    if(u.role==="boss" && deptFilter==="all"){
 
       const deptName = (t)=> t.departmentId ? (getDeptById(t.departmentId)?.name || "Відділ") : "Особисто";
 
@@ -12425,7 +12413,7 @@ function viewTasks(){
 
   const statusChips = isPersonalScope ? "" : chips;
 
-  const personalChips = (showAnnouncementsScope && !u.readOnly) ? `
+  const personalChips = showAnnouncementsScope ? `
 
     <div class="task-menu-row task-menu-row-secondary">
 
@@ -12451,7 +12439,7 @@ function viewTasks(){
 
         ${STATE.departments.map(d=>{
 
-          const active = effectiveDeptFilter===d.id ? "active" : "";
+          const active = deptFilter===d.id ? "active" : "";
 
           return `
 
@@ -12465,9 +12453,9 @@ function viewTasks(){
 
         }).join("")}
 
-        ${u.readOnly ? `` : `<div class="chip ${(effectiveDeptFilter==="personal" && personalFilter==="tasks") ? "active" : ""}" data-action="openMyTasks">Мої</div>`}
+        <div class="chip ${(deptFilter==="personal" && personalFilter==="tasks") ? "active" : ""}" data-action="openMyTasks">Мої</div>
 
-        ${u.readOnly ? `` : `<div class="chip ${(effectiveDeptFilter==="personal" && personalFilter==="announcements") ? "active" : ""}" data-action="openAnnouncementsAudience" data-arg1="all">Оголошення</div>`}
+        <div class="chip ${(deptFilter==="personal" && personalFilter==="announcements") ? "active" : ""}" data-action="openAnnouncementsAudience" data-arg1="all">Оголошення</div>
 
       </div>
 
@@ -12533,7 +12521,7 @@ function viewTasks(){
 
   const currentScopeLabel = (()=> {
 
-    if(effectiveDeptFilter==="personal"){
+    if(deptFilter==="personal"){
 
       if(effectivePersonalFilter==="tasks") return "Мої задачі";
 
@@ -12543,11 +12531,11 @@ function viewTasks(){
 
     }
 
-    if(effectiveDeptFilter && effectiveDeptFilter!=="all"){
+    if(deptFilter && deptFilter!=="all"){
 
-      const dept = getDeptById(effectiveDeptFilter);
+      const dept = getDeptById(deptFilter);
 
-      return dept ? dept.name : effectiveDeptFilter;
+      return dept ? dept.name : deptFilter;
 
     }
 
@@ -12563,7 +12551,7 @@ function viewTasks(){
 
   const deptNoteActionBtn = (()=> {
 
-    const deptId = (u.role === "boss") ? effectiveDeptFilter : u.departmentId;
+    const deptId = (u.role === "boss") ? deptFilter : u.departmentId;
 
     if(!deptId || deptId==="all" || deptId==="personal") return "";
 
@@ -12701,7 +12689,7 @@ function viewTasks(){
 
 
 
-  const isScopeAll = (u.role==="boss" && effectiveDeptFilter==="all");
+  const isScopeAll = (u.role==="boss" && deptFilter==="all");
 
   const renderTaskItem = (t, idx)=>{
 
