@@ -1142,9 +1142,16 @@
     .task-table-toggle-actions{
       display:flex;
       align-items:center;
-      justify-content:space-between;
-      gap:10px;
-      padding:10px 12px;
+      justify-content:flex-start;
+      gap:8px;
+      padding:8px 10px;
+      flex-wrap:wrap;
+    }
+    .task-table-toggle-actions .btn{
+      min-height:30px;
+      padding:6px 10px;
+      font-size:11px;
+      line-height:1.1;
     }
     .task-table-toggle-body{
       padding:0 10px 10px;
