@@ -3235,12 +3235,6 @@ function canWrite(u){
 
 }
 
-function isViewerMode(u){
-
-  return !!u && u.role==="boss" && !!u.readOnly;
-
-}
-
 function roleSubtitle(u){
 
   if(!u) return "";
@@ -4003,8 +3997,6 @@ function getVisibleTasksForUser(u){
 
   if(u.role==="boss"){
 
-    if(isViewerMode(u)) return getViewerTaskSourceForView().filter(t=>!isAnnouncement(t) && t.type!=="personal");
-
     if(u.readOnly) return STATE.tasks.filter(t=>!isAnnouncement(t) && t.type!=="personal");
 
     return STATE.tasks.filter(t=>!isAnnouncement(t));
@@ -4193,52 +4185,9 @@ function getTaskSourceForView(){
 
 }
 
-function getViewerTaskSourceForView(){
-
-  const deletedIds = new Set(Array.isArray(STATE.deletedTaskIds) ? STATE.deletedTaskIds.map(String) : []);
-
-  if(!Array.isArray(DB_TASKS_CACHE)){
-    return getTaskSourceForView();
-  }
-
-  const stateTasks = Array.isArray(STATE.tasks)
-    ? STATE.tasks.filter(t=>t && !deletedIds.has(String(t.id || "")))
-    : [];
-
-  const stateById = new Map(stateTasks.map(t=>[t.id, t]));
-  const merged = [];
-  const seen = new Set();
-
-  for(const dbTask of DB_TASKS_CACHE){
-    if(deletedIds.has(String(dbTask?.id || ""))) continue;
-    if(!dbTask || seen.has(dbTask.id)) continue;
-
-    const stateTask = stateById.get(dbTask.id) || null;
-
-    merged.push({
-      ...dbTask,
-      ...(stateTask || {}),
-      category: stateTask?.category || dbTask.category || null,
-      audience: stateTask?.audience || dbTask.audience || null,
-      annOrder: stateTask?.annOrder ?? dbTask.annOrder ?? null,
-    });
-
-    seen.add(dbTask.id);
-  }
-
-  for(const task of stateTasks){
-    if(seen.has(task.id)) continue;
-    merged.push(task);
-    seen.add(task.id);
-  }
-
-  return merged;
-
-}
-
 function getVisibleTasksForView(u){
 
-  const source = isViewerMode(u) ? getViewerTaskSourceForView() : getTaskSourceForView();
+  const source = getTaskSourceForView();
 
   if(!u) return [];
 
@@ -5998,17 +5947,13 @@ const READ_ONLY_ALLOWED_TABS = new Set([
 
   ROUTES.TASKS,
 
-]);
-
-const VIEWER_ALLOWED_TABS = new Set([
-
-  ROUTES.CONTROL,
-
-  ROUTES.TASKS,
-
   ROUTES.WEEKLY,
 
   ROUTES.ANALYTICS,
+
+  ROUTES.REPORTING,
+
+  ROUTES.PLAN,
 
 ]);
 
@@ -6016,13 +5961,7 @@ function getVisibleTabsForUser(u, tabs){
 
   const items = Array.isArray(tabs) ? tabs : [];
 
-  if(!u) return items;
-
-  if(isViewerMode(u)){
-    return items.filter(t=>t && VIEWER_ALLOWED_TABS.has(t.key));
-  }
-
-  if(!u.readOnly) return items;
+  if(!u || !u.readOnly) return items;
 
   return items.filter(t=>t && READ_ONLY_ALLOWED_TABS.has(t.key));
 
@@ -6031,22 +5970,6 @@ function getVisibleTabsForUser(u, tabs){
 function enforceReadOnlyNavigation(u){
 
   if(!u || !u.readOnly) return;
-
-  if(isViewerMode(u)){
-
-    if(UI.route === ROUTES.PROFILE) UI.route = ROUTES.TASKS;
-
-    if(UI.tab === ROUTES.TASKS && UI.taskDeptFilter === "personal"){
-      UI.taskDeptFilter = "all";
-      UI.taskPersonalFilter = "tasks";
-    }
-
-    if(!VIEWER_ALLOWED_TABS.has(UI.tab)){
-      UI.tab = ROUTES.TASKS;
-    }
-
-    return;
-  }
 
   if(UI.route === ROUTES.PROFILE) UI.route = ROUTES.TASKS;
 
@@ -12179,7 +12102,6 @@ function viewTasks(){
   recomputeDelegationStatuses();
 
   const u = currentSessionUser();
-  const viewerMode = isViewerMode(u);
 
   const {isDeptHeadLike} = asDeptRole(u);
 
@@ -12193,11 +12115,6 @@ function viewTasks(){
 
   const filter = UI.taskFilter;
 
-  if(viewerMode && UI.taskDeptFilter === "personal"){
-    UI.taskDeptFilter = "all";
-    UI.taskPersonalFilter = "tasks";
-  }
-
   const deptFilter = UI.taskDeptFilter || "all";
 
   const taskSearch = UI.taskSearch || "";
@@ -12206,7 +12123,7 @@ function viewTasks(){
 
   const annAudience = UI.taskAnnAudienceFilter || "all";
 
-  const showAnnouncementsScope = !viewerMode && ((u.role!=="boss") || (u.role==="boss" && deptFilter==="personal"));
+  const showAnnouncementsScope = (u.role!=="boss") || (u.role==="boss" && deptFilter==="personal");
 
   const isPersonalScope = (u.role==="boss" && deptFilter==="personal");
 
@@ -12536,9 +12453,9 @@ function viewTasks(){
 
         }).join("")}
 
-        ${viewerMode ? `` : `<div class="chip ${(deptFilter==="personal" && personalFilter==="tasks") ? "active" : ""}" data-action="openMyTasks">Мої</div>`}
+        <div class="chip ${(deptFilter==="personal" && personalFilter==="tasks") ? "active" : ""}" data-action="openMyTasks">Мої</div>
 
-        ${viewerMode ? `` : `<div class="chip ${(deptFilter==="personal" && personalFilter==="announcements") ? "active" : ""}" data-action="openAnnouncementsAudience" data-arg1="all">Оголошення</div>`}
+        <div class="chip ${(deptFilter==="personal" && personalFilter==="announcements") ? "active" : ""}" data-action="openAnnouncementsAudience" data-arg1="all">Оголошення</div>
 
       </div>
 
