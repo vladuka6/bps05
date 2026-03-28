@@ -2916,6 +2916,20 @@ function normalizeAnalyticsHeader(value){
 
 }
 
+function fmtNum(value){
+
+  const num = Number(value);
+  if(!Number.isFinite(num)) return "0";
+
+  const isInteger = Math.abs(num % 1) < 0.000001;
+
+  return num.toLocaleString("uk-UA", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: isInteger ? 0 : 2,
+  });
+
+}
+
 function detectStaffingColumns(headerRow){
 
   const headers = (headerRow || []).map(normalizeAnalyticsHeader);
