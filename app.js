@@ -3573,6 +3573,57 @@ function renderComparisonTopListAsc(title, rows, metricKey, metricLabel, unit=""
 
 }
 
+function renderComparisonDonutCard(title, rows, metricKey, unit="", emptyText="Поки немає даних.", colors=null){
+
+  const slices = buildEvalSlices(
+    (rows || []).slice(0, 5).map(item=>({label:item.name, value:item?.[metricKey] || 0})),
+    colors || ["#5f8ef5", "#6fbf73", "#ff9f43", "#b783ff", "#ff6b8b"]
+  );
+
+  return `
+    <div class="item analytics-block eval-donut-card comparison-donut-card">
+      <div class="row"><div class="name">${htmlesc(title)}</div></div>
+      <div class="eval-donut-wrap">
+        <div class="eval-donut" style="background:${slices.gradient};"></div>
+        <div>
+          ${slices.legendRows.length
+            ? slices.legendRows.map(row=>`<div class="eval-legend-item"><span class="eval-legend-dot" style="background:${row.color}"></span><span>${htmlesc(row.label)}</span><b class="mono">${fmtNum(row.value)}${unit}</b><span class="mono">${row.percent}%</span></div>`).join("")
+            : `<div class="hint">${htmlesc(emptyText)}</div>`
+          }
+        </div>
+      </div>
+    </div>
+  `;
+
+}
+
+function renderComparisonCompactCards(title, rows, metricKey, unit="", tone="blue"){
+
+  const safeTone = ["blue","ok","warn"].includes(tone) ? tone : "blue";
+
+  return `
+    <div class="item analytics-block comparison-compact-section">
+      <div class="row"><div class="name">${htmlesc(title)}</div></div>
+      <div class="comparison-compact-grid">
+        ${rows.length
+          ? rows.slice(0, 4).map((item, index)=>`
+              <div class="comparison-compact-card">
+                <div class="comparison-compact-rank mono">${index + 1}</div>
+                <div class="comparison-compact-main">
+                  <div class="comparison-compact-title">${htmlesc(item.name)}</div>
+                  <div class="comparison-compact-meta">${item.vendor ? `Виробник: ${htmlesc(item.vendor)}` : "Без виробника"}</div>
+                </div>
+                <div class="badge b-${safeTone} mono">${fmtNum(item[metricKey])}${unit}</div>
+              </div>
+            `).join("")
+          : `<div class="hint">Даних поки немає.</div>`
+        }
+      </div>
+    </div>
+  `;
+
+}
+
 function buildComparisonAnalyticsModalHtml(rows, title=""){
 
   const analytics = buildComparisonAnalytics(rows);
@@ -3626,20 +3677,10 @@ function buildComparisonAnalyticsModalHtml(rows, title=""){
     </div>
   `;
 
-  const distanceDonutCard = `
-    <div class="item analytics-block eval-donut-card">
-      <div class="row"><div class="name">Топ по дальності</div></div>
-      <div class="eval-donut-wrap">
-        <div class="eval-donut" style="background:${distanceDonut.gradient};"></div>
-        <div>
-          ${distanceDonut.legendRows.length
-            ? distanceDonut.legendRows.map(row=>`<div class="eval-legend-item"><span class="eval-legend-dot" style="background:${row.color}"></span><span>${htmlesc(row.label)}</span><b class="mono">${fmtNum(row.value)}</b><span class="mono">${row.percent}%</span></div>`).join("")
-            : `<div class="hint">Поки немає даних по дальності.</div>`
-          }
-        </div>
-      </div>
-    </div>
-  `;
+  const distanceDonutCard = renderComparisonDonutCard("Топ по дальності", topDistance, "distance", " км", "Поки немає даних по дальності.");
+  const payloadDonutCard = renderComparisonDonutCard("Топ по навантаженню", topPayload, "payload", " кг", "Поки немає даних по навантаженню.");
+  const speedDonutCard = renderComparisonDonutCard("Топ по швидкості", topSpeed, "speed", " км/год", "Поки немає даних по швидкості.");
+  const flightTimeDonutCard = renderComparisonDonutCard("Топ по часу польоту", topFlightTime, "flightTime", " хв", "Поки немає даних по часу польоту.");
 
   const distanceList = renderComparisonTopList("Найбільша дальність", topDistance, "distance", "Дальність", " км");
   const payloadList = renderComparisonTopList("Найбільше навантаження", topPayload, "payload", "Навантаження", " кг");
@@ -3648,33 +3689,18 @@ function buildComparisonAnalyticsModalHtml(rows, title=""){
   const radiusList = renderComparisonTopList("Найбільший радіус", topRadius, "radius", "Радіус", " км");
   const heightList = renderComparisonTopList("Найбільша висота", topHeight, "height", "Висота", " м");
   const windList = renderComparisonTopList("Найкраща стійкість до вітру", topWind, "wind", "Вітер", " м/с");
-  const cheapestList = renderComparisonTopListAsc("Найдешевші комплекси", cheapestSystems, "systemPrice", "Ціна БпАК", " грн");
-  const deployList = renderComparisonTopListAsc("Найшвидше розгортання", fastestDeploy, "deployTime", "Час розгортання", " хв");
-  const overallList = `
-    <div class="item analytics-block staffing-analytics-list">
-      <div class="row"><div class="name">Загальний рейтинг моделей</div></div>
-      <ul class="report-list">
-        ${overallTop.length
-          ? overallTop.map(item=>`
-              <li>
-                <div class="report-line">
-                  <span class="report-strong">${htmlesc(item.name)}</span>
-                  <span class="badge b-blue mono">${fmtNum(item.overallScore)}</span>
-                </div>
-                <div class="report-meta">Інтегральний бал за дальністю, навантаженням, швидкістю, часом польоту, радіусом, висотою, вітром та базовою ефективністю по ціні.</div>
-              </li>
-            `).join("")
-          : `<li><div class="hint">Поки немає даних для загального рейтингу.</div></li>`
-        }
-      </ul>
-    </div>
-  `;
+  const cheapestCards = renderComparisonCompactCards("Найдешевші комплекси", cheapestSystems, "systemPrice", " грн", "ok");
+  const deployCards = renderComparisonCompactCards("Найшвидше розгортання", fastestDeploy, "deployTime", " хв", "ok");
+  const overallCards = renderComparisonCompactCards("Загальний рейтинг моделей", overallTop, "overallScore", "", "blue");
 
   return `
-    <div class="staffing-analytics-modal">
+    <div class="staffing-analytics-modal comparison-analytics-modal">
       ${summaryGrid}
-      <div class="eval-donut-grid eval-donut-grid-single">
+      <div class="comparison-donut-grid">
         ${distanceDonutCard}
+        ${payloadDonutCard}
+        ${speedDonutCard}
+        ${flightTimeDonutCard}
       </div>
       <div class="control-grid staffing-analytics-sections">
         ${distanceList}
@@ -3690,11 +3716,11 @@ function buildComparisonAnalyticsModalHtml(rows, title=""){
       </div>
       <div class="control-grid staffing-analytics-sections">
         ${windList}
-        ${deployList}
+        ${deployCards}
       </div>
       <div class="control-grid staffing-analytics-sections">
-        ${cheapestList}
-        ${overallList}
+        ${cheapestCards}
+        ${overallCards}
       </div>
     </div>
   `;

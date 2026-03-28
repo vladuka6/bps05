@@ -1207,11 +1207,119 @@
       flex-direction:column;
       gap:12px;
     }
+    .comparison-analytics-modal{
+      gap:10px;
+    }
+    .comparison-donut-grid{
+      display:grid;
+      grid-template-columns:repeat(2, minmax(0, 1fr));
+      gap:10px;
+    }
+    .comparison-analytics-modal .report-grid{
+      gap:5px;
+    }
+    .comparison-analytics-modal .report-tile{
+      padding:7px 8px;
+      gap:1px;
+    }
+    .comparison-analytics-modal .report-tile .k{
+      font-size:9px;
+    }
+    .comparison-analytics-modal .report-tile .v{
+      font-size:14px;
+    }
+    .comparison-analytics-modal .report-tile .s{
+      font-size:9px;
+    }
+    .comparison-analytics-modal .analytics-block{
+      padding:10px;
+    }
+    .comparison-analytics-modal .analytics-block .row .name{
+      font-size:14px;
+    }
+    .comparison-analytics-modal .eval-donut-wrap{
+      grid-template-columns:84px minmax(0,1fr);
+      gap:10px;
+    }
+    .comparison-analytics-modal .eval-donut{
+      width:84px;
+      height:84px;
+    }
+    .comparison-analytics-modal .eval-donut::after{
+      inset:11px;
+    }
+    .comparison-analytics-modal .eval-legend-item{
+      font-size:11px;
+      gap:6px;
+    }
+    .comparison-analytics-modal .report-list{
+      gap:6px;
+    }
+    .comparison-analytics-modal .report-list li{
+      padding:7px 9px;
+    }
+    .comparison-analytics-modal .report-meta{
+      font-size:11px;
+      margin-top:3px;
+    }
+    .comparison-compact-section{
+      padding:10px;
+    }
+    .comparison-compact-grid{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:7px;
+      margin-top:8px;
+    }
+    .comparison-compact-card{
+      display:grid;
+      grid-template-columns:auto minmax(0,1fr) auto;
+      gap:8px;
+      align-items:center;
+      padding:8px 9px;
+      border-radius:12px;
+      border:1px solid rgba(150,170,205,.32);
+      background:rgba(255,255,255,.86);
+    }
+    .comparison-compact-rank{
+      width:20px;
+      height:20px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      border-radius:999px;
+      background:rgba(95,142,245,.12);
+      color:#496bb4;
+      font-size:11px;
+      font-weight:800;
+    }
+    .comparison-compact-main{
+      min-width:0;
+    }
+    .comparison-compact-title{
+      font-size:13px;
+      font-weight:900;
+      color:var(--text);
+      line-height:1.2;
+      overflow-wrap:anywhere;
+    }
+    .comparison-compact-meta{
+      margin-top:2px;
+      font-size:10px;
+      color:var(--muted);
+      line-height:1.25;
+      overflow-wrap:anywhere;
+    }
     .staffing-analytics-sections{
       align-items:start;
     }
     .staffing-analytics-list .report-list{
       margin-top:8px;
+    }
+    @media (max-width: 768px){
+      .comparison-donut-grid{
+        grid-template-columns:1fr;
+      }
     }
     .table-modal-body{
       min-width:0;
