@@ -19492,9 +19492,9 @@ function initOverdueTicker(){
 
 document.addEventListener("click", (e)=>{
 
-  const tableToggle = e.target.closest(".task-table-toggle");
+  const tableToggleSummary = e.target.closest(".task-table-toggle summary");
 
-  if(tableToggle){
+  if(tableToggleSummary){
 
     e.stopPropagation();
 
