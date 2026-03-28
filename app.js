@@ -3744,15 +3744,47 @@ function openRenderedTableModal(key){
   `, {stack:true});
 
   requestAnimationFrame(()=>{
-    document.querySelectorAll('.sheet .is-animated-donut[data-donut-gradient]').forEach((el, idx)=>{
-      el.classList.remove('donut-ready');
-      el.style.background = 'conic-gradient(#dfe6f6 0 360deg)';
-      const gradient = el.getAttribute('data-donut-gradient') || '';
-      setTimeout(()=>{
-        el.style.background = gradient || 'conic-gradient(#dfe6f6 0 360deg)';
+    animateRenderedDonuts(document.querySelector('.sheet'));
+  });
+
+}
+
+function animateRenderedDonuts(scope=document){
+
+  const donuts = [...(scope || document).querySelectorAll('.is-animated-donut[data-donut-gradient]')];
+  if(!donuts.length) return;
+
+  const duration = 820;
+  const easeOutCubic = (t)=>1 - Math.pow(1 - t, 3);
+
+  donuts.forEach((el, idx)=>{
+    const gradient = el.getAttribute('data-donut-gradient') || 'conic-gradient(#dfe6f6 0 360deg)';
+    const delay = idx * 80;
+
+    el.classList.remove('donut-ready');
+    el.style.background = gradient;
+    el.style.setProperty('--donut-progress', '0turn');
+
+    const start = performance.now() + delay;
+
+    const tick = (now)=>{
+      if(now < start){
+        requestAnimationFrame(tick);
+        return;
+      }
+
+      const progress = Math.min(1, (now - start) / duration);
+      const eased = easeOutCubic(progress);
+      el.style.setProperty('--donut-progress', `${eased}turn`);
+
+      if(progress < 1){
+        requestAnimationFrame(tick);
+      } else {
         el.classList.add('donut-ready');
-      }, 40 + (idx * 70));
-    });
+      }
+    };
+
+    requestAnimationFrame(tick);
   });
 
 }
