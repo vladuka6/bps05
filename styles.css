@@ -994,6 +994,7 @@
       background: rgba(246,249,255,.92);
       box-shadow: 0 8px 24px rgba(36,74,140,.08);
       font-size:clamp(11px, 0.72vw, 13px);
+      position:relative;
     }
     .text-table-editor-head{
       display:flex;
@@ -1012,6 +1013,43 @@
       display:flex;
       flex-direction:column;
       gap:8px;
+    }
+    .text-table-context-menu{
+      position:absolute;
+      z-index:8;
+      display:flex;
+      align-items:center;
+      gap:4px;
+      padding:5px;
+      border-radius:12px;
+      border:1px solid rgba(150,170,205,.42);
+      background: rgba(255,255,255,.96);
+      box-shadow: 0 10px 22px rgba(36,74,140,.14);
+      backdrop-filter: blur(8px);
+    }
+    .text-table-context-btn{
+      min-width:30px;
+      height:28px;
+      padding:0 8px;
+      border-radius:9px;
+      border:1px solid rgba(150,170,205,.34);
+      background: rgba(246,249,255,.95);
+      color: var(--text);
+      font: inherit;
+      font-size:11px;
+      font-weight:700;
+      cursor:pointer;
+      transition: all .16s ease;
+    }
+    .text-table-context-btn:hover{
+      border-color: rgba(96,130,198,.48);
+      background: rgba(234,242,255,.98);
+      transform: translateY(-1px);
+    }
+    .text-table-context-btn.danger{
+      color:#ab4a4a;
+      border-color: rgba(220,120,120,.3);
+      background: rgba(255,246,246,.96);
     }
     .text-table-row{
       display:grid;
@@ -3695,6 +3733,25 @@
       background: rgba(17,20,29,.92);
       border-color: rgba(35,42,58,.78);
       box-shadow: 0 10px 26px rgba(0,0,0,.24);
+    }
+    body.theme-dark .text-table-context-menu{
+      background: rgba(21,25,37,.96);
+      border-color: rgba(52,63,88,.84);
+      box-shadow: 0 12px 24px rgba(0,0,0,.28);
+    }
+    body.theme-dark .text-table-context-btn{
+      background: rgba(27,33,47,.94);
+      border-color: rgba(52,63,88,.8);
+      color: var(--text);
+    }
+    body.theme-dark .text-table-context-btn:hover{
+      background: rgba(34,42,60,.98);
+      border-color: rgba(92,122,180,.7);
+    }
+    body.theme-dark .text-table-context-btn.danger{
+      color:#f0a8a8;
+      background: rgba(60,28,32,.78);
+      border-color: rgba(131,72,82,.72);
     }
     body.theme-dark .text-table-cell{
       background: rgba(21,25,37,.88);

@@ -2253,6 +2253,89 @@ function readTextTableEditorRows(textareaId){
 
 }
 
+function getTextTableActiveCell(textareaId, rows){
+
+  const wrap = document.querySelector(`.text-table-editor[data-for="${textareaId}"]`);
+
+  const rowCount = rows?.length || 0;
+
+  const colCount = rows?.[0]?.length || 0;
+
+  if(!wrap || !rowCount || !colCount) return {row:0, col:0};
+
+  const row = Math.max(0, Math.min(rowCount - 1, Number(wrap.dataset.activeRow || 0)));
+
+  const col = Math.max(0, Math.min(colCount - 1, Number(wrap.dataset.activeCol || 0)));
+
+  return {row, col};
+
+}
+
+function setTextTableActiveCell(textareaId, row, col){
+
+  const wrap = document.querySelector(`.text-table-editor[data-for="${textareaId}"]`);
+
+  if(!wrap) return;
+
+  wrap.dataset.activeRow = String(Math.max(0, Number(row || 0)));
+
+  wrap.dataset.activeCol = String(Math.max(0, Number(col || 0)));
+
+}
+
+function hideTextTableContextMenu(textareaId){
+
+  const menu = document.querySelector(`.text-table-context-menu[data-for="${textareaId}"]`);
+
+  if(!menu) return;
+
+  menu.hidden = true;
+
+}
+
+function positionTextTableContextMenu(textareaId, row, col){
+
+  const wrap = document.querySelector(`.text-table-editor[data-for="${textareaId}"]`);
+
+  const menu = wrap?.querySelector(`.text-table-context-menu[data-for="${textareaId}"]`);
+
+  const cell = document.getElementById(`${textareaId}_tbl_${row}_${col}`);
+
+  if(!wrap || !menu || !cell){
+    hideTextTableContextMenu(textareaId);
+    return;
+  }
+
+  const wrapRect = wrap.getBoundingClientRect();
+  const cellRect = cell.getBoundingClientRect();
+  const menuWidth = menu.offsetWidth || 156;
+
+  const left = Math.max(
+    8,
+    Math.min(
+      (wrap.clientWidth || wrapRect.width) - menuWidth - 8,
+      (cellRect.left - wrapRect.left) + ((cellRect.width - menuWidth) / 2)
+    )
+  );
+
+  const top = Math.max(8, (cellRect.top - wrapRect.top) - 42);
+
+  menu.style.left = `${Math.round(left)}px`;
+  menu.style.top = `${Math.round(top)}px`;
+  menu.hidden = false;
+
+}
+
+function showTextTableContextMenu(textareaId, row, col){
+
+  setTextTableActiveCell(textareaId, row, col);
+
+  requestAnimationFrame(()=>{
+    positionTextTableContextMenu(textareaId, row, col);
+  });
+
+}
+
 function buildTextTableEditorHtml(textareaId, rows){
 
   const safeRows = (rows && rows.length) ? rows : defaultTextTableRows();
@@ -2287,20 +2370,33 @@ function buildTextTableEditorHtml(textareaId, rows){
 
       <div class="text-table-editor-head">
 
-        <div class="hint">Таблиця для опису задачі. Перший рядок — заголовки.</div>
+        <div class="hint">Таблиця для опису задачі. Перший рядок — заголовки. Вставка й видалення працюють від активної клітинки.</div>
 
         <div class="text-table-editor-actions">
 
-          <button type="button" class="btn ghost btn-mini" data-action="mutateTextTableEditor" data-arg1="${textareaId}" data-arg2="addRow">+ Рядок</button>
+          <button type="button" class="btn ghost btn-mini" data-action="mutateTextTableEditor" data-arg1="${textareaId}" data-arg2="insertRowAbove">+ Рядок ↑</button>
 
-          <button type="button" class="btn ghost btn-mini" data-action="mutateTextTableEditor" data-arg1="${textareaId}" data-arg2="removeRow">- Рядок</button>
+          <button type="button" class="btn ghost btn-mini" data-action="mutateTextTableEditor" data-arg1="${textareaId}" data-arg2="insertRowBelow">+ Рядок ↓</button>
 
-          <button type="button" class="btn ghost btn-mini" data-action="mutateTextTableEditor" data-arg1="${textareaId}" data-arg2="addCol">+ Колонка</button>
+          <button type="button" class="btn ghost btn-mini" data-action="mutateTextTableEditor" data-arg1="${textareaId}" data-arg2="insertColLeft">+ Колонка ←</button>
 
-          <button type="button" class="btn ghost btn-mini" data-action="mutateTextTableEditor" data-arg1="${textareaId}" data-arg2="removeCol">- Колонка</button>
+          <button type="button" class="btn ghost btn-mini" data-action="mutateTextTableEditor" data-arg1="${textareaId}" data-arg2="insertColRight">+ Колонка →</button>
+
+          <button type="button" class="btn ghost btn-mini" data-action="mutateTextTableEditor" data-arg1="${textareaId}" data-arg2="removeActiveRow">- Рядок</button>
+
+          <button type="button" class="btn ghost btn-mini" data-action="mutateTextTableEditor" data-arg1="${textareaId}" data-arg2="removeActiveCol">- Колонка</button>
 
         </div>
 
+      </div>
+
+      <div class="text-table-context-menu" data-for="${textareaId}" hidden>
+        <button type="button" class="text-table-context-btn" data-action="mutateTextTableEditor" data-arg1="${textareaId}" data-arg2="insertRowAbove" title="Вставити рядок вище">↑Р</button>
+        <button type="button" class="text-table-context-btn" data-action="mutateTextTableEditor" data-arg1="${textareaId}" data-arg2="insertRowBelow" title="Вставити рядок нижче">↓Р</button>
+        <button type="button" class="text-table-context-btn" data-action="mutateTextTableEditor" data-arg1="${textareaId}" data-arg2="insertColLeft" title="Вставити колонку ліворуч">←К</button>
+        <button type="button" class="text-table-context-btn" data-action="mutateTextTableEditor" data-arg1="${textareaId}" data-arg2="insertColRight" title="Вставити колонку праворуч">→К</button>
+        <button type="button" class="text-table-context-btn danger" data-action="mutateTextTableEditor" data-arg1="${textareaId}" data-arg2="removeActiveRow" title="Видалити поточний рядок">−Р</button>
+        <button type="button" class="text-table-context-btn danger" data-action="mutateTextTableEditor" data-arg1="${textareaId}" data-arg2="removeActiveCol" title="Видалити поточну колонку">−К</button>
       </div>
 
       <div class="text-table-grid">${grid}</div>
@@ -2413,11 +2509,42 @@ function bindTextTableEditorLiveSync(textareaId){
 
   if(!wrap) return;
 
+  const menu = wrap.querySelector(`.text-table-context-menu[data-for="${textareaId}"]`);
+
+  if(menu){
+    menu.addEventListener("mousedown", e=>e.preventDefault());
+  }
+
+  wrap.addEventListener("focusout", ()=>{
+    setTimeout(()=>{
+      const active = document.activeElement;
+      if(active && wrap.contains(active)) return;
+      hideTextTableContextMenu(textareaId);
+    }, 0);
+  });
+
   wrap.querySelectorAll(".text-table-cell").forEach(input=>{
+
+    const m = input.id.match(/_tbl_(\d+)_(\d+)$/);
+
+    const row = m ? Number(m[1]) : 0;
+
+    const col = m ? Number(m[2]) : 0;
+
+    const markActive = ()=>{
+      showTextTableContextMenu(textareaId, row, col);
+    };
+
+    input.addEventListener("focus", markActive);
+
+    input.addEventListener("click", markActive);
 
     input.addEventListener("input", ()=>{
 
+      markActive();
+
       writeTextTableToTextarea(textareaId, readTextTableEditorRows(textareaId));
+      positionTextTableContextMenu(textareaId, row, col);
 
     });
 
@@ -2425,7 +2552,7 @@ function bindTextTableEditorLiveSync(textareaId){
 
 }
 
-function renderTextTableEditor(textareaId, rows){
+function renderTextTableEditor(textareaId, rows, focusPos=null){
 
   const el = document.getElementById(textareaId);
 
@@ -2439,6 +2566,10 @@ function renderTextTableEditor(textareaId, rows){
 
     bindTextTableEditorLiveSync(textareaId);
 
+    const nextFocus = focusPos || {row:0, col:0};
+    setTextTableActiveCell(textareaId, nextFocus.row, nextFocus.col);
+    document.getElementById(`${textareaId}_tbl_${nextFocus.row}_${nextFocus.col}`)?.focus();
+
     return;
 
   }
@@ -2446,6 +2577,10 @@ function renderTextTableEditor(textareaId, rows){
   wrap.outerHTML = buildTextTableEditorHtml(textareaId, rows);
 
   bindTextTableEditorLiveSync(textareaId);
+
+  const nextFocus = focusPos || {row:0, col:0};
+  setTextTableActiveCell(textareaId, nextFocus.row, nextFocus.col);
+  document.getElementById(`${textareaId}_tbl_${nextFocus.row}_${nextFocus.col}`)?.focus();
 
 }
 
@@ -2464,18 +2599,28 @@ function insertTextTable(textareaId){
 function mutateTextTableEditor(textareaId, action){
 
   let rows = readTextTableEditorRows(textareaId);
+  const active = getTextTableActiveCell(textareaId, rows);
+  let nextFocus = {...active};
+  const emptyRow = ()=>new Array(rows[0]?.length || 2).fill("");
 
   if(action==="addRow"){
 
     rows.push(new Array(rows[0]?.length || 2).fill(""));
 
+    nextFocus = {row: rows.length - 1, col: 0};
+
   } else if(action==="removeRow"){
 
-    if(rows.length > 2) rows = rows.slice(0, -1);
+    if(rows.length > 2){
+      rows = rows.slice(0, -1);
+      nextFocus = {row: Math.max(0, Math.min(active.row, rows.length - 1)), col: Math.min(active.col, (rows[0]?.length || 1) - 1)};
+    }
 
   } else if(action==="addCol"){
 
     rows = rows.map(row=>[...row, ""]);
+
+    nextFocus = {row: active.row, col: rows[0].length - 1};
 
   } else if(action==="removeCol"){
 
@@ -2483,11 +2628,63 @@ function mutateTextTableEditor(textareaId, action){
 
       rows = rows.map(row=>row.slice(0, -1));
 
+      nextFocus = {row: active.row, col: Math.max(0, Math.min(active.col, rows[0].length - 1))};
+
+    }
+
+  } else if(action==="insertRowAbove"){
+
+    rows.splice(active.row, 0, emptyRow());
+
+    nextFocus = {row: active.row, col: active.col};
+
+  } else if(action==="insertRowBelow"){
+
+    rows.splice(active.row + 1, 0, emptyRow());
+
+    nextFocus = {row: active.row + 1, col: active.col};
+
+  } else if(action==="insertColLeft"){
+
+    rows = rows.map((row, index)=>{
+      const next = row.slice();
+      next.splice(active.col, 0, "");
+      return next;
+    });
+
+    nextFocus = {row: active.row, col: active.col};
+
+  } else if(action==="insertColRight"){
+
+    rows = rows.map(row=>{
+      const next = row.slice();
+      next.splice(active.col + 1, 0, "");
+      return next;
+    });
+
+    nextFocus = {row: active.row, col: active.col + 1};
+
+  } else if(action==="removeActiveRow"){
+
+    if(rows.length > 2){
+      rows.splice(active.row, 1);
+      nextFocus = {row: Math.max(0, Math.min(active.row, rows.length - 1)), col: Math.min(active.col, (rows[0]?.length || 1) - 1)};
+    }
+
+  } else if(action==="removeActiveCol"){
+
+    if((rows[0]?.length || 0) > 2){
+      rows = rows.map(row=>{
+        const next = row.slice();
+        next.splice(active.col, 1);
+        return next;
+      });
+      nextFocus = {row: active.row, col: Math.max(0, Math.min(active.col, rows[0].length - 1))};
     }
 
   }
 
-  renderTextTableEditor(textareaId, rows);
+  renderTextTableEditor(textareaId, rows, nextFocus);
 
 }
 
@@ -2501,7 +2698,9 @@ function applyTextTableEditor(textareaId){
 
   writeTextTableToTextarea(textareaId, rows);
 
-  renderTextTableEditor(textareaId, rows);
+  const active = getTextTableActiveCell(textareaId, rows);
+
+  renderTextTableEditor(textareaId, rows, active);
 
 }
 
