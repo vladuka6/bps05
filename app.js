@@ -4003,6 +4003,8 @@ function getVisibleTasksForUser(u){
 
   if(u.role==="boss"){
 
+    if(isViewerMode(u)) return getViewerTaskSourceForView().filter(t=>!isAnnouncement(t) && t.type!=="personal");
+
     if(u.readOnly) return STATE.tasks.filter(t=>!isAnnouncement(t) && t.type!=="personal");
 
     return STATE.tasks.filter(t=>!isAnnouncement(t));
@@ -4191,9 +4193,52 @@ function getTaskSourceForView(){
 
 }
 
+function getViewerTaskSourceForView(){
+
+  const deletedIds = new Set(Array.isArray(STATE.deletedTaskIds) ? STATE.deletedTaskIds.map(String) : []);
+
+  if(!Array.isArray(DB_TASKS_CACHE)){
+    return getTaskSourceForView();
+  }
+
+  const stateTasks = Array.isArray(STATE.tasks)
+    ? STATE.tasks.filter(t=>t && !deletedIds.has(String(t.id || "")))
+    : [];
+
+  const stateById = new Map(stateTasks.map(t=>[t.id, t]));
+  const merged = [];
+  const seen = new Set();
+
+  for(const dbTask of DB_TASKS_CACHE){
+    if(deletedIds.has(String(dbTask?.id || ""))) continue;
+    if(!dbTask || seen.has(dbTask.id)) continue;
+
+    const stateTask = stateById.get(dbTask.id) || null;
+
+    merged.push({
+      ...dbTask,
+      ...(stateTask || {}),
+      category: stateTask?.category || dbTask.category || null,
+      audience: stateTask?.audience || dbTask.audience || null,
+      annOrder: stateTask?.annOrder ?? dbTask.annOrder ?? null,
+    });
+
+    seen.add(dbTask.id);
+  }
+
+  for(const task of stateTasks){
+    if(seen.has(task.id)) continue;
+    merged.push(task);
+    seen.add(task.id);
+  }
+
+  return merged;
+
+}
+
 function getVisibleTasksForView(u){
 
-  const source = getTaskSourceForView();
+  const source = isViewerMode(u) ? getViewerTaskSourceForView() : getTaskSourceForView();
 
   if(!u) return [];
 
