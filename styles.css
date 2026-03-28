@@ -1203,13 +1203,107 @@
       color:var(--text-soft);
     }
     .staffing-analytics-modal{
-      display:flex;
-      flex-direction:column;
-      gap:12px;
-    }
+        display:flex;
+        flex-direction:column;
+        gap:8px;
+      }
+    .staffing-analytics-modal .report-grid{
+        grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+        gap:4px;
+      }
+    .staffing-analytics-modal .report-tile{
+        padding:5px 6px;
+        gap:1px;
+        min-height:62px;
+      }
+    .staffing-analytics-modal .report-tile .k{
+        font-size:9px;
+      }
+    .staffing-analytics-modal .report-tile .v{
+        font-size:12px;
+        line-height:1.05;
+      }
+    .staffing-analytics-modal .report-tile .s{
+        font-size:9px;
+      }
+    .staffing-analytics-modal .analytics-block{
+        padding:7px;
+      }
+    .staffing-analytics-modal .analytics-block .row .name{
+        font-size:12px;
+      }
+    .staffing-analytics-modal .eval-donut-grid{
+        gap:8px;
+        margin-bottom:8px;
+      }
+    .staffing-analytics-modal .eval-donut-wrap{
+        grid-template-columns:68px minmax(0,1fr);
+        gap:7px;
+        margin-top:6px;
+      }
+    .staffing-analytics-modal .eval-donut{
+        width:68px;
+        height:68px;
+      }
+    .staffing-analytics-modal .eval-donut::after{
+        inset:9px;
+      }
+    .staffing-analytics-modal .eval-legend-item{
+        font-size:9px;
+        gap:4px;
+      }
+    .staffing-analytics-modal .report-list{
+        gap:5px;
+      }
+    .staffing-analytics-modal .report-list li{
+        padding:6px 8px;
+      }
+    .staffing-analytics-modal .report-meta{
+        font-size:9px;
+        margin-top:2px;
+      }
+    .staffing-analytics-modal .report-strong{
+        font-size:12px;
+        line-height:1.1;
+      }
+    .staffing-analytics-kpis{
+        margin-bottom:2px;
+      }
+    .staffing-analytics-sections{
+        gap:8px;
+      }
+    .staffing-model-grid{
+        display:grid;
+        grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
+        gap:6px;
+        margin-top:6px;
+      }
+    .staffing-model-card{
+        border:1px solid rgba(150,170,205,.42);
+        border-radius:10px;
+        background: rgba(255,255,255,.88);
+        padding:7px 8px;
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:8px;
+      }
+    .staffing-model-name{
+        min-width:0;
+        font-size:11px;
+        font-weight:900;
+        color:var(--text);
+        line-height:1.12;
+      }
+    .staffing-model-value{
+        flex:0 0 auto;
+        font-size:12px;
+        font-weight:1000;
+        color:#2a63d4;
+      }
     .comparison-analytics-modal{
-      gap:10px;
-    }
+        gap:10px;
+      }
     .comparison-donut-grid{
       display:grid;
       grid-template-columns:repeat(2, minmax(0, 1fr));
@@ -1344,11 +1438,28 @@
       align-items:start;
     }
     .staffing-analytics-list .report-list{
-      margin-top:8px;
+      margin-top:6px;
     }
     @media (max-width: 768px){
-      .comparison-donut-grid{
-        grid-template-columns:1fr;
+      .staffing-analytics-modal .eval-donut-grid{
+          grid-template-columns:1fr;
+        }
+      .staffing-analytics-modal .eval-donut-wrap{
+          grid-template-columns:64px minmax(0,1fr);
+        }
+      .staffing-analytics-modal .eval-donut{
+          width:64px;
+          height:64px;
+        }
+      .staffing-model-grid{
+          grid-template-columns:repeat(2, minmax(0,1fr));
+          gap:5px;
+        }
+      .staffing-analytics-sections{
+          grid-template-columns:1fr;
+        }
+        .comparison-donut-grid{
+          grid-template-columns:1fr;
       }
     }
     .table-modal-body{

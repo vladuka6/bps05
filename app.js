@@ -3104,13 +3104,12 @@ function buildStaffingAnalyticsModalHtml(rows, title=""){
   const {items, totalPlan, totalFact, totalAssets, totalShortage, completion, topShortage, bestFilled, topModels, donut, shortageDonut} = analytics;
 
   const summaryGrid = `
-    <div class="report-grid staffing-analytics-kpis">
-      <div class="report-tile"><div class="k">Таблиця</div><div class="v">${htmlesc(title || "Укомплектованість")}</div><div class="s">${items.length} рядків</div></div>
-      <div class="report-tile"><div class="k">План</div><div class="v mono">${fmtNum(totalPlan)}</div><div class="s">За таблицею</div></div>
-      <div class="report-tile"><div class="k">Факт</div><div class="v mono">${fmtNum(totalFact)}</div><div class="s">Наявні</div></div>
-      <div class="report-tile"><div class="k">Нестача</div><div class="v mono">${fmtNum(totalShortage)}</div><div class="s">${completion}% укомплектовано</div></div>
-      <div class="report-tile"><div class="k">Всього засобів</div><div class="v mono">${fmtNum(totalAssets)}</div><div class="s">За колонкою “Всього”</div></div>
-    </div>
+      <div class="report-grid staffing-analytics-kpis">
+        <div class="report-tile"><div class="k">План</div><div class="v mono">${fmtNum(totalPlan)}</div><div class="s">За таблицею</div></div>
+        <div class="report-tile"><div class="k">Факт</div><div class="v mono">${fmtNum(totalFact)}</div><div class="s">Наявні</div></div>
+        <div class="report-tile"><div class="k">Нестача</div><div class="v mono">${fmtNum(totalShortage)}</div><div class="s">${completion}% укомплектовано</div></div>
+        <div class="report-tile"><div class="k">Всього засобів</div><div class="v mono">${fmtNum(totalAssets)}</div><div class="s">За колонкою “Всього”</div></div>
+      </div>
   `;
 
   const totalDonutCard = `
@@ -3183,24 +3182,22 @@ function buildStaffingAnalyticsModalHtml(rows, title=""){
     </div>
   `;
 
-  const modelsList = `
-    <div class="item analytics-block staffing-analytics-list">
-      <div class="row"><div class="name">Найпоширеніші моделі / позиції</div></div>
-      <ul class="report-list">
-        ${topModels.length
-          ? topModels.map(item=>`
-              <li>
-                <div class="report-line">
-                  <span class="report-strong">${htmlesc(item.name)}</span>
-                  <span class="badge b-blue mono">${fmtNum(item.value)}</span>
+    const modelsList = `
+      <div class="item analytics-block staffing-analytics-list">
+        <div class="row"><div class="name">Найпоширеніші моделі / позиції</div></div>
+        <div class="staffing-model-grid">
+          ${topModels.length
+            ? topModels.map(item=>`
+                <div class="staffing-model-card">
+                  <div class="staffing-model-name">${htmlesc(item.name)}</div>
+                  <div class="staffing-model-value mono">${fmtNum(item.value)}</div>
                 </div>
-              </li>
-            `).join("")
-          : `<li><div class="hint">По моделях поки немає заповнених даних.</div></li>`
-        }
-      </ul>
-    </div>
-  `;
+              `).join("")
+            : `<div class="hint">По моделях поки немає заповнених даних.</div>`
+          }
+        </div>
+      </div>
+    `;
 
   return `
     <div class="staffing-analytics-modal">
