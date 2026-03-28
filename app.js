@@ -2916,6 +2916,13 @@ function normalizeAnalyticsHeader(value){
 
 }
 
+function isAnalyticsSummaryLabel(value){
+
+  const label = normalizeAnalyticsHeader(value);
+  return /^(всього|усього|разом|итого|всего|підсумок|підсумки|загалом)$/.test(label);
+
+}
+
 function fmtNum(value){
 
   const num = Number(value);
@@ -2990,6 +2997,8 @@ function buildStaffingAnalytics(rows){
   const modelTotals = new Map();
   const items = grid.slice(1).map((row, index)=>{
     const name = String(row?.[columns.dept] || "").trim() || `Рядок ${index + 1}`;
+    if(isAnalyticsSummaryLabel(name)) return null;
+
     let plan = columns.plan >= 0 ? parseAnalyticsNumber(row?.[columns.plan]) : null;
     let fact = columns.fact >= 0 ? parseAnalyticsNumber(row?.[columns.fact]) : null;
     let shortage = columns.shortage >= 0 ? parseAnalyticsNumber(row?.[columns.shortage]) : null;
