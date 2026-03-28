@@ -729,6 +729,22 @@ function saveState(st, opts={}){
 
 }
 
+function ensureCriticalStateSaved(warnText="Зміни поки що збережені тимчасово. Дочекайся синхронізації перед оновленням сторінки."){
+
+  if(!_lastLocalPersistOk){
+
+    showToast(warnText, "warn");
+
+  }
+
+  if(_syncReady){
+
+    pushSync();
+
+  }
+
+}
+
 function nowIsoKyiv(){
 
   const d = kyivNow();
@@ -4253,19 +4269,15 @@ function updateTask(taskId, patch, authorId, note){
 
   saveState(STATE);
 
-  if(hasStoredTable(patch?.description || "")){
+  const savedTask = STATE.tasks[idx];
 
-    if(!_lastLocalPersistOk){
+  if(savedTask?.type==="personal"){
 
-      showToast("Таблиця поки що збережена тимчасово. Дочекайся синхронізації перед оновленням сторінки.", "warn");
+    ensureCriticalStateSaved("Моя задача поки що збережена тимчасово. Дочекайся синхронізації перед оновленням сторінки.");
 
-    }
+  } else if(hasStoredTable(savedTask?.description || patch?.description || "")){
 
-    if(_syncReady){
-
-      pushSync();
-
-    }
+    ensureCriticalStateSaved("Таблиця поки що збережена тимчасово. Дочекайся синхронізації перед оновленням сторінки.");
 
   }
 
@@ -4307,19 +4319,13 @@ function createTask(task, authorId){
 
   saveState(STATE);
 
-  if(hasStoredTable(task?.description || "")){
+  if(task?.type==="personal"){
 
-    if(!_lastLocalPersistOk){
+    ensureCriticalStateSaved("Моя задача поки що збережена тимчасово. Дочекайся синхронізації перед оновленням сторінки.");
 
-      showToast("Таблиця поки що збережена тимчасово. Дочекайся синхронізації перед оновленням сторінки.", "warn");
+  } else if(hasStoredTable(task?.description || "")){
 
-    }
-
-    if(_syncReady){
-
-      pushSync();
-
-    }
+    ensureCriticalStateSaved("Таблиця поки що збережена тимчасово. Дочекайся синхронізації перед оновленням сторінки.");
 
   }
 
@@ -6740,6 +6746,7 @@ function saveReferenceGeneralNow(){
   STATE.referenceNotes.general = text;
 
   saveState(STATE);
+  ensureCriticalStateSaved("Запис у Цікавому поки що збережений тимчасово. Дочекайся синхронізації перед оновленням сторінки.");
   hideSheet();
   showToast("Загальну довідку збережено", "ok");
   render();
@@ -6757,6 +6764,7 @@ function saveReferenceDeptNow(deptId){
   STATE.referenceNotes.byDept[deptId] = text;
 
   saveState(STATE);
+  ensureCriticalStateSaved("Запис у Цікавому поки що збережений тимчасово. Дочекайся синхронізації перед оновленням сторінки.");
   hideSheet();
   showToast(`Збережено: ${dept.name}`, "ok");
   render();
@@ -6902,6 +6910,7 @@ function saveReferenceLinkNow(entryId="", attachmentId=""){
 
   STATE.referenceNotes.attachments = items;
   saveState(STATE);
+  ensureCriticalStateSaved("Вкладення поки що збережене тимчасово. Дочекайся синхронізації перед оновленням сторінки.");
   hideSheet();
   showToast("Вкладення збережено", "ok");
   render();
@@ -6916,6 +6925,7 @@ function deleteReferenceLinkNow(entryId="", attachmentId=""){
   STATE.referenceNotes = normalizeReferenceNotes(STATE.referenceNotes);
   STATE.referenceNotes.attachments = (STATE.referenceNotes.attachments || []).filter(x=>x && x.id!==attachmentId);
   saveState(STATE);
+  ensureCriticalStateSaved("Вкладення поки що збережене тимчасово. Дочекайся синхронізації перед оновленням сторінки.");
   hideSheet();
   showToast("Вкладення видалено", "ok");
   render();
@@ -7041,6 +7051,7 @@ function saveReferenceEntryNow(entryId=""){
 
   STATE.referenceNotes.entries = entries;
   saveState(STATE);
+  ensureCriticalStateSaved("Запис у Цікавому поки що збережений тимчасово. Дочекайся синхронізації перед оновленням сторінки.");
   hideSheet();
   showToast("Запис збережено", "ok");
   render();
@@ -7054,6 +7065,7 @@ function deleteReferenceEntryNow(entryId=""){
   STATE.referenceNotes = normalizeReferenceNotes(STATE.referenceNotes);
   STATE.referenceNotes.entries = (STATE.referenceNotes.entries || []).filter(x=>x && x.id!==entryId);
   saveState(STATE);
+  ensureCriticalStateSaved("Запис у Цікавому поки що збережений тимчасово. Дочекайся синхронізації перед оновленням сторінки.");
   hideSheet();
   showToast("Запис видалено", "ok");
   render();
@@ -8591,6 +8603,12 @@ function saveDeptNoteNow(deptId){
   dept.note = text;
 
   saveState(STATE);
+
+  if(t.type==="personal"){
+
+    ensureCriticalStateSaved("Моя задача поки що збережена тимчасово. Дочекайся синхронізації перед оновленням сторінки.");
+
+  }
 
   hideSheet();
 
