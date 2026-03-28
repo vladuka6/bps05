@@ -3235,6 +3235,12 @@ function canWrite(u){
 
 }
 
+function isViewerMode(u){
+
+  return !!u && u.role==="boss" && !!u.readOnly;
+
+}
+
 function roleSubtitle(u){
 
   if(!u) return "";
@@ -5947,13 +5953,17 @@ const READ_ONLY_ALLOWED_TABS = new Set([
 
   ROUTES.TASKS,
 
+]);
+
+const VIEWER_ALLOWED_TABS = new Set([
+
+  ROUTES.CONTROL,
+
+  ROUTES.TASKS,
+
   ROUTES.WEEKLY,
 
   ROUTES.ANALYTICS,
-
-  ROUTES.REPORTING,
-
-  ROUTES.PLAN,
 
 ]);
 
@@ -5961,7 +5971,13 @@ function getVisibleTabsForUser(u, tabs){
 
   const items = Array.isArray(tabs) ? tabs : [];
 
-  if(!u || !u.readOnly) return items;
+  if(!u) return items;
+
+  if(isViewerMode(u)){
+    return items.filter(t=>t && VIEWER_ALLOWED_TABS.has(t.key));
+  }
+
+  if(!u.readOnly) return items;
 
   return items.filter(t=>t && READ_ONLY_ALLOWED_TABS.has(t.key));
 
@@ -5970,6 +5986,22 @@ function getVisibleTabsForUser(u, tabs){
 function enforceReadOnlyNavigation(u){
 
   if(!u || !u.readOnly) return;
+
+  if(isViewerMode(u)){
+
+    if(UI.route === ROUTES.PROFILE) UI.route = ROUTES.TASKS;
+
+    if(UI.tab === ROUTES.TASKS && UI.taskDeptFilter === "personal"){
+      UI.taskDeptFilter = "all";
+      UI.taskPersonalFilter = "tasks";
+    }
+
+    if(!VIEWER_ALLOWED_TABS.has(UI.tab)){
+      UI.tab = ROUTES.TASKS;
+    }
+
+    return;
+  }
 
   if(UI.route === ROUTES.PROFILE) UI.route = ROUTES.TASKS;
 
@@ -12102,6 +12134,7 @@ function viewTasks(){
   recomputeDelegationStatuses();
 
   const u = currentSessionUser();
+  const viewerMode = isViewerMode(u);
 
   const {isDeptHeadLike} = asDeptRole(u);
 
@@ -12115,6 +12148,11 @@ function viewTasks(){
 
   const filter = UI.taskFilter;
 
+  if(viewerMode && UI.taskDeptFilter === "personal"){
+    UI.taskDeptFilter = "all";
+    UI.taskPersonalFilter = "tasks";
+  }
+
   const deptFilter = UI.taskDeptFilter || "all";
 
   const taskSearch = UI.taskSearch || "";
@@ -12123,7 +12161,7 @@ function viewTasks(){
 
   const annAudience = UI.taskAnnAudienceFilter || "all";
 
-  const showAnnouncementsScope = (u.role!=="boss") || (u.role==="boss" && deptFilter==="personal");
+  const showAnnouncementsScope = !viewerMode && ((u.role!=="boss") || (u.role==="boss" && deptFilter==="personal"));
 
   const isPersonalScope = (u.role==="boss" && deptFilter==="personal");
 
@@ -12453,9 +12491,9 @@ function viewTasks(){
 
         }).join("")}
 
-        <div class="chip ${(deptFilter==="personal" && personalFilter==="tasks") ? "active" : ""}" data-action="openMyTasks">Мої</div>
+        ${viewerMode ? `` : `<div class="chip ${(deptFilter==="personal" && personalFilter==="tasks") ? "active" : ""}" data-action="openMyTasks">Мої</div>`}
 
-        <div class="chip ${(deptFilter==="personal" && personalFilter==="announcements") ? "active" : ""}" data-action="openAnnouncementsAudience" data-arg1="all">Оголошення</div>
+        ${viewerMode ? `` : `<div class="chip ${(deptFilter==="personal" && personalFilter==="announcements") ? "active" : ""}" data-action="openAnnouncementsAudience" data-arg1="all">Оголошення</div>`}
 
       </div>
 
