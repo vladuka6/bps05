@@ -2790,40 +2790,32 @@ function renderTaskDescWithTableToggle(text, label, opts={}){
 
   if(tables.length){
 
-    const summary = tables.length > 1 ? `Показати дані (${tables.length})` : "Показати дані";
-
     const updatedShort = opts.updatedAt ? compactTimeFirst(opts.updatedAt) : "";
+    const currentModalKey = registerRenderedTableModal(
+      tables.length > 1 ? `${label || "Дані"} (${tables.length})` : (label || "Дані"),
+      `<div class="rich-text">${tables.map(item=>renderStoredTableBlock(item.content)).join("")}</div>`
+    );
     parts.push(`
 
-      <details class="task-table-toggle">
-
-        <summary><span>${summary}</span>${updatedShort ? `<span class="task-table-stamp mono">${htmlesc(updatedShort)}</span>` : ``}</summary>
-
-        <div class="task-table-toggle-body rich-text">
-
-          ${tables.map(item=>renderStoredTableBlock(item.content)).join("")}
-
-        </div>
-
-      </details>
+      <div class="task-table-toggle task-table-toggle-actions">
+        <button class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${currentModalKey}">${tables.length > 1 ? `Показати дані (${tables.length})` : "Показати дані"}</button>
+        ${updatedShort ? `<span class="task-table-stamp mono">${htmlesc(updatedShort)}</span>` : ``}
+      </div>
 
     `);
 
     if(diffMeta && diffMeta.changedCount){
+      const diffModalKey = registerRenderedTableModal(
+        "Показати зміни",
+        `<div class="rich-text">${renderTableDiffBlock(currentTable.rows, previousTable.rows)}</div>`
+      );
 
       parts.push(`
 
-        <details class="task-table-toggle task-table-diff-toggle">
-
-          <summary><span>Показати зміни</span><span class="task-table-diff-badge mono">${htmlesc(String(diffMeta.changedCount))}</span></summary>
-
-          <div class="task-table-toggle-body rich-text">
-
-            ${renderTableDiffBlock(currentTable.rows, previousTable.rows)}
-
-          </div>
-
-        </details>
+        <div class="task-table-toggle task-table-toggle-actions task-table-diff-toggle">
+          <button class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${diffModalKey}">Показати зміни</button>
+          <span class="task-table-diff-badge mono">${htmlesc(String(diffMeta.changedCount))}</span>
+        </div>
 
       `);
 
@@ -2832,6 +2824,40 @@ function renderTaskDescWithTableToggle(text, label, opts={}){
   }
 
   return parts.join("");
+
+}
+
+function registerRenderedTableModal(title, bodyHtml){
+
+  if(!UI.renderedTableModals || typeof UI.renderedTableModals !== "object"){
+    UI.renderedTableModals = {};
+  }
+
+  const key = `tbl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+  UI.renderedTableModals[key] = {
+    title: String(title || "Дані"),
+    bodyHtml: String(bodyHtml || "")
+  };
+
+  return key;
+
+}
+
+function openRenderedTableModal(key){
+
+  const item = UI.renderedTableModals?.[key];
+
+  if(!item) return;
+
+  showSheet(item.title, `
+    <div class="table-modal-body">
+      ${item.bodyHtml}
+    </div>
+    <div class="actions" style="margin-top:14px;">
+      <button class="btn primary" data-action="hideSheet">Закрити</button>
+    </div>
+  `, {stack:true});
 
 }
 
@@ -5998,6 +6024,8 @@ let UI = {
   taskAnnAudienceFilter: "all",
 
   taskIndexMap: {},
+
+  renderedTableModals: {},
 
   deptOpen: {},
 
@@ -18960,6 +18988,8 @@ const ACTIONS = {
 
   saveTaskEvaluationNow,
 
+  openRenderedTableModal,
+
   openReferenceGeneral,
 
   openReferenceDept,
@@ -19557,6 +19587,8 @@ document.addEventListener("change", (e)=>{
 function render(){
 
   const user = currentSessionUser();
+
+  UI.renderedTableModals = {};
 
   if(!user){
 

@@ -1139,6 +1139,13 @@
       transition:transform .18s ease;
     }
     .task-table-toggle[open] summary::before{transform:rotate(90deg);}
+    .task-table-toggle-actions{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:10px 12px;
+    }
     .task-table-toggle-body{
       padding:0 10px 10px;
       white-space:normal !important;
@@ -1177,6 +1184,12 @@
       font-size:11px;
       line-height:1.35;
       color:var(--text-soft);
+    }
+    .table-modal-body{
+      min-width:0;
+    }
+    .table-modal-body .rich-text .rt-table-wrap{
+      margin-top:0;
     }
     .task-table-diff-toggle .rt-table-wrap{
       margin-top:2px;
