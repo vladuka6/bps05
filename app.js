@@ -3485,12 +3485,28 @@ function renderStaffingUnitList(items, sortKey="shortage"){
       ${list.length
         ? list.map(item=>`
             <li>
-              <div class="report-line staffing-unit-line">
-                <span class="report-strong">${htmlesc(item.name)}</span>
-                <span class="badge mono">План ${fmtNum(item.plan)}</span>
-                <span class="badge b-blue mono">Факт ${fmtNum(item.fact)}</span>
-                <span class="badge b-warn mono">Нестача ${fmtNum(item.shortage)}</span>
-                <span class="badge mono">${fmtNum(item.percent)}%</span>
+              <div class="staffing-unit-card">
+                <div class="staffing-unit-card-head">
+                  <span class="report-strong staffing-unit-name">${htmlesc(item.name)}</span>
+                </div>
+                <div class="staffing-unit-metrics">
+                  <div class="staffing-unit-metric">
+                    <div class="staffing-unit-metric-k">План</div>
+                    <div class="staffing-unit-metric-v mono">${fmtNum(item.plan)}</div>
+                  </div>
+                  <div class="staffing-unit-metric is-blue">
+                    <div class="staffing-unit-metric-k">Факт</div>
+                    <div class="staffing-unit-metric-v mono">${fmtNum(item.fact)}</div>
+                  </div>
+                  <div class="staffing-unit-metric is-warn">
+                    <div class="staffing-unit-metric-k">Нестача</div>
+                    <div class="staffing-unit-metric-v mono">${fmtNum(item.shortage)}</div>
+                  </div>
+                  <div class="staffing-unit-metric">
+                    <div class="staffing-unit-metric-k">%</div>
+                    <div class="staffing-unit-metric-v mono">${fmtNum(item.percent)}%</div>
+                  </div>
+                </div>
               </div>
             </li>
           `).join("")
