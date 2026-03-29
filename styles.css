@@ -1243,11 +1243,12 @@
         font-size:9px;
       }
     .staffing-analytics-modal .report-tile .v{
-        font-size:12px;
+        font-size:15px;
         line-height:1.05;
       }
     .staffing-analytics-modal .report-tile .s{
-        font-size:9px;
+        font-size:10px;
+        line-height:1.05;
       }
     .staffing-analytics-modal .analytics-block{
         padding:7px;
@@ -1294,6 +1295,32 @@
       }
     .staffing-analytics-sections{
         gap:8px;
+      }
+    .staffing-unit-list{
+        gap:6px;
+      }
+    .staffing-unit-line{
+        flex-wrap:wrap;
+        row-gap:6px;
+      }
+    .staffing-units-search{
+        margin:0 0 6px;
+      }
+    .staffing-units-search-input{
+        width:100%;
+        min-height:34px;
+        padding:8px 10px;
+        border-radius:10px;
+      }
+    .staffing-sort-buttons{
+        gap:6px;
+        margin-bottom:6px;
+      }
+    .staffing-units-block .comparison-switch-panel{
+        padding-top:2px;
+      }
+    .staffing-units-empty{
+        margin-top:6px;
       }
     .staffing-model-grid{
         display:grid;
@@ -4809,6 +4836,26 @@
   }
   .eval-donut-depts .eval-donut::after{inset:12px;}
   .eval-task-actions .btn{flex:1 1 auto;}
+  .staffing-analytics-modal .report-grid.staffing-analytics-kpis{
+    grid-template-columns:repeat(4, minmax(0,1fr));
+    gap:5px;
+  }
+  .staffing-analytics-modal .report-tile{
+    padding:clamp(4px, 1.15vw, 6px);
+    min-height:clamp(50px, 13vw, 58px);
+  }
+  .staffing-analytics-modal .report-tile .k{
+    font-size:clamp(8px, 2.15vw, 9px);
+    line-height:1.02;
+  }
+  .staffing-analytics-modal .report-tile .v{
+    font-size:clamp(13px, 3.8vw, 16px);
+    line-height:1;
+  }
+  .staffing-analytics-modal .report-tile .s{
+    font-size:clamp(8px, 2.2vw, 10px);
+    line-height:1;
+  }
 }
 
 @media (max-width: 420px){
@@ -4816,6 +4863,23 @@
   .report-grid{grid-template-columns:repeat(2, minmax(0,1fr));}
   .report-tile{padding:7px 8px;}
   .report-tile .v{font-size:14px;}
+  .staffing-analytics-modal .report-grid.staffing-analytics-kpis{
+    grid-template-columns:repeat(4, minmax(0,1fr));
+    gap:4px;
+  }
+  .staffing-analytics-modal .report-tile{
+    padding:4px;
+    min-height:48px;
+  }
+  .staffing-analytics-modal .report-tile .k{
+    font-size:8px;
+  }
+  .staffing-analytics-modal .report-tile .v{
+    font-size:13px;
+  }
+  .staffing-analytics-modal .report-tile .s{
+    font-size:8px;
+  }
   .eval-donut-depts .eval-donut-wrap{
     grid-template-columns:64px minmax(0,1fr);
     gap:8px;

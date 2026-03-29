@@ -3347,14 +3347,15 @@ function buildStaffingAnalyticsModalHtml(rows, title="", opts={}){
     `;
   }
 
-  const {items, totalPlan, totalFact, totalAssets, totalShortage, completion, topShortage, bestFilled, topModels, donut, shortageDonut} = analytics;
+  const {items, totalPlan, totalFact, totalAssets, totalShortage, completion, topModels, donut, shortageDonut} = analytics;
+  const shortagePercent = Math.max(0, 100 - Number(completion || 0));
 
   const summaryGrid = `
       <div class="report-grid staffing-analytics-kpis">
-        <div class="report-tile"><div class="k">План</div><div class="v mono">${fmtNum(totalPlan)}</div><div class="s">За таблицею</div></div>
-        <div class="report-tile"><div class="k">Факт</div><div class="v mono">${fmtNum(totalFact)}</div><div class="s">Наявні</div></div>
-        <div class="report-tile"><div class="k">Нестача</div><div class="v mono">${fmtNum(totalShortage)}</div><div class="s">${completion}% укомплектовано</div></div>
-        <div class="report-tile"><div class="k">Всього засобів</div><div class="v mono">${fmtNum(totalAssets)}</div><div class="s">За колонкою “Всього”</div></div>
+        <div class="report-tile"><div class="k">План</div><div class="v mono">${fmtNum(totalPlan)}</div><div class="s">&nbsp;</div></div>
+        <div class="report-tile"><div class="k">Факт</div><div class="v mono">${fmtNum(totalFact)}</div><div class="s">${fmtNum(completion)}%</div></div>
+        <div class="report-tile"><div class="k">Нестача</div><div class="v mono">${fmtNum(totalShortage)}</div><div class="s">${fmtNum(shortagePercent)}%</div></div>
+        <div class="report-tile"><div class="k">Всього засобів</div><div class="v mono">${fmtNum(totalAssets)}</div><div class="s">&nbsp;</div></div>
       </div>
   `;
 
@@ -3385,48 +3386,7 @@ function buildStaffingAnalyticsModalHtml(rows, title="", opts={}){
     </div>
   `;
 
-  const shortageList = `
-    <div class="item analytics-block staffing-analytics-list">
-      <div class="row"><div class="name">Підрозділи з найбільшою нестачею</div></div>
-      <ul class="report-list">
-        ${topShortage.length
-          ? topShortage.map(item=>`
-              <li>
-                <div class="report-line">
-                  <span class="report-strong">${htmlesc(item.name)}</span>
-                  <span class="badge b-warn">Нестача ${fmtNum(item.shortage)}</span>
-                  <span class="badge b-blue">Факт ${fmtNum(item.fact)}</span>
-                  <span class="badge">${fmtNum(item.percent)}%</span>
-                </div>
-                <div class="report-meta">План: ${fmtNum(item.plan)} · Факт: ${fmtNum(item.fact)} · Нестача: ${fmtNum(item.shortage)}</div>
-              </li>
-            `).join("")
-          : `<li><div class="hint">Некомплекту в таблиці не знайдено.</div></li>`
-        }
-      </ul>
-    </div>
-  `;
-
-  const bestList = `
-    <div class="item analytics-block staffing-analytics-list">
-      <div class="row"><div class="name">Найкраща укомплектованість</div></div>
-      <ul class="report-list">
-        ${bestFilled.length
-          ? bestFilled.map(item=>`
-              <li>
-                <div class="report-line">
-                  <span class="report-strong">${htmlesc(item.name)}</span>
-                  <span class="badge b-ok">${fmtNum(item.percent)}%</span>
-                  <span class="badge b-blue">Факт ${fmtNum(item.fact)}</span>
-                </div>
-                <div class="report-meta">План: ${fmtNum(item.plan)} · Нестача: ${fmtNum(item.shortage)}</div>
-              </li>
-            `).join("")
-          : `<li><div class="hint">Даних для рейтингу поки недостатньо.</div></li>`
-        }
-      </ul>
-    </div>
-  `;
+  const unitsBlock = renderStaffingUnitsCombinedBlock("Підрозділи", items, "shortage");
 
   const modelsList = `
       <div class="item analytics-block staffing-analytics-list">
@@ -3479,13 +3439,10 @@ function buildStaffingAnalyticsModalHtml(rows, title="", opts={}){
       ${summaryGrid}
       ${buildStaffingTrendBlockHtml(trendPoints)}
       <div class="eval-donut-grid">
-        ${totalDonutCard}
-        ${shortageDonutCard}
+      ${totalDonutCard}
+      ${shortageDonutCard}
       </div>
-      <div class="control-grid staffing-analytics-sections">
-        ${shortageList}
-        ${bestList}
-      </div>
+      ${unitsBlock}
       ${modelsList}
       ${compareSelector}
       ${dynamicsBlock}
@@ -3508,6 +3465,102 @@ function renderStaffingDynamicsDelta(delta, opts={}){
   const suffix = opts.suffix ? ` ${opts.suffix}` : "";
 
   return `<span class="${cls}">${prefix}${fmtNum(Math.abs(num))}${suffix}</span>`;
+
+}
+
+function renderStaffingUnitList(items, sortKey="shortage"){
+
+  const list = Array.isArray(items) ? items.slice() : [];
+  const key = String(sortKey || "shortage");
+
+  list.sort((a,b)=>{
+    if(key === "plan") return (b.plan - a.plan) || String(a.name).localeCompare(String(b.name), "uk");
+    if(key === "fact") return (b.fact - a.fact) || String(a.name).localeCompare(String(b.name), "uk");
+    if(key === "percent") return (b.percent - a.percent) || (a.shortage - b.shortage) || String(a.name).localeCompare(String(b.name), "uk");
+    return (b.shortage - a.shortage) || (a.percent - b.percent) || String(a.name).localeCompare(String(b.name), "uk");
+  });
+
+  return `
+    <ul class="report-list staffing-unit-list">
+      ${list.length
+        ? list.map(item=>`
+            <li>
+              <div class="report-line staffing-unit-line">
+                <span class="report-strong">${htmlesc(item.name)}</span>
+                <span class="badge mono">План ${fmtNum(item.plan)}</span>
+                <span class="badge b-blue mono">Факт ${fmtNum(item.fact)}</span>
+                <span class="badge b-warn mono">Нестача ${fmtNum(item.shortage)}</span>
+                <span class="badge mono">${fmtNum(item.percent)}%</span>
+              </div>
+            </li>
+          `).join("")
+        : `<li><div class="hint">Дані по підрозділах поки відсутні.</div></li>`
+      }
+    </ul>
+  `;
+
+}
+
+function buildStaffingUnitsSearchIndex(items){
+
+  const data = Array.isArray(items) ? items : [];
+  return data.map(item=>({
+    ...item,
+    searchText: String(item.name || "").toLowerCase(),
+  }));
+
+}
+
+function renderStaffingUnitsCombinedBlock(title, items, defaultKey="shortage"){
+
+  const buttons = [
+    {key:"shortage", label:"Нестача"},
+    {key:"percent", label:"%"},
+    {key:"fact", label:"Факт"},
+    {key:"plan", label:"План"},
+  ];
+
+  const groupId = `stf_sort_${Math.random().toString(36).slice(2, 8)}`;
+  const searchId = `stf_search_${Math.random().toString(36).slice(2, 8)}`;
+  const indexedItems = buildStaffingUnitsSearchIndex(items);
+
+  return `
+    <div class="item analytics-block comparison-switch-block staffing-units-block">
+      <div class="row"><div class="name">${htmlesc(title)}</div></div>
+      <div class="field staffing-units-search">
+        <input
+          id="${searchId}"
+          type="search"
+          class="staffing-units-search-input"
+          placeholder="Пошук загону / органу..."
+          data-action="filterStaffingUnitsBlock"
+          data-arg1="${groupId}"
+        />
+      </div>
+      <div class="comparison-switcher" data-topswitch-group="${groupId}">
+        <div class="comparison-switcher-buttons staffing-sort-buttons">
+          ${buttons.map(btn=>`
+            <button
+              type="button"
+              class="comparison-switcher-btn ${btn.key===defaultKey ? "is-active" : ""}"
+              data-action="switchComparisonTopPanel"
+              data-arg1="${groupId}"
+              data-arg2="${btn.key}"
+            >${htmlesc(btn.label)}</button>
+          `).join("")}
+        </div>
+        <div class="comparison-switch-panels">
+          ${buttons.map(btn=>`
+            <div class="comparison-switch-panel ${btn.key===defaultKey ? "is-active" : ""}" data-topswitch-panel="${groupId}:${btn.key}">
+              <div class="staffing-units-panel-body" data-staffing-sort="${btn.key}" data-staffing-filter-group="${groupId}">
+                ${renderStaffingUnitList(indexedItems, btn.key)}
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    </div>
+  `;
 
 }
 
@@ -4740,6 +4793,44 @@ function switchComparisonTopPanel(groupId, key){
 
   scope.querySelectorAll("[data-topswitch-panel]").forEach(panel=>{
     panel.classList.toggle("is-active", panel.getAttribute("data-topswitch-panel") === `${groupId}:${key}`);
+  });
+
+}
+
+function filterStaffingUnitsBlock(groupId){
+
+  if(!groupId) return;
+
+  const switcher = [...document.querySelectorAll("[data-topswitch-group]")].find(el=>el.getAttribute("data-topswitch-group") === groupId);
+  if(!switcher) return;
+
+  const input = switcher.parentElement?.querySelector(`.staffing-units-search-input[data-arg1="${groupId}"]`);
+  const query = String(input?.value || "").trim().toLowerCase();
+
+  const panels = switcher.querySelectorAll("[data-staffing-filter-group]");
+  panels.forEach(panel=>{
+    const sortKey = panel.getAttribute("data-staffing-sort") || "shortage";
+    const items = [...panel.querySelectorAll(".staffing-unit-list li")];
+    let visibleCount = 0;
+
+    items.forEach(item=>{
+      const name = String(item.querySelector(".report-strong")?.textContent || "").trim().toLowerCase();
+      const show = !query || name.includes(query);
+      item.style.display = show ? "" : "none";
+      if(show) visibleCount += 1;
+    });
+
+    let hint = panel.querySelector(".staffing-units-empty");
+    if(!visibleCount){
+      if(!hint){
+        hint = document.createElement("div");
+        hint.className = "hint staffing-units-empty";
+        panel.appendChild(hint);
+      }
+      hint.textContent = "Нічого не знайдено за цим запитом.";
+    } else if(hint){
+      hint.remove();
+    }
   });
 
 }
@@ -20788,6 +20879,7 @@ const ACTIONS = {
 
   hideSheet,
   switchComparisonTopPanel,
+  filterStaffingUnitsBlock,
 
   logout,
 
