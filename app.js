@@ -3980,14 +3980,64 @@ function buildComparisonItemDetailHtml(item){
     },
   ].filter(group=>group.rows.some(row=>String(row.value || "").trim() && String(row.value || "").trim() !== "—"));
 
-  const scoreRows = [
-    {label:"Універсальний", key:"universalScore", hint:"Збалансована оцінка по всіх основних характеристиках."},
-    {label:"Ударний", key:"strike_multirotorScore", hint:"Акцент на навантаження, дальність, швидкість і стійкість."},
-    {label:"Розвідка", key:"recon_fixed_wingScore", hint:"Акцент на час польоту, дальність, радіус і спостереження."},
-    {label:"Перехоплення", key:"interceptorScore", hint:"Акцент на швидкість, дальність, висоту й оперативність."},
-    {label:"Логістика", key:"logisticsScore", hint:"Акцент на навантаження, дальність, витривалість і розгортання."},
-    {label:"Ціна / можливості", key:"valueScore", hint:"Співвідношення технічних можливостей до вартості."},
-  ].filter(row=>Number.isFinite(item?.[row.key]));
+  const profileRows = [
+    {label:"Універсальний", key:"universalScore"},
+    {label:"Ударний", key:"strike_multirotorScore"},
+    {label:"Розвідка", key:"recon_fixed_wingScore"},
+    {label:"Перехоплення", key:"interceptorScore"},
+    {label:"Логістика", key:"logisticsScore"},
+    {label:"Ціна / можливості", key:"valueScore"},
+  ]
+    .filter(row=>Number.isFinite(item?.[row.key]))
+    .map(row=>({...row, score:Number(item[row.key])}))
+    .sort((a,b)=>b.score - a.score);
+
+  const flattenedRows = groups.flatMap(group=>group.rows);
+  const strengthLabels = flattenedRows
+    .filter(row=>row.accent === "strong")
+    .map(row=>row.label)
+    .slice(0, 4);
+  const weaknessLabels = flattenedRows
+    .filter(row=>row.accent === "weak")
+    .map(row=>row.label)
+    .slice(0, 4);
+  const primaryProfile = profileRows[0] || null;
+  const secondaryProfiles = profileRows.slice(1, 3);
+  const recommendationBlock = `
+    <div class="comparison-insight-grid">
+      <div class="comparison-insight-card">
+        <div class="comparison-insight-label">Основний сценарій</div>
+        <div class="comparison-insight-value">${htmlesc(primaryProfile?.label || "Потрібно дивитись вручну")}</div>
+      </div>
+      <div class="comparison-insight-card">
+        <div class="comparison-insight-label">Також підходить</div>
+        <div class="comparison-insight-tags">
+          ${secondaryProfiles.length
+            ? secondaryProfiles.map(row=>`<span class="comparison-insight-tag">${htmlesc(row.label)}</span>`).join("")
+            : `<span class="comparison-insight-muted">Немає вираженого другого сценарію</span>`
+          }
+        </div>
+      </div>
+      <div class="comparison-insight-card">
+        <div class="comparison-insight-label">Сильні сторони</div>
+        <div class="comparison-insight-tags">
+          ${strengthLabels.length
+            ? strengthLabels.map(label=>`<span class="comparison-insight-tag is-strong">${htmlesc(label)}</span>`).join("")
+            : `<span class="comparison-insight-muted">Явно виражених немає</span>`
+          }
+        </div>
+      </div>
+      <div class="comparison-insight-card">
+        <div class="comparison-insight-label">Слабкі сторони</div>
+        <div class="comparison-insight-tags">
+          ${weaknessLabels.length
+            ? weaknessLabels.map(label=>`<span class="comparison-insight-tag is-weak">${htmlesc(label)}</span>`).join("")
+            : `<span class="comparison-insight-muted">Критичних слабких сторін не видно</span>`
+          }
+        </div>
+      </div>
+    </div>
+  `;
 
   return `
     <div class="comparison-detail-modal">
@@ -3995,20 +4045,10 @@ function buildComparisonItemDetailHtml(item){
         <div class="comparison-detail-title">${htmlesc(item.name || "Модель")}</div>
         ${item.vendor ? `<div class="comparison-detail-sub">${htmlesc(item.vendor)}</div>` : ``}
       </div>
-      ${scoreRows.length ? `
-          <div class="comparison-detail-scores report-grid">
-            ${scoreRows.map(row=>`
-              <div class="report-tile comparison-score-tile ${Number(item[row.key]) >= 70 ? "is-strong" : (Number(item[row.key]) <= 35 ? "is-weak" : "")}">
-                <div class="k">${htmlesc(row.label)}</div>
-                <div class="v mono">${fmtNum(item[row.key])}</div>
-                <div class="s" title="${htmlesc(row.hint)}">${htmlesc(row.hint)} Макс. 100.</div>
-              </div>
-            `).join("")}
-          </div>
-      ` : ``}
+      ${recommendationBlock}
       <div class="comparison-detail-groups">
         ${groups.map(group=>`
-            <div class="comparison-detail-section">
+          <div class="comparison-detail-section">
               <div class="comparison-detail-section-title">${htmlesc(group.title)}</div>
               <div class="comparison-detail-grid">
                 ${group.rows.map(row=>`
