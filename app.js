@@ -8954,6 +8954,7 @@ function saveReferenceEntryNow(entryId=""){
   const entries = Array.isArray(STATE.referenceNotes.entries) ? STATE.referenceNotes.entries.slice() : [];
   const now = nowIsoKyiv();
   const existingIdx = entryId ? entries.findIndex(x=>x && x.id===entryId) : -1;
+  let tableVersionCreated = false;
 
   if(existingIdx >= 0){
     const existingEntry = entries[existingIdx] || {};
@@ -8976,6 +8977,7 @@ function saveReferenceEntryNow(entryId=""){
           createdAt: existingEntry.updatedAt || existingEntry.createdAt || now,
           rows: cloneStoredTableRows(existingCurrentTable.rows),
         });
+        tableVersionCreated = true;
       }
     }
 
@@ -9009,7 +9011,7 @@ function saveReferenceEntryNow(entryId=""){
   saveState(STATE);
   ensureCriticalStateSaved("Запис у Цікавому поки що збережений тимчасово. Дочекайся синхронізації перед оновленням сторінки.");
   hideSheet();
-  showToast("Запис збережено", "ok");
+  showToast(tableVersionCreated ? "Запис збережено · створено нову версію таблиці" : "Запис збережено", "ok");
   render();
 
 }
