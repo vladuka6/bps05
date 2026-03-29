@@ -3065,6 +3065,75 @@ function buildStaffingTrendBlockHtml(points){
 
 }
 
+function buildStaffingAutoSummaryHtml(currentAnalytics, previousAnalytics=null){
+
+  if(!currentAnalytics) return "";
+
+  const topShortageItem = (currentAnalytics.topShortage || [])[0] || null;
+  const bestFilledItem = (currentAnalytics.bestFilled || [])[0] || null;
+  const criticalZero = (currentAnalytics.items || []).filter(item=>Number(item.percent || 0) <= 0 && Number(item.plan || 0) > 0).length;
+
+  let dynamicsText = "Суттєвих змін щодо попередньої версії поки не зафіксовано.";
+  if(previousAnalytics){
+    const factDelta = currentAnalytics.totalFact - previousAnalytics.totalFact;
+    const shortageDelta = currentAnalytics.totalShortage - previousAnalytics.totalShortage;
+
+    if(factDelta > 0 && shortageDelta < 0){
+      dynamicsText = `Список зріс на ${fmtNum(factDelta)}, а нестача зменшилась на ${fmtNum(Math.abs(shortageDelta))}.`;
+    } else if(factDelta > 0){
+      dynamicsText = `Список зріс на ${fmtNum(factDelta)} відносно попередньої версії.`;
+    } else if(factDelta < 0){
+      dynamicsText = `Список зменшився на ${fmtNum(Math.abs(factDelta))} відносно попередньої версії.`;
+    } else if(shortageDelta < 0){
+      dynamicsText = `Нестача зменшилась на ${fmtNum(Math.abs(shortageDelta))}.`;
+    } else if(shortageDelta > 0){
+      dynamicsText = `Нестача зросла на ${fmtNum(shortageDelta)}.`;
+    }
+  }
+
+  const cards = [
+    {
+      label: "Загальний стан",
+      value: `${fmtNum(currentAnalytics.completion)}%`,
+      text: `Некомплект становить ${fmtNum(Math.max(0, 100 - Number(currentAnalytics.completion || 0)))}%.`,
+    },
+    {
+      label: "Найбільша проблема",
+      value: topShortageItem ? htmlesc(topShortageItem.name) : "—",
+      text: topShortageItem
+        ? `Найбільший некомплект: ${fmtNum(topShortageItem.shortage)}.`
+        : "Некомплекту в таблиці не виявлено.",
+    },
+    {
+      label: "Найкращий показник",
+      value: bestFilledItem ? htmlesc(bestFilledItem.name) : "—",
+      text: bestFilledItem
+        ? `Укомплектованість ${fmtNum(bestFilledItem.percent)}% при факті ${fmtNum(bestFilledItem.fact)}.`
+        : "Даних для рейтингу поки недостатньо.",
+    },
+    {
+      label: "Динаміка / ризик",
+      value: criticalZero ? `${fmtNum(criticalZero)}` : "0",
+      text: previousAnalytics
+        ? dynamicsText
+        : (criticalZero ? `У критичній зоні ${fmtNum(criticalZero)} підрозділів із 0% укомплектованості.` : "Критичних 0% підрозділів наразі не зафіксовано."),
+    },
+  ];
+
+  return `
+    <div class="staffing-summary-grid">
+      ${cards.map(card=>`
+        <div class="staffing-summary-card">
+          <div class="staffing-summary-k">${card.label}</div>
+          <div class="staffing-summary-v">${card.value}</div>
+          <div class="staffing-summary-s">${card.text}</div>
+        </div>
+      `).join("")}
+    </div>
+  `;
+
+}
+
 function registerStaffingAnalyticsModalSet(currentRows, title, versions=[], currentAt=""){
 
   const modalTitle = `Аналітика: ${title || "Таблиця"}`;
@@ -3347,7 +3416,7 @@ function buildStaffingAnalyticsModalHtml(rows, title="", opts={}){
     `;
   }
 
-  const {items, totalPlan, totalFact, totalAssets, totalShortage, completion, topModels, donut, shortageDonut} = analytics;
+  const {items, totalPlan, totalFact, totalAssets, totalShortage, completion, topShortage, bestFilled, topModels, donut, shortageDonut} = analytics;
   const shortagePercent = Math.max(0, 100 - Number(completion || 0));
 
   const summaryGrid = `
@@ -3410,6 +3479,7 @@ function buildStaffingAnalyticsModalHtml(rows, title="", opts={}){
   const compareRows = Array.isArray(opts.compareRows) ? opts.compareRows : [];
   const compareAt = String(opts.compareAt || "");
   const trendPoints = Array.isArray(opts.trendPoints) ? opts.trendPoints : [];
+  const previousAnalytics = compareRows.length ? buildStaffingAnalytics(compareRows) : null;
   const compareSelector = compareOptions.length ? `
     <div class="item analytics-block staffing-dynamics-picker">
       <div class="row"><div class="name">Динаміка</div></div>
@@ -3437,10 +3507,11 @@ function buildStaffingAnalyticsModalHtml(rows, title="", opts={}){
   return `
     <div class="staffing-analytics-modal">
       ${summaryGrid}
+      ${buildStaffingAutoSummaryHtml({items, totalPlan, totalFact, totalAssets, totalShortage, completion, topShortage, bestFilled}, previousAnalytics)}
       ${buildStaffingTrendBlockHtml(trendPoints)}
       <div class="eval-donut-grid">
-      ${totalDonutCard}
-      ${shortageDonutCard}
+        ${totalDonutCard}
+        ${shortageDonutCard}
       </div>
       ${unitsBlock}
       ${modelsList}
@@ -3487,7 +3558,7 @@ function renderStaffingUnitList(items, sortKey="shortage", panelId=""){
         ${list.length
         ? list.map((item, index)=>`
             <li>
-              <div class="staffing-unit-card" data-staffing-rank="${index}">
+              <div class="staffing-unit-card" data-staffing-rank="${index}" data-staffing-plan="${fmtNum(item.plan)}" data-staffing-plan-value="${Number(item.plan || 0)}">
                 <div class="staffing-unit-card-head">
                   <span class="report-strong staffing-unit-name">${htmlesc(item.name)}</span>
                 </div>
@@ -3556,6 +3627,22 @@ function renderStaffingUnitsCombinedBlock(title, items, defaultKey="shortage"){
   return `
     <div class="item analytics-block comparison-switch-block staffing-units-block">
       <div class="row"><div class="name">${htmlesc(title)}</div></div>
+      <div class="comparison-switcher-buttons staffing-scope-buttons" data-staffing-scope-group="${groupId}">
+        <button
+          type="button"
+          class="comparison-switcher-btn is-active"
+          data-action="setStaffingUnitsScope"
+          data-arg1="${groupId}"
+          data-arg2="plan"
+        >Тільки з планом</button>
+        <button
+          type="button"
+          class="comparison-switcher-btn"
+          data-action="setStaffingUnitsScope"
+          data-arg1="${groupId}"
+          data-arg2="all"
+        >Усі</button>
+      </div>
       <div class="field staffing-units-search">
         <input
           id="${searchId}"
@@ -3566,7 +3653,7 @@ function renderStaffingUnitsCombinedBlock(title, items, defaultKey="shortage"){
           data-arg1="${groupId}"
         />
       </div>
-      <div class="comparison-switcher" data-topswitch-group="${groupId}">
+      <div class="comparison-switcher" data-topswitch-group="${groupId}" data-staffing-scope="plan">
         <div class="comparison-switcher-buttons staffing-sort-buttons">
           ${buttons.map(btn=>`
             <button
@@ -4835,6 +4922,7 @@ function filterStaffingUnitsBlock(groupId){
 
   const input = switcher.parentElement?.querySelector(`.staffing-units-search-input[data-arg1="${groupId}"]`);
   const query = String(input?.value || "").trim().toLowerCase();
+  const scopeMode = String(switcher.getAttribute("data-staffing-scope") || "plan");
 
   const panels = switcher.querySelectorAll("[data-staffing-filter-group]");
   panels.forEach(panel=>{
@@ -4844,7 +4932,10 @@ function filterStaffingUnitsBlock(groupId){
 
     items.forEach(item=>{
       const name = String(item.querySelector(".report-strong")?.textContent || "").trim().toLowerCase();
-      const show = !query || name.includes(query);
+      const planValue = Number(item.querySelector(".staffing-unit-card")?.getAttribute("data-staffing-plan-value") || 0);
+      const matchesSearch = !query || name.includes(query);
+      const matchesScope = scopeMode === "all" ? true : planValue > 0;
+      const show = matchesSearch && matchesScope;
       item.style.display = show ? "" : "none";
       if(show) visibleCount += 1;
     });
@@ -4871,6 +4962,27 @@ function filterStaffingUnitsBlock(groupId){
       hint.remove();
     }
   });
+
+}
+
+function setStaffingUnitsScope(groupId, scope="plan"){
+
+  if(!groupId) return;
+
+  const switcher = [...document.querySelectorAll("[data-topswitch-group]")].find(el=>el.getAttribute("data-topswitch-group") === groupId);
+  if(!switcher) return;
+
+  const nextScope = scope === "all" ? "all" : "plan";
+  switcher.setAttribute("data-staffing-scope", nextScope);
+
+  const scopeWrap = switcher.parentElement?.querySelector(`[data-staffing-scope-group="${groupId}"]`);
+  if(scopeWrap){
+    scopeWrap.querySelectorAll(".comparison-switcher-btn").forEach(btn=>{
+      btn.classList.toggle("is-active", btn.dataset.arg2 === nextScope);
+    });
+  }
+
+  filterStaffingUnitsBlock(groupId);
 
 }
 
@@ -9193,7 +9305,7 @@ function viewControl(){
   const filterButtons = [
     {key:"all", label:"Усі"},
     {key:"general", label:"Загальні"},
-    ...STATE.departments.map(dept=>({key:dept.id, label:dept.name.replace(/^Відділ\\s+/,"").trim()}))
+    ...STATE.departments.map(dept=>({key:dept.id, label:dept.name.replace(/^Відділ\s+/,"").trim()}))
   ].map(item=>`
     <button
       type="button"
@@ -20938,6 +21050,7 @@ const ACTIONS = {
   hideSheet,
   switchComparisonTopPanel,
   filterStaffingUnitsBlock,
+  setStaffingUnitsScope,
   toggleStaffingUnitsExpand,
 
   logout,

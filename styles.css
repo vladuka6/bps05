@@ -1293,6 +1293,39 @@
     .staffing-analytics-kpis{
         margin-bottom:2px;
       }
+    .staffing-summary-grid{
+        display:grid;
+        grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
+        gap:8px;
+      }
+    .staffing-summary-card{
+        border:1px solid rgba(150,170,205,.36);
+        border-radius:14px;
+        background:linear-gradient(180deg, rgba(255,255,255,.96), rgba(248,251,255,.92));
+        box-shadow:0 10px 24px rgba(31,52,96,.05);
+        padding:10px 12px;
+        display:flex;
+        flex-direction:column;
+        gap:4px;
+      }
+    .staffing-summary-k{
+        font-size:10px;
+        line-height:1.05;
+        font-weight:800;
+        color:var(--muted);
+      }
+    .staffing-summary-v{
+        font-size:16px;
+        line-height:1.05;
+        font-weight:1000;
+        color:var(--text);
+      }
+    .staffing-summary-s{
+        font-size:11px;
+        line-height:1.25;
+        color:var(--text);
+        opacity:.86;
+      }
     .staffing-analytics-sections{
         gap:8px;
       }
@@ -1379,6 +1412,10 @@
       }
     .staffing-units-search{
         margin:0 0 6px;
+      }
+    .staffing-scope-buttons{
+        gap:6px;
+        margin-bottom:6px;
       }
     .staffing-units-search-input{
         width:100%;
@@ -4745,6 +4782,11 @@
       border-color:rgba(55,69,98,.72);
       box-shadow:none;
     }
+    body.theme-dark .staffing-summary-card{
+      background:linear-gradient(180deg, rgba(27,34,50,.94), rgba(21,25,37,.88));
+      border-color:rgba(55,69,98,.72);
+      box-shadow:none;
+    }
     body.theme-dark .staffing-unit-toggle{
       border-color:rgba(95,142,245,.24);
       background:linear-gradient(180deg, rgba(27,34,50,.94), rgba(21,25,37,.88));
@@ -4951,6 +4993,20 @@
     grid-template-columns:repeat(4, minmax(0,1fr));
     gap:5px;
   }
+  .staffing-summary-grid{
+    grid-template-columns:1fr;
+    gap:6px;
+  }
+  .staffing-summary-card{
+    padding:8px 9px;
+    border-radius:12px;
+  }
+  .staffing-summary-v{
+    font-size:14px;
+  }
+  .staffing-summary-s{
+    font-size:10px;
+  }
   .staffing-analytics-modal .report-tile{
     padding:clamp(4px, 1.15vw, 6px);
     min-height:clamp(50px, 13vw, 58px);
@@ -4971,6 +5027,9 @@
     padding:8px 9px;
     gap:7px;
     border-radius:12px;
+  }
+  .staffing-scope-buttons{
+    flex-wrap:wrap;
   }
   .staffing-unit-name{
     font-size:13px;
@@ -4998,6 +5057,15 @@
   .staffing-analytics-modal .report-grid.staffing-analytics-kpis{
     grid-template-columns:repeat(4, minmax(0,1fr));
     gap:4px;
+  }
+  .staffing-summary-card{
+    padding:7px 8px;
+  }
+  .staffing-summary-v{
+    font-size:13px;
+  }
+  .staffing-summary-s{
+    font-size:9px;
   }
   .staffing-analytics-modal .report-tile{
     padding:4px;
