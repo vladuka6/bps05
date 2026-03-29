@@ -3468,10 +3468,11 @@ function renderStaffingDynamicsDelta(delta, opts={}){
 
 }
 
-function renderStaffingUnitList(items, sortKey="shortage"){
+function renderStaffingUnitList(items, sortKey="shortage", panelId=""){
 
   const list = Array.isArray(items) ? items.slice() : [];
   const key = String(sortKey || "shortage");
+  const visibleLimit = 6;
 
   list.sort((a,b)=>{
     if(key === "plan") return (b.plan - a.plan) || String(a.name).localeCompare(String(b.name), "uk");
@@ -3481,11 +3482,12 @@ function renderStaffingUnitList(items, sortKey="shortage"){
   });
 
   return `
-    <ul class="report-list staffing-unit-list">
-      ${list.length
-        ? list.map(item=>`
+    <div class="staffing-unit-list-wrap ${list.length <= visibleLimit ? "is-short" : ""}" data-staffing-list="${panelId}">
+      <ul class="report-list staffing-unit-list">
+        ${list.length
+        ? list.map((item, index)=>`
             <li>
-              <div class="staffing-unit-card">
+              <div class="staffing-unit-card" data-staffing-rank="${index}">
                 <div class="staffing-unit-card-head">
                   <span class="report-strong staffing-unit-name">${htmlesc(item.name)}</span>
                 </div>
@@ -3511,8 +3513,19 @@ function renderStaffingUnitList(items, sortKey="shortage"){
             </li>
           `).join("")
         : `<li><div class="hint">Дані по підрозділах поки відсутні.</div></li>`
-      }
-    </ul>
+        }
+      </ul>
+      ${list.length > visibleLimit ? `
+        <div class="staffing-unit-list-actions">
+          <button
+            type="button"
+            class="btn ghost btn-mini staffing-unit-toggle"
+            data-action="toggleStaffingUnitsExpand"
+            data-arg1="${panelId}"
+          >Показати всі (${list.length})</button>
+        </div>
+      ` : ``}
+    </div>
   `;
 
 }
@@ -3568,8 +3581,8 @@ function renderStaffingUnitsCombinedBlock(title, items, defaultKey="shortage"){
         <div class="comparison-switch-panels">
           ${buttons.map(btn=>`
             <div class="comparison-switch-panel ${btn.key===defaultKey ? "is-active" : ""}" data-topswitch-panel="${groupId}:${btn.key}">
-              <div class="staffing-units-panel-body" data-staffing-sort="${btn.key}" data-staffing-filter-group="${groupId}">
-                ${renderStaffingUnitList(indexedItems, btn.key)}
+              <div class="staffing-units-panel-body" data-staffing-sort="${btn.key}" data-staffing-filter-group="${groupId}" data-staffing-panel="${groupId}:${btn.key}">
+                ${renderStaffingUnitList(indexedItems, btn.key, `${groupId}:${btn.key}`)}
               </div>
             </div>
           `).join("")}
@@ -4825,7 +4838,7 @@ function filterStaffingUnitsBlock(groupId){
 
   const panels = switcher.querySelectorAll("[data-staffing-filter-group]");
   panels.forEach(panel=>{
-    const sortKey = panel.getAttribute("data-staffing-sort") || "shortage";
+    const wrap = panel.querySelector(".staffing-unit-list-wrap");
     const items = [...panel.querySelectorAll(".staffing-unit-list li")];
     let visibleCount = 0;
 
@@ -4835,6 +4848,16 @@ function filterStaffingUnitsBlock(groupId){
       item.style.display = show ? "" : "none";
       if(show) visibleCount += 1;
     });
+
+    if(wrap){
+      wrap.classList.toggle("is-filtering", !!query);
+      const toggleBtn = wrap.querySelector(".staffing-unit-toggle");
+      if(toggleBtn){
+        toggleBtn.textContent = wrap.classList.contains("is-expanded")
+          ? "Згорнути"
+          : `Показати всі (${visibleCount || items.length})`;
+      }
+    }
 
     let hint = panel.querySelector(".staffing-units-empty");
     if(!visibleCount){
@@ -4848,6 +4871,25 @@ function filterStaffingUnitsBlock(groupId){
       hint.remove();
     }
   });
+
+}
+
+function toggleStaffingUnitsExpand(panelId){
+
+  if(!panelId) return;
+
+  const wrap = document.querySelector(`.staffing-unit-list-wrap[data-staffing-list="${panelId}"]`);
+  if(!wrap) return;
+
+  wrap.classList.toggle("is-expanded");
+
+  const btn = wrap.querySelector(".staffing-unit-toggle");
+  if(btn){
+    const total = wrap.querySelectorAll(".staffing-unit-list li").length;
+    btn.textContent = wrap.classList.contains("is-expanded")
+      ? "Згорнути"
+      : `Показати всі (${total})`;
+  }
 
 }
 
@@ -20896,6 +20938,7 @@ const ACTIONS = {
   hideSheet,
   switchComparisonTopPanel,
   filterStaffingUnitsBlock,
+  toggleStaffingUnitsExpand,
 
   logout,
 

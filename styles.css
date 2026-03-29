@@ -1304,6 +1304,24 @@
         background:transparent;
         border:none;
       }
+    .staffing-unit-list-wrap .staffing-unit-list li:nth-child(n+7){
+        display:none;
+      }
+    .staffing-unit-list-wrap.is-expanded .staffing-unit-list li,
+    .staffing-unit-list-wrap.is-filtering .staffing-unit-list li{
+        display:list-item;
+      }
+    .staffing-unit-list-wrap.is-short .staffing-unit-list li{
+        display:list-item;
+      }
+    .staffing-unit-list-actions{
+        margin-top:8px;
+        display:flex;
+        justify-content:center;
+      }
+    .staffing-unit-toggle{
+        min-width:170px;
+      }
     .staffing-unit-card{
         border:1px solid rgba(150,170,205,.36);
         border-radius:14px;
@@ -4726,6 +4744,11 @@
       background:linear-gradient(180deg, rgba(27,34,50,.94), rgba(21,25,37,.88));
       border-color:rgba(55,69,98,.72);
       box-shadow:none;
+    }
+    body.theme-dark .staffing-unit-toggle{
+      border-color:rgba(95,142,245,.24);
+      background:linear-gradient(180deg, rgba(27,34,50,.94), rgba(21,25,37,.88));
+      color:#dce7ff;
     }
     body.theme-dark .staffing-unit-metric{
       background:rgba(21,25,37,.82);
