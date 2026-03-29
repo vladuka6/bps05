@@ -3865,6 +3865,62 @@ function renderComparisonLeaderCards(title, cards){
 
 }
 
+function renderComparisonSwitchTopBlock(title, itemsByKey, defaultKey="price"){
+
+  const buttons = [
+    {key:"price", label:"Ціна"},
+    {key:"distance", label:"Дальність"},
+    {key:"payload", label:"Навантаження"},
+    {key:"speed", label:"Швидкість"},
+    {key:"flightTime", label:"Час"},
+    {key:"radius", label:"Радіус"},
+    {key:"height", label:"Висота"},
+    {key:"wind", label:"Вітер"},
+  ].filter(item=>itemsByKey?.[item.key]);
+
+  if(!buttons.length) return "";
+
+  const groupId = `cmp_top_${Math.random().toString(36).slice(2, 8)}`;
+
+  const panels = {
+    price: renderComparisonTopListAsc("Топ-5 за ціною", itemsByKey.price || [], "systemPrice", "Ціна", " грн"),
+    distance: renderComparisonTopList("Топ-5 за дальністю", itemsByKey.distance || [], "distance", "Дальність", " км"),
+    payload: renderComparisonTopList("Топ-5 за навантаженням", itemsByKey.payload || [], "payload", "Навантаження", " кг"),
+    speed: renderComparisonTopList("Топ-5 за швидкістю", itemsByKey.speed || [], "speed", "Швидкість", " км/год"),
+    flightTime: renderComparisonTopList("Топ-5 за часом польоту", itemsByKey.flightTime || [], "flightTime", "Час польоту", " хв"),
+    radius: renderComparisonTopList("Топ-5 за радіусом", itemsByKey.radius || [], "radius", "Радіус", " км"),
+    height: renderComparisonTopList("Топ-5 за висотою", itemsByKey.height || [], "height", "Висота", " м"),
+    wind: renderComparisonTopList("Топ-5 за стійкістю до вітру", itemsByKey.wind || [], "wind", "Вітер", " м/с"),
+  };
+
+  return `
+    <div class="item analytics-block comparison-switch-block">
+      <div class="row"><div class="name">${htmlesc(title)}</div></div>
+      <div class="comparison-switcher" data-topswitch-group="${groupId}">
+        <div class="comparison-switcher-buttons">
+          ${buttons.map(btn=>`
+            <button
+              type="button"
+              class="comparison-switcher-btn ${btn.key===defaultKey ? "is-active" : ""}"
+              data-action="switchComparisonTopPanel"
+              data-arg1="${groupId}"
+              data-arg2="${btn.key}"
+            >${htmlesc(btn.label)}</button>
+          `).join("")}
+        </div>
+        <div class="comparison-switch-panels">
+          ${buttons.map(btn=>`
+            <div class="comparison-switch-panel ${btn.key===defaultKey ? "is-active" : ""}" data-topswitch-panel="${groupId}:${btn.key}">
+              ${panels[btn.key] || ""}
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    </div>
+  `;
+
+}
+
 function buildComparisonAnalyticsModalHtml(rows, title=""){
 
   const analytics = buildComparisonAnalytics(rows, title);
@@ -3962,12 +4018,23 @@ function buildComparisonAnalyticsModalHtml(rows, title=""){
     )
   ).join("");
   const overallCards = renderComparisonCompactCards("Ще сильні моделі для розгляду", overallTop.slice(0, 4), "universalScore", "", "blue");
+  const switchTopBlock = renderComparisonSwitchTopBlock("Швидкий top-5 по критерію", {
+    price: cheapestSystems,
+    distance: topDistance,
+    payload: topPayload,
+    speed: topSpeed,
+    flightTime: topFlightTime,
+    radius: topRadius,
+    height: topHeight,
+    wind: topWind,
+  }, "price");
 
     return `
       <div class="staffing-analytics-modal comparison-analytics-modal">
         ${summaryGrid}
         ${overviewDonuts}
         ${technicalLeaders}
+        ${switchTopBlock}
         ${practicalLeaders}
         <div class="control-grid staffing-analytics-sections">
           ${profileCards}
@@ -3996,6 +4063,23 @@ function openRenderedTableModal(key){
 
   requestAnimationFrame(()=>{
     animateRenderedDonuts(document.querySelector('.sheet'));
+  });
+
+}
+
+function switchComparisonTopPanel(groupId, key){
+
+  if(!groupId || !key) return;
+
+  const scope = [...document.querySelectorAll("[data-topswitch-group]")].find(el=>el.getAttribute("data-topswitch-group") === groupId);
+  if(!scope) return;
+
+  scope.querySelectorAll(".comparison-switcher-btn").forEach(btn=>{
+    btn.classList.toggle("is-active", btn.dataset.arg2 === key);
+  });
+
+  scope.querySelectorAll("[data-topswitch-panel]").forEach(panel=>{
+    panel.classList.toggle("is-active", panel.getAttribute("data-topswitch-panel") === `${groupId}:${key}`);
   });
 
 }
@@ -20012,6 +20096,7 @@ const ACTIONS = {
   openSyncLogin,
 
   hideSheet,
+  switchComparisonTopPanel,
 
   logout,
 
