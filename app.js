@@ -323,6 +323,27 @@ function normalizeReferenceNotes(source){
     }
 
     const item = (value && typeof value === "object") ? value : {};
+    const tableVersions = Array.isArray(item.tableVersions)
+      ? item.tableVersions.map((version, versionIndex)=>{
+          const versionItem = (version && typeof version === "object") ? version : {};
+          let rows = [];
+
+          if(Array.isArray(versionItem.rows)){
+            rows = cloneStoredTableRows(versionItem.rows);
+          } else if(typeof versionItem.text === "string" && versionItem.text.trim()){
+            const versionBlock = findStoredTableBlock(versionItem.text) || {rows: parseStoredTableRows(versionItem.text)};
+            rows = cloneStoredTableRows(versionBlock.rows);
+          }
+
+          return {
+            id: typeof versionItem.id === "string" && versionItem.id ? versionItem.id : uid(`ref_ver_${index}_${versionIndex}`),
+            createdAt: typeof versionItem.createdAt === "string" && versionItem.createdAt ? versionItem.createdAt : nowIsoKyiv(),
+            rows,
+          };
+        }).filter(item=>item.rows.length)
+      : [];
+
+    tableVersions.sort((a,b)=> String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
 
     return {
       id: typeof item.id === "string" && item.id ? item.id : uid(`ref_${index}`),
@@ -332,6 +353,7 @@ function normalizeReferenceNotes(source){
       tableType: normalizeReferenceTableType(item.tableType),
       createdAt: typeof item.createdAt === "string" && item.createdAt ? item.createdAt : nowIsoKyiv(),
       updatedAt: typeof item.updatedAt === "string" && item.updatedAt ? item.updatedAt : nowIsoKyiv(),
+      tableVersions,
     };
 
   };
@@ -377,6 +399,7 @@ function normalizeReferenceNotes(source){
         title: "Загальне",
         text: generalText,
         tableType: "none",
+        tableVersions: [],
         createdAt: nowIsoKyiv(),
         updatedAt: nowIsoKyiv(),
       });
@@ -391,6 +414,7 @@ function normalizeReferenceNotes(source){
         title: "",
         text: deptText,
         tableType: "none",
+        tableVersions: [],
         createdAt: nowIsoKyiv(),
         updatedAt: nowIsoKyiv(),
       });
@@ -431,6 +455,14 @@ function normalizeReferenceTableType(value){
   if(raw === "planfact") return "planfact";
   if(raw === "compare") return "compare";
   return "none";
+
+}
+
+function getLatestReferenceTableVersion(entry){
+
+  const versions = Array.isArray(entry?.tableVersions) ? entry.tableVersions : [];
+
+  return versions.length ? versions[0] : null;
 
 }
 
@@ -1947,6 +1979,20 @@ function hasStoredTable(text){
 
 }
 
+function cloneStoredTableRows(rows){
+
+  return Array.isArray(rows)
+    ? rows.map(row=>(Array.isArray(row) ? row : []).map(cell=>String(cell ?? "")))
+    : [];
+
+}
+
+function areStoredTableRowsEqual(a, b){
+
+  return serializeStoredTable(cloneStoredTableRows(a)) === serializeStoredTable(cloneStoredTableRows(b));
+
+}
+
 function serializeStoredTable(rows, marker="TABLE"){
 
   const normalized = (rows || []).map(row=>(row || []).map(cell=>
@@ -2810,9 +2856,11 @@ function renderTaskDescWithTableToggle(text, label, opts={}){
   if(currentTable?.rows?.length){
 
     if(analyticsType === "staffing"){
-      analyticsModalKey = registerRenderedTableModal(
-        `Аналітика: ${opts.analyticsTitle || label || "Таблиця"}`,
-        buildStaffingAnalyticsModalHtml(currentTable.rows, opts.analyticsTitle || label || "Таблиця")
+      analyticsModalKey = registerStaffingAnalyticsModalSet(
+        currentTable.rows,
+        opts.analyticsTitle || label || "Таблиця",
+        Array.isArray(opts.dynamicVersions) ? opts.dynamicVersions : [],
+        opts.updatedAt || ""
       );
     } else if(analyticsType === "compare"){
       analyticsModalKey = registerRenderedTableModal(
@@ -2898,6 +2946,181 @@ function registerRenderedTableModal(title, bodyHtml){
   };
 
   return key;
+
+}
+
+function getStaffingVersionShortDate(value, fallback=""){
+
+  const compact = String(compactTimeFirst(value || "") || "").trim();
+  if(!compact) return fallback;
+
+  const parts = compact.split(/\s+/);
+  return parts[1] || parts[0] || fallback;
+
+}
+
+function buildStaffingTrendPoints(currentRows, versions=[], currentAt=""){
+
+  const currentAnalytics = buildStaffingAnalytics(currentRows);
+  if(!currentAnalytics) return [];
+
+  const normalizedVersions = Array.isArray(versions)
+    ? versions
+      .filter(item=>item && Array.isArray(item.rows) && item.rows.length)
+      .slice(0, 7)
+      .reverse()
+    : [];
+
+  const points = normalizedVersions.map((version, index)=>{
+    const analytics = buildStaffingAnalytics(version.rows);
+    if(!analytics) return null;
+    return {
+      id: String(version.id || `ver_${index}`),
+      label: getStaffingVersionShortDate(version.createdAt, `V${index + 1}`),
+      fact: analytics.totalFact,
+      completion: analytics.completion,
+      createdAt: version.createdAt || "",
+      isCurrent: false,
+    };
+  }).filter(Boolean);
+
+  points.push({
+    id: "current",
+    label: getStaffingVersionShortDate(currentAt, "Зараз"),
+    fact: currentAnalytics.totalFact,
+    completion: currentAnalytics.completion,
+    createdAt: currentAt || "",
+    isCurrent: true,
+  });
+
+  return points;
+
+}
+
+function buildSparklineSvg(values, color="#5a84ea"){
+
+  const nums = Array.isArray(values)
+    ? values.map(value=>Number(value)).filter(Number.isFinite)
+    : [];
+
+  if(nums.length < 2){
+    return `<div class="staffing-trend-empty"></div>`;
+  }
+
+  const width = 220;
+  const height = 56;
+  const padX = 8;
+  const padY = 8;
+  const min = Math.min(...nums);
+  const max = Math.max(...nums);
+  const range = Math.max(max - min, 1);
+  const stepX = (width - padX * 2) / Math.max(nums.length - 1, 1);
+
+  const points = nums.map((value, index)=>{
+    const x = padX + stepX * index;
+    const y = height - padY - (((value - min) / range) * (height - padY * 2));
+    return {x, y, value};
+  });
+
+  const polyline = points.map(point=>`${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
+  const last = points[points.length - 1];
+  const first = points[0];
+  const area = `${polyline} ${last.x.toFixed(1)},${(height - padY).toFixed(1)} ${first.x.toFixed(1)},${(height - padY).toFixed(1)}`;
+
+  return `
+    <svg class="staffing-trend-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true">
+      <polyline class="staffing-trend-area" points="${area}"></polyline>
+      <polyline class="staffing-trend-line" points="${polyline}" style="--trend-color:${color};"></polyline>
+      ${points.map((point, index)=>`<circle class="staffing-trend-dot ${index===points.length-1 ? "is-last" : ""}" cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="${index===points.length-1 ? "3.5" : "2.4"}" style="--trend-color:${color};"></circle>`).join("")}
+    </svg>
+  `;
+
+}
+
+function buildStaffingTrendBlockHtml(points){
+
+  const items = Array.isArray(points) ? points : [];
+  if(items.length < 2) return "";
+
+  const factValues = items.map(item=>item.fact);
+  const completionValues = items.map(item=>item.completion);
+  const labels = items.map(item=>`<span class="staffing-trend-label ${item.isCurrent ? "is-current" : ""}" title="${htmlesc(compactTimeFirst(item.createdAt || "") || item.label)}">${htmlesc(item.label)}</span>`).join("");
+
+  return `
+    <div class="control-grid staffing-trend-grid">
+      <div class="item analytics-block staffing-trend-card">
+        <div class="row"><div class="name">Тренд по Списку</div></div>
+        <div class="staffing-trend-value mono">${fmtNum(factValues[factValues.length - 1])}</div>
+        ${buildSparklineSvg(factValues, "#4e7ef1")}
+        <div class="staffing-trend-labels">${labels}</div>
+      </div>
+      <div class="item analytics-block staffing-trend-card">
+        <div class="row"><div class="name">Тренд по % укомплектованості</div></div>
+        <div class="staffing-trend-value mono">${fmtNum(completionValues[completionValues.length - 1])}%</div>
+        ${buildSparklineSvg(completionValues, "#49b277")}
+        <div class="staffing-trend-labels">${labels}</div>
+      </div>
+    </div>
+  `;
+
+}
+
+function registerStaffingAnalyticsModalSet(currentRows, title, versions=[], currentAt=""){
+
+  const modalTitle = `Аналітика: ${title || "Таблиця"}`;
+  const normalizedVersions = Array.isArray(versions)
+    ? versions
+      .filter(item=>item && Array.isArray(item.rows) && item.rows.length)
+      .map(item=>({
+        id: String(item.id || uid("ref_ver")),
+        createdAt: typeof item.createdAt === "string" ? item.createdAt : "",
+        rows: cloneStoredTableRows(item.rows),
+      }))
+    : [];
+
+  const primaryKey = registerRenderedTableModal(modalTitle, "");
+
+  if(!normalizedVersions.length){
+    UI.renderedTableModals[primaryKey].bodyHtml = buildStaffingAnalyticsModalHtml(currentRows, title, {
+      compareOptions:[],
+      selectedVersionId:"",
+      trendPoints: buildStaffingTrendPoints(currentRows, [], currentAt),
+    });
+    return primaryKey;
+  }
+
+  const versionDefs = normalizedVersions.map(version=>({
+    ...version,
+    key: registerRenderedTableModal(modalTitle, ""),
+  }));
+
+  const compareOptions = versionDefs.map((item, index)=>({
+    id: item.id,
+    key: item.key,
+    primaryLabel: index === 0 ? "Попередня" : `${index + 1} версії тому`,
+    secondaryLabel: compactTimeFirst(item.createdAt || ""),
+  }));
+  const trendPoints = buildStaffingTrendPoints(currentRows, normalizedVersions, currentAt);
+
+  UI.renderedTableModals[primaryKey].bodyHtml = buildStaffingAnalyticsModalHtml(currentRows, title, {
+    compareOptions,
+    selectedVersionId: versionDefs[0]?.id || "",
+    compareRows: versionDefs[0]?.rows || [],
+    compareAt: versionDefs[0]?.createdAt || "",
+    trendPoints,
+  });
+
+  versionDefs.forEach(item=>{
+    UI.renderedTableModals[item.key].bodyHtml = buildStaffingAnalyticsModalHtml(currentRows, title, {
+      compareOptions,
+      selectedVersionId: item.id,
+      compareRows: item.rows,
+      compareAt: item.createdAt,
+      trendPoints,
+    });
+  });
+
+  return primaryKey;
 
 }
 
@@ -3114,7 +3337,7 @@ function buildStaffingAnalytics(rows){
 
 }
 
-function buildStaffingAnalyticsModalHtml(rows, title=""){
+function buildStaffingAnalyticsModalHtml(rows, title="", opts={}){
 
   const analytics = buildStaffingAnalytics(rows);
 
@@ -3205,7 +3428,7 @@ function buildStaffingAnalyticsModalHtml(rows, title=""){
     </div>
   `;
 
-    const modelsList = `
+  const modelsList = `
       <div class="item analytics-block staffing-analytics-list">
         <div class="row"><div class="name">Найпоширеніші моделі / позиції</div></div>
         <div class="staffing-model-grid">
@@ -3222,9 +3445,39 @@ function buildStaffingAnalyticsModalHtml(rows, title=""){
       </div>
     `;
 
+  const compareOptions = Array.isArray(opts.compareOptions) ? opts.compareOptions : [];
+  const selectedVersionId = String(opts.selectedVersionId || "");
+  const compareRows = Array.isArray(opts.compareRows) ? opts.compareRows : [];
+  const compareAt = String(opts.compareAt || "");
+  const trendPoints = Array.isArray(opts.trendPoints) ? opts.trendPoints : [];
+  const compareSelector = compareOptions.length ? `
+    <div class="item analytics-block staffing-dynamics-picker">
+      <div class="row"><div class="name">Динаміка</div></div>
+      <div class="hint staffing-dynamics-picker-note">Порівняй поточну таблицю з однією з попередніх версій.</div>
+      <div class="comparison-switcher-buttons staffing-dynamics-buttons">
+        ${compareOptions.map(item=>`
+          <button
+            type="button"
+            class="comparison-switcher-btn ${item.id===selectedVersionId ? "is-active" : ""}"
+            data-action="openRenderedTableModal"
+            data-arg1="${item.key}"
+          >
+            <span class="staffing-dynamics-btn-main">${htmlesc(item.primaryLabel || "Версія")}</span>
+            <span class="staffing-dynamics-btn-sub mono">${htmlesc(item.secondaryLabel || "")}</span>
+          </button>
+        `).join("")}
+      </div>
+    </div>
+  ` : "";
+
+  const dynamicsBlock = compareRows.length
+    ? buildStaffingDynamicsModalHtml(rows, compareRows, title, compareAt)
+    : "";
+
   return `
     <div class="staffing-analytics-modal">
       ${summaryGrid}
+      ${buildStaffingTrendBlockHtml(trendPoints)}
       <div class="eval-donut-grid">
         ${totalDonutCard}
         ${shortageDonutCard}
@@ -3234,6 +3487,236 @@ function buildStaffingAnalyticsModalHtml(rows, title=""){
         ${bestList}
       </div>
       ${modelsList}
+      ${compareSelector}
+      ${dynamicsBlock}
+    </div>
+  `;
+
+}
+
+function renderStaffingDynamicsDelta(delta, opts={}){
+
+  const num = Number(delta);
+  if(!Number.isFinite(num) || Math.abs(num) < 0.000001){
+    return `<span class="badge mono">0</span>`;
+  }
+
+  const invert = !!opts.invert;
+  const isBetter = invert ? num < 0 : num > 0;
+  const cls = isBetter ? "badge b-ok mono" : "badge b-warn mono";
+  const prefix = num > 0 ? "+" : "−";
+  const suffix = opts.suffix ? ` ${opts.suffix}` : "";
+
+  return `<span class="${cls}">${prefix}${fmtNum(Math.abs(num))}${suffix}</span>`;
+
+}
+
+function buildStaffingDynamicsModalHtml(currentRows, previousRows, title="", previousAt=""){
+
+  const current = buildStaffingAnalytics(currentRows);
+  const previous = buildStaffingAnalytics(previousRows);
+
+  if(!current || !previous){
+    return `
+      <div class="hint">Для динаміки потрібні поточна і попередня версії таблиці укомплектованості.</div>
+    `;
+  }
+
+  const currentByName = new Map(current.items.map(item=>[item.name, item]));
+  const previousByName = new Map(previous.items.map(item=>[item.name, item]));
+  const unitNames = Array.from(new Set([...currentByName.keys(), ...previousByName.keys()]));
+
+  const unitChanges = unitNames.map(name=>{
+    const prev = previousByName.get(name) || {plan:0, fact:0, shortage:0, percent:0};
+    const curr = currentByName.get(name) || {plan:0, fact:0, shortage:0, percent:0};
+    return {
+      name,
+      prev,
+      curr,
+      deltaFact: curr.fact - prev.fact,
+      deltaShortage: curr.shortage - prev.shortage,
+      deltaPercent: curr.percent - prev.percent,
+    };
+  });
+
+  const topImproved = unitChanges
+    .filter(item=>item.deltaFact > 0 || item.deltaShortage < 0 || item.deltaPercent > 0)
+    .sort((a,b)=>
+      (b.deltaFact - a.deltaFact) ||
+      (a.deltaShortage - b.deltaShortage) ||
+      (b.deltaPercent - a.deltaPercent)
+    )
+    .slice(0, 6);
+
+  const topDeclined = unitChanges
+    .filter(item=>item.deltaFact < 0 || item.deltaShortage > 0 || item.deltaPercent < 0)
+    .sort((a,b)=>
+      (a.deltaFact - b.deltaFact) ||
+      (b.deltaShortage - a.deltaShortage) ||
+      (a.deltaPercent - b.deltaPercent)
+    )
+    .slice(0, 6);
+
+  const buildModelTotals = analytics=>{
+    const totals = new Map();
+    analytics.items.forEach(item=>{
+      (item.modelBreakdown || []).forEach(model=>{
+        const prev = totals.get(model.label) || 0;
+        totals.set(model.label, prev + Number(model.value || 0));
+      });
+    });
+    return totals;
+  };
+
+  const currentModelTotals = buildModelTotals(current);
+  const previousModelTotals = buildModelTotals(previous);
+  const modelNames = Array.from(new Set([...currentModelTotals.keys(), ...previousModelTotals.keys()]));
+  const modelChanges = modelNames.map(name=>{
+    const prev = Number(previousModelTotals.get(name) || 0);
+    const curr = Number(currentModelTotals.get(name) || 0);
+    return {
+      name,
+      prev,
+      curr,
+      delta: curr - prev,
+    };
+  }).filter(item=>item.prev || item.curr);
+
+  const topAddedModels = modelChanges
+    .filter(item=>item.delta > 0)
+    .sort((a,b)=>b.delta - a.delta)
+    .slice(0, 8);
+
+  const topReducedModels = modelChanges
+    .filter(item=>item.delta < 0)
+    .sort((a,b)=>a.delta - b.delta)
+    .slice(0, 8);
+
+  const summaryGrid = `
+    <div class="report-grid staffing-analytics-kpis staffing-dynamics-kpis">
+      <div class="report-tile staffing-dynamics-tile">
+        <div class="k">Штат</div>
+        <div class="v mono">${fmtNum(current.totalPlan)}</div>
+        <div class="s">Було ${fmtNum(previous.totalPlan)}</div>
+        <div class="staffing-dynamics-delta">${renderStaffingDynamicsDelta(current.totalPlan - previous.totalPlan)}</div>
+      </div>
+      <div class="report-tile staffing-dynamics-tile">
+        <div class="k">Список</div>
+        <div class="v mono">${fmtNum(current.totalFact)}</div>
+        <div class="s">Було ${fmtNum(previous.totalFact)}</div>
+        <div class="staffing-dynamics-delta">${renderStaffingDynamicsDelta(current.totalFact - previous.totalFact)}</div>
+      </div>
+      <div class="report-tile staffing-dynamics-tile">
+        <div class="k">Нестача</div>
+        <div class="v mono">${fmtNum(current.totalShortage)}</div>
+        <div class="s">Було ${fmtNum(previous.totalShortage)}</div>
+        <div class="staffing-dynamics-delta">${renderStaffingDynamicsDelta(current.totalShortage - previous.totalShortage, {invert:true})}</div>
+      </div>
+      <div class="report-tile staffing-dynamics-tile">
+        <div class="k">% укомплектованості</div>
+        <div class="v mono">${fmtNum(current.completion)}%</div>
+        <div class="s">Було ${fmtNum(previous.completion)}%</div>
+        <div class="staffing-dynamics-delta">${renderStaffingDynamicsDelta(current.completion - previous.completion, {suffix:"%"})}</div>
+      </div>
+      <div class="report-tile staffing-dynamics-tile">
+        <div class="k">Всього засобів</div>
+        <div class="v mono">${fmtNum(current.totalAssets)}</div>
+        <div class="s">Було ${fmtNum(previous.totalAssets)}</div>
+        <div class="staffing-dynamics-delta">${renderStaffingDynamicsDelta(current.totalAssets - previous.totalAssets)}</div>
+      </div>
+    </div>
+  `;
+
+  const improvedList = `
+    <div class="item analytics-block staffing-analytics-list">
+      <div class="row"><div class="name">Де стало краще</div></div>
+      <ul class="report-list">
+        ${topImproved.length
+          ? topImproved.map(item=>`
+              <li>
+                <div class="report-line">
+                  <span class="report-strong">${htmlesc(item.name)}</span>
+                  ${renderStaffingDynamicsDelta(item.deltaFact)}
+                  ${renderStaffingDynamicsDelta(item.deltaShortage, {invert:true})}
+                </div>
+                <div class="report-meta">Список: ${fmtNum(item.prev.fact)} → ${fmtNum(item.curr.fact)} · Нестача: ${fmtNum(item.prev.shortage)} → ${fmtNum(item.curr.shortage)} · %: ${fmtNum(item.prev.percent)} → ${fmtNum(item.curr.percent)}</div>
+              </li>
+            `).join("")
+          : `<li><div class="hint">Суттєвих покращень між версіями не видно.</div></li>`
+        }
+      </ul>
+    </div>
+  `;
+
+  const declinedList = `
+    <div class="item analytics-block staffing-analytics-list">
+      <div class="row"><div class="name">Де стало гірше</div></div>
+      <ul class="report-list">
+        ${topDeclined.length
+          ? topDeclined.map(item=>`
+              <li>
+                <div class="report-line">
+                  <span class="report-strong">${htmlesc(item.name)}</span>
+                  ${renderStaffingDynamicsDelta(item.deltaFact)}
+                  ${renderStaffingDynamicsDelta(item.deltaShortage, {invert:true})}
+                </div>
+                <div class="report-meta">Список: ${fmtNum(item.prev.fact)} → ${fmtNum(item.curr.fact)} · Нестача: ${fmtNum(item.prev.shortage)} → ${fmtNum(item.curr.shortage)} · %: ${fmtNum(item.prev.percent)} → ${fmtNum(item.curr.percent)}</div>
+              </li>
+            `).join("")
+          : `<li><div class="hint">Погіршень між версіями не зафіксовано.</div></li>`
+        }
+      </ul>
+    </div>
+  `;
+
+  const modelLists = `
+    <div class="control-grid staffing-analytics-sections staffing-dynamics-models">
+      <div class="item analytics-block staffing-analytics-list">
+        <div class="row"><div class="name">По моделях додалось</div></div>
+        <div class="staffing-model-grid">
+          ${topAddedModels.length
+            ? topAddedModels.map(item=>`
+                <div class="staffing-model-card staffing-model-card-delta is-up">
+                  <div>
+                    <div class="staffing-model-name">${htmlesc(item.name)}</div>
+                    <div class="report-meta">Було ${fmtNum(item.prev)} → стало ${fmtNum(item.curr)}</div>
+                  </div>
+                  <div class="staffing-model-value mono">+${fmtNum(item.delta)}</div>
+                </div>
+              `).join("")
+            : `<div class="hint">Нових приростів по моделях не видно.</div>`
+          }
+        </div>
+      </div>
+      <div class="item analytics-block staffing-analytics-list">
+        <div class="row"><div class="name">По моделях зменшилось</div></div>
+        <div class="staffing-model-grid">
+          ${topReducedModels.length
+            ? topReducedModels.map(item=>`
+                <div class="staffing-model-card staffing-model-card-delta is-down">
+                  <div>
+                    <div class="staffing-model-name">${htmlesc(item.name)}</div>
+                    <div class="report-meta">Було ${fmtNum(item.prev)} → стало ${fmtNum(item.curr)}</div>
+                  </div>
+                  <div class="staffing-model-value mono">−${fmtNum(Math.abs(item.delta))}</div>
+                </div>
+              `).join("")
+            : `<div class="hint">Зменшень по моделях не зафіксовано.</div>`
+          }
+        </div>
+      </div>
+    </div>
+  `;
+
+  return `
+    <div class="staffing-analytics-modal staffing-dynamics-modal">
+      <div class="hint staffing-dynamics-note">${previousAt ? `Порівняння з версією від ${htmlesc(compactTimeFirst(previousAt))}.` : "Порівняння з попередньою версією."}</div>
+      ${summaryGrid}
+      <div class="control-grid staffing-analytics-sections">
+        ${improvedList}
+        ${declinedList}
+      </div>
+      ${modelLists}
     </div>
   `;
 
@@ -8422,7 +8905,7 @@ function openReferenceEntry(entryId=""){
     ${readOnly ? `
       <div class="field">
         <label>Текст</label>
-        <div class="task-desc-input ref-entry-preview">${renderTaskDescWithTableToggle(entry?.text || "", "Текст", {showEmpty:true, updatedAt:entry?.updatedAt, className:"ref-entry-preview rich-text", analyticsType: tableType, analyticsTitle: entry?.title || "Запис"})}</div>
+        <div class="task-desc-input ref-entry-preview">${renderTaskDescWithTableToggle(entry?.text || "", "Текст", {showEmpty:true, updatedAt:entry?.updatedAt, className:"ref-entry-preview rich-text", analyticsType: tableType, analyticsTitle: entry?.title || "Запис", dynamicVersions: entry?.tableVersions || []})}</div>
       </div>
     ` : `
       <div class="field">
@@ -8473,12 +8956,40 @@ function saveReferenceEntryNow(entryId=""){
   const existingIdx = entryId ? entries.findIndex(x=>x && x.id===entryId) : -1;
 
   if(existingIdx >= 0){
+    const existingEntry = entries[existingIdx] || {};
+    const existingCurrentTable = findStoredTableBlock(existingEntry.text || "");
+    const nextCurrentTable = findStoredTableBlock(text || "");
+    let nextTableVersions = Array.isArray(existingEntry.tableVersions) ? existingEntry.tableVersions.slice() : [];
+
+    if(
+      tableType === "staffing" &&
+      existingCurrentTable?.rows?.length &&
+      nextCurrentTable?.rows?.length &&
+      !areStoredTableRowsEqual(existingCurrentTable.rows, nextCurrentTable.rows)
+    ){
+      const existingSerialized = serializeStoredTable(existingCurrentTable.rows);
+      const alreadySaved = nextTableVersions.some(version=>areStoredTableRowsEqual(version.rows, existingCurrentTable.rows));
+
+      if(!alreadySaved && existingSerialized){
+        nextTableVersions.unshift({
+          id: uid("ref_ver"),
+          createdAt: existingEntry.updatedAt || existingEntry.createdAt || now,
+          rows: cloneStoredTableRows(existingCurrentTable.rows),
+        });
+      }
+    }
+
+    if(nextTableVersions.length > 24){
+      nextTableVersions = nextTableVersions.slice(0, 24);
+    }
+
     entries[existingIdx] = {
-      ...entries[existingIdx],
+      ...existingEntry,
       deptId,
       title,
       text,
       tableType,
+      tableVersions: nextTableVersions,
       updatedAt: now,
     };
   } else {
@@ -8488,6 +8999,7 @@ function saveReferenceEntryNow(entryId=""){
       title,
       text,
       tableType,
+      tableVersions: [],
       createdAt: now,
       updatedAt: now,
     });
@@ -8560,7 +9072,7 @@ function viewControl(){
     const tableOnlyText = [currentTable?.raw || "", previousTable?.raw || ""].filter(Boolean).join("\n\n");
     const bodyHtml = refSearch ? highlightReferenceText(plainText, refSearch) : richText(plainText);
     const tableHtml = tableOnlyText
-      ? renderTaskDescWithTableToggle(tableOnlyText, "Дані", {updatedAt:entry.updatedAt, showEmpty:false, className:"ref-note-body rich-text", analyticsType: entry.tableType, analyticsTitle: title})
+      ? renderTaskDescWithTableToggle(tableOnlyText, "Дані", {updatedAt:entry.updatedAt, showEmpty:false, className:"ref-note-body rich-text", analyticsType: entry.tableType, analyticsTitle: title, dynamicVersions: entry.tableVersions || []})
       : "";
       const tableTypeBadge = currentTable
         ? `<span class="ref-tabletype-badge"><span class="ref-tabletype-dot"></span><span>${htmlesc(getReferenceTableTypeLabel(entry.tableType))}</span></span>`
