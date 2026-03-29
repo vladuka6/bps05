@@ -1347,6 +1347,8 @@
     .comparison-analytics-modal .report-tile .v{
         font-size:12px;
         line-height:1.05;
+        overflow-wrap:anywhere;
+        word-break:break-word;
       }
     .comparison-analytics-modal .report-tile .s{
         font-size:9px;
@@ -1530,10 +1532,37 @@
         width:3px;
         background:transparent;
       }
+    .comparison-detail-row-top{
+        display:flex;
+        align-items:flex-start;
+        justify-content:space-between;
+        gap:8px;
+      }
+    .comparison-detail-flag{
+        flex:0 0 auto;
+        display:inline-flex;
+        align-items:center;
+        min-height:18px;
+        padding:1px 7px;
+        border-radius:999px;
+        font-size:9px;
+        font-weight:900;
+        letter-spacing:.02em;
+        border:1px solid transparent;
+      }
+    .comparison-detail-flag.is-strong{
+        color:#237a43;
+        background:rgba(99,185,123,.12);
+        border-color:rgba(99,185,123,.22);
+      }
+    .comparison-detail-flag.is-weak{
+        color:#b66b14;
+        background:rgba(241,169,76,.12);
+        border-color:rgba(241,169,76,.22);
+      }
     .comparison-detail-row.is-strong,
     .comparison-score-tile.is-strong{
-        border-color:rgba(95,182,120,.34);
-        background:linear-gradient(180deg, rgba(233,250,239,.92), rgba(255,255,255,.88));
+        border-color:rgba(95,182,120,.28);
       }
     .comparison-detail-row.is-strong::before,
     .comparison-score-tile.is-strong::before{
@@ -1541,8 +1570,7 @@
       }
     .comparison-detail-row.is-weak,
     .comparison-score-tile.is-weak{
-        border-color:rgba(243,176,84,.34);
-        background:linear-gradient(180deg, rgba(255,246,232,.92), rgba(255,255,255,.88));
+        border-color:rgba(243,176,84,.28);
       }
     .comparison-detail-row.is-weak::before,
     .comparison-score-tile.is-weak::before{
@@ -1560,6 +1588,9 @@
         color:var(--text);
         line-height:1.22;
         overflow-wrap:anywhere;
+      }
+    .comparison-summary-btn{
+        text-align:left;
       }
     .comparison-switch-block{
         padding:8px;
@@ -1703,6 +1734,25 @@
             padding:4px 8px;
             font-size:10px;
             min-height:26px;
+        }
+        .comparison-analytics-modal .report-grid{
+            grid-template-columns:repeat(2, minmax(0,1fr));
+            gap:4px;
+        }
+        .comparison-analytics-modal .report-tile{
+            padding:5px 6px;
+            min-height:58px;
+        }
+        .comparison-analytics-modal .report-tile .k{
+            font-size:8px;
+        }
+        .comparison-analytics-modal .report-tile .v{
+            font-size:11px;
+            line-height:1.02;
+        }
+        .comparison-analytics-modal .report-tile .s{
+            font-size:8px;
+            line-height:1.1;
         }
       }
     .table-modal-body{
@@ -4426,12 +4476,20 @@
     body.theme-dark .comparison-detail-row.is-strong,
     body.theme-dark .comparison-score-tile.is-strong{
       border-color:rgba(95,182,120,.28);
-      background:linear-gradient(180deg, rgba(31,58,42,.88), rgba(21,25,37,.82));
     }
     body.theme-dark .comparison-detail-row.is-weak,
     body.theme-dark .comparison-score-tile.is-weak{
       border-color:rgba(243,176,84,.26);
-      background:linear-gradient(180deg, rgba(66,49,30,.88), rgba(21,25,37,.82));
+    }
+    body.theme-dark .comparison-detail-flag.is-strong{
+      color:#9ee0b2;
+      background:rgba(99,185,123,.18);
+      border-color:rgba(99,185,123,.26);
+    }
+    body.theme-dark .comparison-detail-flag.is-weak{
+      color:#f2c27c;
+      background:rgba(241,169,76,.16);
+      border-color:rgba(241,169,76,.24);
     }
     body.theme-dark .ref-hero-card{
       background:

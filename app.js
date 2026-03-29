@@ -2948,6 +2948,29 @@ function fmtNum(value){
 
 }
 
+function fmtCompactMoneyUa(value){
+
+  const num = Number(value);
+  if(!Number.isFinite(num)) return "0";
+
+  const abs = Math.abs(num);
+
+  if(abs >= 1000000){
+    return `${(num / 1000000).toLocaleString("uk-UA", {minimumFractionDigits: 0, maximumFractionDigits: 2})} млн`;
+  }
+
+  if(abs >= 100000){
+    return `${Math.round(num / 1000).toLocaleString("uk-UA")} тис.`;
+  }
+
+  if(abs >= 10000){
+    return `${(num / 1000).toLocaleString("uk-UA", {minimumFractionDigits: 0, maximumFractionDigits: 1})} тис.`;
+  }
+
+  return fmtNum(num);
+
+}
+
 function detectStaffingColumns(headerRow){
 
   const headers = (headerRow || []).map(normalizeAnalyticsHeader);
@@ -3703,6 +3726,11 @@ function renderComparisonTopList(title, rows, metricKey, metricLabel, unit=""){
 
 function renderComparisonTopListAsc(title, rows, metricKey, metricLabel, unit=""){
 
+  const formatValue = (item)=>{
+    if(metricKey === "systemPrice") return fmtCompactMoneyUa(item?.[metricKey]);
+    return `${fmtNum(item?.[metricKey])}${unit}`;
+  };
+
   return `
     <div class="item analytics-block comparison-compact-section">
       <div class="row"><div class="name">${htmlesc(title)}</div></div>
@@ -3715,9 +3743,9 @@ function renderComparisonTopListAsc(title, rows, metricKey, metricLabel, unit=""
                 <div class="comparison-compact-rank mono">${index + 1}</div>
                 <div class="comparison-compact-main">
                   <div class="comparison-compact-title">${htmlesc(item.name)}</div>
-                  <div class="comparison-compact-meta">${metricLabel}: ${fmtNum(item[metricKey])}${unit}${item.vendor ? ` · ${htmlesc(item.vendor)}` : ""}</div>
+                  <div class="comparison-compact-meta">${metricLabel}: ${formatValue(item)}${item.vendor ? ` · ${htmlesc(item.vendor)}` : ""}</div>
                 </div>
-                <div class="badge b-ok mono">${fmtNum(item[metricKey])}${unit}</div>
+                <div class="badge b-ok mono">${formatValue(item)}</div>
               </button>
             `;
             }).join("")
@@ -3920,8 +3948,8 @@ function buildComparisonItemDetailHtml(item){
       title: "Економіка",
       rows: [
         {label:"Виробник", value:item.vendor || "—", accent:"neutral"},
-        {label:"Вартість БпАК", value:Number.isFinite(item.systemPrice) ? `${fmtNum(item.systemPrice)} грн` : "—", accent:classifyAccent("systemPrice", item.systemPrice)},
-        {label:"Вартість БпЛА", value:Number.isFinite(item.unitPrice) ? `${fmtNum(item.unitPrice)} грн` : "—", accent:"neutral"},
+        {label:"Вартість БпАК", value:Number.isFinite(item.systemPrice) ? fmtCompactMoneyUa(item.systemPrice) : "—", accent:classifyAccent("systemPrice", item.systemPrice)},
+        {label:"Вартість БпЛА", value:Number.isFinite(item.unitPrice) ? fmtCompactMoneyUa(item.unitPrice) : "—", accent:"neutral"},
         {label:"Кількість у комплексі", value:Number.isFinite(item.quantity) ? fmtNum(item.quantity) : "—", accent:classifyAccent("quantity", item.quantity)},
       ],
     },
@@ -3984,7 +4012,10 @@ function buildComparisonItemDetailHtml(item){
               <div class="comparison-detail-grid">
                 ${group.rows.map(row=>`
                 <div class="comparison-detail-row ${row.accent === "strong" ? "is-strong" : (row.accent === "weak" ? "is-weak" : "")}">
-                  <div class="comparison-detail-label">${htmlesc(row.label)}</div>
+                  <div class="comparison-detail-row-top">
+                    <div class="comparison-detail-label">${htmlesc(row.label)}</div>
+                    ${row.accent === "strong" ? `<span class="comparison-detail-flag is-strong">сильна</span>` : (row.accent === "weak" ? `<span class="comparison-detail-flag is-weak">слабка</span>` : ``)}
+                  </div>
                   <div class="comparison-detail-value">${htmlesc(String(row.value || "—"))}</div>
                 </div>
               `).join("")}
@@ -4096,21 +4127,28 @@ function buildComparisonAnalyticsModalHtml(rows, title=""){
 
     const primaryProfile = featuredProfiles[0] || null;
     const secondaryProfile = featuredProfiles[1] || null;
+    const summaryTile = (label, value, sub, item=null)=>{
+      if(item){
+        const detailKey = registerRenderedTableModal(`Модель: ${item.name}`, buildComparisonItemDetailHtml(item));
+        return `<button type="button" class="report-tile clickable comparison-summary-btn" data-action="openRenderedTableModal" data-arg1="${detailKey}"><div class="k">${htmlesc(label)}</div><div class="v mono">${htmlesc(String(value))}</div><div class="s">${htmlesc(sub || "—")}</div></button>`;
+      }
+      return `<div class="report-tile"><div class="k">${htmlesc(label)}</div><div class="v mono">${htmlesc(String(value))}</div><div class="s">${htmlesc(sub || "—")}</div></div>`;
+    };
 
     const summaryGrid = `
       <div class="report-grid staffing-analytics-kpis">
-        <div class="report-tile"><div class="k">Сер. ціна БпАК</div><div class="v mono">${fmtNum(avgSystemPrice)}</div><div class="s">грн</div></div>
-      <div class="report-tile"><div class="k">Макс. дальність</div><div class="v mono">${maxDistance ? fmtNum(maxDistance.distance) : "0"}</div><div class="s">${maxDistance ? htmlesc(maxDistance.name) : "—"}</div></div>
-        <div class="report-tile"><div class="k">Макс. навантаження</div><div class="v mono">${maxPayload ? fmtNum(maxPayload.payload) : "0"}</div><div class="s">${maxPayload ? htmlesc(maxPayload.name) : "—"}</div></div>
-        <div class="report-tile"><div class="k">Макс. швидкість</div><div class="v mono">${maxSpeed ? fmtNum(maxSpeed.speed) : "0"}</div><div class="s">${maxSpeed ? htmlesc(maxSpeed.name) : "—"}</div></div>
-        <div class="report-tile"><div class="k">Макс. радіус</div><div class="v mono">${maxRadius ? fmtNum(maxRadius.radius) : "0"}</div><div class="s">${maxRadius ? htmlesc(maxRadius.name) : "—"}</div></div>
-        <div class="report-tile"><div class="k">Макс. висота</div><div class="v mono">${maxHeight ? fmtNum(maxHeight.height) : "0"}</div><div class="s">${maxHeight ? htmlesc(maxHeight.name) : "—"}</div></div>
-        <div class="report-tile"><div class="k">Стійкість до вітру</div><div class="v mono">${maxWind ? fmtNum(maxWind.wind) : "0"}</div><div class="s">${maxWind ? htmlesc(maxWind.name) : "—"}</div></div>
-        <div class="report-tile"><div class="k">${primaryProfile ? htmlesc(primaryProfile.config.shortLabel) : "Профіль 1"}</div><div class="v mono">${primaryProfile?.best ? fmtNum(primaryProfile.best[primaryProfile.scoreKey]) : "0"}</div><div class="s">${primaryProfile?.best ? htmlesc(primaryProfile.best.name) : "—"}</div></div>
-        <div class="report-tile"><div class="k">${secondaryProfile ? htmlesc(secondaryProfile.config.shortLabel) : "Профіль 2"}</div><div class="v mono">${secondaryProfile?.best ? fmtNum(secondaryProfile.best[secondaryProfile.scoreKey]) : "0"}</div><div class="s">${secondaryProfile?.best ? htmlesc(secondaryProfile.best.name) : "—"}</div></div>
-        <div class="report-tile"><div class="k">Кодифіковано</div><div class="v mono">${fmtNum(codifiedCount)}</div><div class="s">із ${fmtNum(items.length)}</div></div>
-        <div class="report-tile"><div class="k">З тепловізором</div><div class="v mono">${fmtNum(thermalCount)}</div><div class="s">позицій</div></div>
-        <div class="report-tile"><div class="k">Виробників</div><div class="v mono">${fmtNum(vendorCount)}</div><div class="s">у таблиці</div></div>
+        ${summaryTile("Сер. ціна БпАК", fmtCompactMoneyUa(avgSystemPrice), "грн")}
+        ${summaryTile("Макс. дальність", maxDistance ? fmtNum(maxDistance.distance) : "0", maxDistance ? maxDistance.name : "—", maxDistance)}
+        ${summaryTile("Макс. навантаження", maxPayload ? fmtNum(maxPayload.payload) : "0", maxPayload ? maxPayload.name : "—", maxPayload)}
+        ${summaryTile("Макс. швидкість", maxSpeed ? fmtNum(maxSpeed.speed) : "0", maxSpeed ? maxSpeed.name : "—", maxSpeed)}
+        ${summaryTile("Макс. радіус", maxRadius ? fmtNum(maxRadius.radius) : "0", maxRadius ? maxRadius.name : "—", maxRadius)}
+        ${summaryTile("Макс. висота", maxHeight ? fmtNum(maxHeight.height) : "0", maxHeight ? maxHeight.name : "—", maxHeight)}
+        ${summaryTile("Стійкість до вітру", maxWind ? fmtNum(maxWind.wind) : "0", maxWind ? maxWind.name : "—", maxWind)}
+        ${summaryTile(primaryProfile ? primaryProfile.config.shortLabel : "Профіль 1", primaryProfile?.best ? fmtNum(primaryProfile.best[primaryProfile.scoreKey]) : "0", primaryProfile?.best ? primaryProfile.best.name : "—", primaryProfile?.best || null)}
+        ${summaryTile(secondaryProfile ? secondaryProfile.config.shortLabel : "Профіль 2", secondaryProfile?.best ? fmtNum(secondaryProfile.best[secondaryProfile.scoreKey]) : "0", secondaryProfile?.best ? secondaryProfile.best.name : "—", secondaryProfile?.best || null)}
+        ${summaryTile("Кодифіковано", fmtNum(codifiedCount), `із ${fmtNum(items.length)}`)}
+        ${summaryTile("З тепловізором", fmtNum(thermalCount), "позицій")}
+        ${summaryTile("Виробників", fmtNum(vendorCount), "у таблиці")}
       </div>
     `;
 
