@@ -3981,12 +3981,12 @@ function buildComparisonItemDetailHtml(item){
   ].filter(group=>group.rows.some(row=>String(row.value || "").trim() && String(row.value || "").trim() !== "—"));
 
   const scoreRows = [
-    {label:"Універсальний", key:"universalScore"},
-    {label:"Ударний", key:"strike_multirotorScore"},
-    {label:"Розвідка", key:"recon_fixed_wingScore"},
-    {label:"Перехоплення", key:"interceptorScore"},
-    {label:"Логістика", key:"logisticsScore"},
-    {label:"Ціна / можливості", key:"valueScore"},
+    {label:"Універсальний", key:"universalScore", hint:"Збалансована оцінка по всіх основних характеристиках."},
+    {label:"Ударний", key:"strike_multirotorScore", hint:"Акцент на навантаження, дальність, швидкість і стійкість."},
+    {label:"Розвідка", key:"recon_fixed_wingScore", hint:"Акцент на час польоту, дальність, радіус і спостереження."},
+    {label:"Перехоплення", key:"interceptorScore", hint:"Акцент на швидкість, дальність, висоту й оперативність."},
+    {label:"Логістика", key:"logisticsScore", hint:"Акцент на навантаження, дальність, витривалість і розгортання."},
+    {label:"Ціна / можливості", key:"valueScore", hint:"Співвідношення технічних можливостей до вартості."},
   ].filter(row=>Number.isFinite(item?.[row.key]));
 
   return `
@@ -4001,6 +4001,7 @@ function buildComparisonItemDetailHtml(item){
               <div class="report-tile comparison-score-tile ${Number(item[row.key]) >= 70 ? "is-strong" : (Number(item[row.key]) <= 35 ? "is-weak" : "")}">
                 <div class="k">${htmlesc(row.label)}</div>
                 <div class="v mono">${fmtNum(item[row.key])}</div>
+                <div class="s" title="${htmlesc(row.hint)}">${htmlesc(row.hint)} Макс. 100.</div>
               </div>
             `).join("")}
           </div>
