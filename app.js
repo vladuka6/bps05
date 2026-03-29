@@ -3680,16 +3680,19 @@ function renderComparisonTopList(title, rows, metricKey, metricLabel, unit=""){
       <div class="row"><div class="name">${htmlesc(title)}</div></div>
       <div class="comparison-compact-grid">
         ${rows.length
-          ? rows.slice(0, 5).map((item, index)=>`
-              <div class="comparison-compact-card">
+          ? rows.slice(0, 5).map((item, index)=>{
+              const detailKey = registerRenderedTableModal(`Модель: ${item.name}`, buildComparisonItemDetailHtml(item));
+              return `
+              <button type="button" class="comparison-compact-card comparison-card-btn" data-action="openRenderedTableModal" data-arg1="${detailKey}">
                 <div class="comparison-compact-rank mono">${index + 1}</div>
                 <div class="comparison-compact-main">
                   <div class="comparison-compact-title">${htmlesc(item.name)}</div>
                   <div class="comparison-compact-meta">${metricLabel}: ${fmtNum(item[metricKey])}${unit}${item.vendor ? ` · ${htmlesc(item.vendor)}` : ""}</div>
                 </div>
                 <div class="badge b-blue mono">${fmtNum(item[metricKey])}${unit}</div>
-              </div>
-            `).join("")
+              </button>
+            `;
+            }).join("")
           : `<div class="hint">Даних для цього рейтингу поки немає.</div>`
         }
       </div>
@@ -3705,16 +3708,19 @@ function renderComparisonTopListAsc(title, rows, metricKey, metricLabel, unit=""
       <div class="row"><div class="name">${htmlesc(title)}</div></div>
       <div class="comparison-compact-grid">
         ${rows.length
-          ? rows.slice(0, 5).map((item, index)=>`
-              <div class="comparison-compact-card">
+          ? rows.slice(0, 5).map((item, index)=>{
+              const detailKey = registerRenderedTableModal(`Модель: ${item.name}`, buildComparisonItemDetailHtml(item));
+              return `
+              <button type="button" class="comparison-compact-card comparison-card-btn" data-action="openRenderedTableModal" data-arg1="${detailKey}">
                 <div class="comparison-compact-rank mono">${index + 1}</div>
                 <div class="comparison-compact-main">
                   <div class="comparison-compact-title">${htmlesc(item.name)}</div>
                   <div class="comparison-compact-meta">${metricLabel}: ${fmtNum(item[metricKey])}${unit}${item.vendor ? ` · ${htmlesc(item.vendor)}` : ""}</div>
                 </div>
                 <div class="badge b-ok mono">${fmtNum(item[metricKey])}${unit}</div>
-              </div>
-            `).join("")
+              </button>
+            `;
+            }).join("")
           : `<div class="hint">Даних для цього рейтингу поки немає.</div>`
         }
       </div>
@@ -3818,16 +3824,19 @@ function renderComparisonCompactCards(title, rows, metricKey, unit="", tone="blu
       <div class="row"><div class="name">${htmlesc(title)}</div></div>
       <div class="comparison-compact-grid">
         ${rows.length
-          ? rows.slice(0, 4).map((item, index)=>`
-              <div class="comparison-compact-card">
+          ? rows.slice(0, 4).map((item, index)=>{
+              const detailKey = registerRenderedTableModal(`Модель: ${item.name}`, buildComparisonItemDetailHtml(item));
+              return `
+              <button type="button" class="comparison-compact-card comparison-card-btn" data-action="openRenderedTableModal" data-arg1="${detailKey}">
                 <div class="comparison-compact-rank mono">${index + 1}</div>
                 <div class="comparison-compact-main">
                   <div class="comparison-compact-title">${htmlesc(item.name)}</div>
                   <div class="comparison-compact-meta">${item.vendor ? `Виробник: ${htmlesc(item.vendor)}` : "Без виробника"}</div>
                 </div>
                 <div class="badge b-${safeTone} mono">${fmtNum(item[metricKey])}${unit}</div>
-              </div>
-            `).join("")
+              </button>
+            `;
+            }).join("")
           : `<div class="hint">Даних поки немає.</div>`
         }
       </div>
@@ -3844,21 +3853,144 @@ function renderComparisonLeaderCards(title, cards){
       <div class="comparison-leader-grid">
         ${cards.filter(card=>card && card.item).map(card=>{
           const item = card.item;
+          const detailKey = registerRenderedTableModal(`Модель: ${item.name}`, buildComparisonItemDetailHtml(item));
           const value = Number.isFinite(card.value) ? fmtNum(card.value) : "—";
           const unit = card.unit || "";
           const tone = ["blue","ok","warn"].includes(card.tone) ? card.tone : "blue";
           const meta = card.meta || `${card.metricLabel}: ${value}${unit}${item.vendor ? ` · ${htmlesc(item.vendor)}` : ""}`;
           return `
-            <div class="comparison-leader-card">
+            <button type="button" class="comparison-leader-card comparison-card-btn" data-action="openRenderedTableModal" data-arg1="${detailKey}">
               <div class="comparison-leader-head">
                 <div class="comparison-leader-label">${htmlesc(card.label)}</div>
                 <div class="badge b-${tone} mono">${value}${unit}</div>
               </div>
               <div class="comparison-leader-title">${htmlesc(item.name)}</div>
               <div class="comparison-leader-meta">${meta}</div>
-            </div>
+            </button>
           `;
         }).join("") || `<div class="hint">Даних для цього блоку поки немає.</div>`}
+      </div>
+    </div>
+  `;
+
+}
+
+function buildComparisonItemDetailHtml(item){
+
+  const classifyAccent = (key, value)=>{
+    const num = Number(value);
+
+    if(key === "cameraType"){
+      return /тепловіз|thermal|ir/i.test(String(value || "")) ? "strong" : "neutral";
+    }
+    if(key === "codified"){
+      return value ? "strong" : "neutral";
+    }
+    if(!Number.isFinite(num)) return "neutral";
+
+    const thresholds = {
+      systemPrice: {strongMax: 1200000, weakMin: 3000000, inverse:true},
+      quantity: {strongMin: 3, weakMax: 1},
+      payload: {strongMin: 15, weakMax: 5},
+      distance: {strongMin: 25, weakMax: 10},
+      flightTime: {strongMin: 25, weakMax: 10},
+      speed: {strongMin: 70, weakMax: 40},
+      radius: {strongMin: 15, weakMax: 8},
+      height: {strongMin: 1000, weakMax: 400},
+      wind: {strongMin: 10, weakMax: 6},
+      deployTime: {strongMax: 8, weakMin: 20, inverse:true},
+    };
+
+    const t = thresholds[key];
+    if(!t) return "neutral";
+
+    if(t.inverse){
+      if(Number.isFinite(t.strongMax) && num <= t.strongMax) return "strong";
+      if(Number.isFinite(t.weakMin) && num >= t.weakMin) return "weak";
+      return "neutral";
+    }
+
+    if(Number.isFinite(t.strongMin) && num >= t.strongMin) return "strong";
+    if(Number.isFinite(t.weakMax) && num <= t.weakMax) return "weak";
+    return "neutral";
+  };
+
+  const groups = [
+    {
+      title: "Економіка",
+      rows: [
+        {label:"Виробник", value:item.vendor || "—", accent:"neutral"},
+        {label:"Вартість БпАК", value:Number.isFinite(item.systemPrice) ? `${fmtNum(item.systemPrice)} грн` : "—", accent:classifyAccent("systemPrice", item.systemPrice)},
+        {label:"Вартість БпЛА", value:Number.isFinite(item.unitPrice) ? `${fmtNum(item.unitPrice)} грн` : "—", accent:"neutral"},
+        {label:"Кількість у комплексі", value:Number.isFinite(item.quantity) ? fmtNum(item.quantity) : "—", accent:classifyAccent("quantity", item.quantity)},
+      ],
+    },
+    {
+      title: "Льотні характеристики",
+      rows: [
+        {label:"Дальність", value:Number.isFinite(item.distance) ? `${fmtNum(item.distance)} км` : "—", accent:classifyAccent("distance", item.distance)},
+        {label:"Час польоту", value:Number.isFinite(item.flightTime) ? `${fmtNum(item.flightTime)} хв` : "—", accent:classifyAccent("flightTime", item.flightTime)},
+        {label:"Швидкість", value:Number.isFinite(item.speed) ? `${fmtNum(item.speed)} км/год` : "—", accent:classifyAccent("speed", item.speed)},
+        {label:"Радіус", value:Number.isFinite(item.radius) ? `${fmtNum(item.radius)} км` : "—", accent:classifyAccent("radius", item.radius)},
+        {label:"Висота", value:Number.isFinite(item.height) ? `${fmtNum(item.height)} м` : "—", accent:classifyAccent("height", item.height)},
+        {label:"Стійкість до вітру", value:Number.isFinite(item.wind) ? `${fmtNum(item.wind)} м/с` : "—", accent:classifyAccent("wind", item.wind)},
+      ],
+    },
+    {
+      title: "Навантаження та розгортання",
+      rows: [
+        {label:"Корисне навантаження", value:Number.isFinite(item.payload) ? `${fmtNum(item.payload)} кг` : "—", accent:classifyAccent("payload", item.payload)},
+        {label:"Час розгортання", value:Number.isFinite(item.deployTime) ? `${fmtNum(item.deployTime)} хв` : "—", accent:classifyAccent("deployTime", item.deployTime)},
+      ],
+    },
+    {
+      title: "Оснащення",
+      rows: [
+        {label:"Камера", value:item.cameraType || "—", accent:classifyAccent("cameraType", item.cameraType)},
+        {label:"Кодифікація", value:item.codified ? "Так" : "Ні", accent:classifyAccent("codified", item.codified)},
+      ],
+    },
+  ].filter(group=>group.rows.some(row=>String(row.value || "").trim() && String(row.value || "").trim() !== "—"));
+
+  const scoreRows = [
+    {label:"Універсальний", key:"universalScore"},
+    {label:"Ударний", key:"strike_multirotorScore"},
+    {label:"Розвідка", key:"recon_fixed_wingScore"},
+    {label:"Перехоплення", key:"interceptorScore"},
+    {label:"Логістика", key:"logisticsScore"},
+    {label:"Ціна / можливості", key:"valueScore"},
+  ].filter(row=>Number.isFinite(item?.[row.key]));
+
+  return `
+    <div class="comparison-detail-modal">
+      <div class="comparison-detail-head">
+        <div class="comparison-detail-title">${htmlesc(item.name || "Модель")}</div>
+        ${item.vendor ? `<div class="comparison-detail-sub">${htmlesc(item.vendor)}</div>` : ``}
+      </div>
+      ${scoreRows.length ? `
+          <div class="comparison-detail-scores report-grid">
+            ${scoreRows.map(row=>`
+              <div class="report-tile comparison-score-tile ${Number(item[row.key]) >= 70 ? "is-strong" : (Number(item[row.key]) <= 35 ? "is-weak" : "")}">
+                <div class="k">${htmlesc(row.label)}</div>
+                <div class="v mono">${fmtNum(item[row.key])}</div>
+              </div>
+            `).join("")}
+          </div>
+      ` : ``}
+      <div class="comparison-detail-groups">
+        ${groups.map(group=>`
+            <div class="comparison-detail-section">
+              <div class="comparison-detail-section-title">${htmlesc(group.title)}</div>
+              <div class="comparison-detail-grid">
+                ${group.rows.map(row=>`
+                <div class="comparison-detail-row ${row.accent === "strong" ? "is-strong" : (row.accent === "weak" ? "is-weak" : "")}">
+                  <div class="comparison-detail-label">${htmlesc(row.label)}</div>
+                  <div class="comparison-detail-value">${htmlesc(String(row.value || "—"))}</div>
+                </div>
+              `).join("")}
+            </div>
+          </div>
+        `).join("")}
       </div>
     </div>
   `;
@@ -3883,14 +4015,14 @@ function renderComparisonSwitchTopBlock(title, itemsByKey, defaultKey="price"){
   const groupId = `cmp_top_${Math.random().toString(36).slice(2, 8)}`;
 
   const panels = {
-    price: renderComparisonTopListAsc("Топ-5 за ціною", itemsByKey.price || [], "systemPrice", "Ціна", " грн"),
-    distance: renderComparisonTopList("Топ-5 за дальністю", itemsByKey.distance || [], "distance", "Дальність", " км"),
-    payload: renderComparisonTopList("Топ-5 за навантаженням", itemsByKey.payload || [], "payload", "Навантаження", " кг"),
-    speed: renderComparisonTopList("Топ-5 за швидкістю", itemsByKey.speed || [], "speed", "Швидкість", " км/год"),
-    flightTime: renderComparisonTopList("Топ-5 за часом польоту", itemsByKey.flightTime || [], "flightTime", "Час польоту", " хв"),
-    radius: renderComparisonTopList("Топ-5 за радіусом", itemsByKey.radius || [], "radius", "Радіус", " км"),
-    height: renderComparisonTopList("Топ-5 за висотою", itemsByKey.height || [], "height", "Висота", " м"),
-    wind: renderComparisonTopList("Топ-5 за стійкістю до вітру", itemsByKey.wind || [], "wind", "Вітер", " м/с"),
+    price: renderComparisonTopListAsc("ТОП-5 за ціною", itemsByKey.price || [], "systemPrice", "Ціна", " грн"),
+    distance: renderComparisonTopList("ТОП-5 за дальністю", itemsByKey.distance || [], "distance", "Дальність", " км"),
+    payload: renderComparisonTopList("ТОП-5 за навантаженням", itemsByKey.payload || [], "payload", "Навантаження", " кг"),
+    speed: renderComparisonTopList("ТОП-5 за швидкістю", itemsByKey.speed || [], "speed", "Швидкість", " км/год"),
+    flightTime: renderComparisonTopList("ТОП-5 за часом польоту", itemsByKey.flightTime || [], "flightTime", "Час польоту", " хв"),
+    radius: renderComparisonTopList("ТОП-5 за радіусом", itemsByKey.radius || [], "radius", "Радіус", " км"),
+    height: renderComparisonTopList("ТОП-5 за висотою", itemsByKey.height || [], "height", "Висота", " м"),
+    wind: renderComparisonTopList("ТОП-5 за стійкістю до вітру", itemsByKey.wind || [], "wind", "Вітер", " м/с"),
   };
 
   return `
@@ -3991,34 +4123,7 @@ function buildComparisonAnalyticsModalHtml(rows, title=""){
     maxHeight ? {label:"Висота", item:maxHeight, value:maxHeight.height, metricLabel:"Висота", unit:" м"} : null,
     maxWind ? {label:"Стійкість до вітру", item:maxWind, value:maxWind.wind, metricLabel:"Вітер", unit:" м/с"} : null,
     ]);
-    const practicalLeaders = renderComparisonLeaderCards("Практичні орієнтири", [
-    cheapestSystems[0] ? {label:"Найдешевший комплекс", item:cheapestSystems[0], value:cheapestSystems[0].systemPrice, metricLabel:"Ціна", unit:" грн", tone:"ok"} : null,
-    fastestDeploy[0] ? {label:"Найшвидше розгортання", item:fastestDeploy[0], value:fastestDeploy[0].deployTime, metricLabel:"Розгортання", unit:" хв", tone:"ok"} : null,
-    primaryProfile?.best ? {label:primaryProfile.config.label, item:primaryProfile.best, value:primaryProfile.best[primaryProfile.scoreKey], metricLabel:primaryProfile.config.label, unit:"", tone:primaryProfile.config.tone || "blue"} : null,
-    secondaryProfile?.best ? {label:secondaryProfile.config.label, item:secondaryProfile.best, value:secondaryProfile.best[secondaryProfile.scoreKey], metricLabel:secondaryProfile.config.label, unit:"", tone:secondaryProfile.config.tone || "blue"} : null,
-    ]);
-  const overviewDonuts = `
-    <div class="comparison-donut-grid">
-      ${renderComparisonSliceDonutCard("Цінові сегменти", priceSlices, "Немає цінових даних.", ["#6fbf73", "#ffcc66", "#ff8f5a"])}
-      ${renderComparisonSliceDonutCard("Клас навантаження", payloadSlices, "Немає даних по навантаженню.", ["#5f8ef5", "#7bc67f", "#ff9f43"])}
-      ${renderComparisonSliceDonutCard("Клас дальності", distanceSlices, "Немає даних по дальності.", ["#7bc67f", "#5f8ef5", "#b783ff"])}
-      ${renderComparisonSliceDonutCard("Камери", cameraSlices, "Немає даних по камерах.", ["#5f8ef5", "#d7dfef"])}
-    </div>
-  `;
-  const enduranceDonut = flightTimeSlices.length
-    ? renderComparisonSliceDonutCard("Тривалість польоту", flightTimeSlices, "Немає даних по часу польоту.", ["#67b4ff", "#7bc67f", "#ffb14d"])
-    : "";
-  const profileCards = featuredProfiles.slice(0, 2).map(profile=>
-    renderComparisonCompactCards(
-      `Ще моделі: ${profile.config.label}`,
-      profile.top.slice(1, 5),
-      profile.scoreKey,
-      "",
-      profile.config.tone || "blue"
-    )
-  ).join("");
-  const overallCards = renderComparisonCompactCards("Ще сильні моделі для розгляду", overallTop.slice(0, 4), "universalScore", "", "blue");
-  const switchTopBlock = renderComparisonSwitchTopBlock("Швидкий top-5 по критерію", {
+  const switchTopBlock = renderComparisonSwitchTopBlock("Швидкий ТОП-5 по критерію", {
     price: cheapestSystems,
     distance: topDistance,
     payload: topPayload,
@@ -4032,15 +4137,8 @@ function buildComparisonAnalyticsModalHtml(rows, title=""){
     return `
       <div class="staffing-analytics-modal comparison-analytics-modal">
         ${summaryGrid}
-        ${overviewDonuts}
         ${technicalLeaders}
         ${switchTopBlock}
-        ${practicalLeaders}
-        <div class="control-grid staffing-analytics-sections">
-          ${profileCards}
-        </div>
-        ${enduranceDonut}
-        ${overallCards}
       </div>
     `;
 
