@@ -5401,9 +5401,11 @@ function detectDeltaNrkColumns(headerRow){
     startAt:-1,
     endAt:-1,
     duration:-1,
+    circumstances:-1,
     cargo:-1,
     cargoWeight:-1,
     assetStatus:-1,
+    lossCircumstances:-1,
     asset:-1,
     primaryLink:-1,
     reserveLink:-1,
@@ -5420,6 +5422,10 @@ function detectDeltaNrkColumns(headerRow){
     }
     if(result.result < 0 && /(^результат$|статус місії|результат місії)/.test(header)){
       result.result = idx;
+      return;
+    }
+    if(result.circumstances < 0 && /(^обставини$|обставини місії|деталі місії)/.test(header)){
+      result.circumstances = idx;
       return;
     }
     if(result.resultAt < 0 && /(дата і час результату|час результату|дата результату)/.test(header)){
@@ -5448,6 +5454,10 @@ function detectDeltaNrkColumns(headerRow){
     }
     if(result.assetStatus < 0 && /(статус засобу)/.test(header)){
       result.assetStatus = idx;
+      return;
+    }
+    if(result.lossCircumstances < 0 && /(обставини втрати засобу|втрати засобу|причина втрати засобу)/.test(header)){
+      result.lossCircumstances = idx;
       return;
     }
     if(result.asset < 0 && /(^засіб$|платформа|модель засобу)/.test(header)){
@@ -5484,9 +5494,11 @@ function detectDeltaNrkColumns(headerRow){
       if(result.endAt < 0) result.endAt = 9;
       if(result.duration < 0) result.duration = 10;
       if(result.result < 0) result.result = 12;
+      if(result.circumstances < 0) result.circumstances = 13;
       if(result.cargo < 0) result.cargo = 14;
       if(result.cargoWeight < 0) result.cargoWeight = 15;
       if(result.assetStatus < 0) result.assetStatus = 21;
+      if(result.lossCircumstances < 0) result.lossCircumstances = 22;
       if(result.asset < 0) result.asset = 23;
       if(result.primaryLink < 0) result.primaryLink = 24;
       if(result.reserveLink < 0) result.reserveLink = 25;
@@ -5500,9 +5512,11 @@ function detectDeltaNrkColumns(headerRow){
       if(result.endAt < 0) result.endAt = 11;
       if(result.duration < 0) result.duration = 12;
       if(result.result < 0) result.result = 14;
+      if(result.circumstances < 0) result.circumstances = 15;
       if(result.cargo < 0) result.cargo = 16;
       if(result.cargoWeight < 0) result.cargoWeight = 17;
       if(result.assetStatus < 0) result.assetStatus = 23;
+      if(result.lossCircumstances < 0) result.lossCircumstances = 24;
       if(result.asset < 0) result.asset = 25;
       if(result.primaryLink < 0) result.primaryLink = 26;
       if(result.reserveLink < 0) result.reserveLink = 27;
@@ -5855,6 +5869,136 @@ function formatDurationMinutes(minutes){
 
 }
 
+function getDeltaDayNightKindForTimestamp(ts){
+
+  if(!Number.isFinite(ts)) return "";
+  const dt = new Date(ts);
+  const hour = dt.getHours();
+  return (hour >= 6 && hour < 22) ? "day" : "night";
+
+}
+
+function splitDeltaDayNight(startTs, endTs, fallbackTs){
+
+  if(Number.isFinite(startTs) && Number.isFinite(endTs) && endTs >= startTs){
+    let dayMinutes = 0;
+    let nightMinutes = 0;
+    let cursor = startTs;
+
+    while(cursor < endTs){
+      const current = new Date(cursor);
+      const dayStart = new Date(current.getFullYear(), current.getMonth(), current.getDate(), 6, 0, 0, 0).getTime();
+      const dayEnd = new Date(current.getFullYear(), current.getMonth(), current.getDate(), 22, 0, 0, 0).getTime();
+      const nextMidnight = new Date(current.getFullYear(), current.getMonth(), current.getDate() + 1, 0, 0, 0, 0).getTime();
+
+      let segmentEnd = endTs;
+      if(cursor < dayStart){
+        segmentEnd = Math.min(endTs, dayStart);
+        nightMinutes += Math.max(0, Math.round((segmentEnd - cursor) / 60000));
+      } else if(cursor < dayEnd){
+        segmentEnd = Math.min(endTs, dayEnd);
+        dayMinutes += Math.max(0, Math.round((segmentEnd - cursor) / 60000));
+      } else {
+        segmentEnd = Math.min(endTs, nextMidnight);
+        nightMinutes += Math.max(0, Math.round((segmentEnd - cursor) / 60000));
+      }
+
+      if(segmentEnd <= cursor) break;
+      cursor = segmentEnd;
+    }
+
+    const kind = dayMinutes > nightMinutes ? "day" : "night";
+    return {kind, dayMinutes, nightMinutes, totalMinutes: dayMinutes + nightMinutes};
+  }
+
+  const refTs = Number.isFinite(startTs) ? startTs : (Number.isFinite(fallbackTs) ? fallbackTs : (Number.isFinite(endTs) ? endTs : null));
+  if(!Number.isFinite(refTs)) return {kind:"", dayMinutes:0, nightMinutes:0, totalMinutes:0};
+
+  const kind = getDeltaDayNightKindForTimestamp(refTs);
+  return {
+    kind,
+    dayMinutes: kind === "day" ? 1 : 0,
+    nightMinutes: kind === "night" ? 1 : 0,
+    totalMinutes: 1,
+  };
+
+}
+
+function buildDeltaNrkDayNightHtml(analytics){
+
+  const block = analytics?.dayNight;
+  if(!block?.units?.length && !block?.assets?.length) return "";
+
+  const renderSection = (sectionTitle, items, modalTitle)=>{
+    if(!items?.length) return "";
+    const modalRows = items.map(item=>({
+      label: item.label,
+      valueText: fmtNum(item.total),
+      meta: `День ${fmtNum(item.dayCount)} · Ніч ${fmtNum(item.nightCount)} · Нічні ${fmtNum(item.nightPercent)}%`,
+      tone: item.nightPercent >= 50 ? "b-violet" : "b-blue",
+    }));
+    const detailKey = registerRenderedTableModal(
+      modalTitle,
+      buildDeltaNrkInsightModalHtml([
+        {
+          title: sectionTitle,
+          summary: `День: ${fmtNum(block.dayCount)} · Ніч: ${fmtNum(block.nightCount)} · Нічні місії: ${fmtNum(block.nightPercent)}%`,
+          rows: modalRows,
+          emptyText: "По часу місій даних поки немає.",
+        }
+      ])
+    );
+
+    return `
+      <div class="delta-nrk-daynight-section">
+        <div class="row">
+          <div class="name">${htmlesc(sectionTitle)}</div>
+          <button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${detailKey}">Детальніше</button>
+        </div>
+        <div class="delta-nrk-daynight-list">
+          ${items.slice(0, 8).map(item=>`
+            <div class="delta-nrk-daynight-card">
+              <div class="delta-nrk-daynight-head">
+                <div class="delta-nrk-daynight-name">${htmlesc(item.label)}</div>
+                <div class="delta-nrk-daynight-total mono">${fmtNum(item.total)}</div>
+              </div>
+              <div class="delta-nrk-daynight-meta">День ${fmtNum(item.dayCount)} · Ніч ${fmtNum(item.nightCount)} · Нічні ${fmtNum(item.nightPercent)}%</div>
+              <div class="delta-nrk-daynight-bar">
+                <div class="delta-nrk-daynight-day" style="width:${Math.max(0, Math.min(100, item.dayPercent))}%;"></div>
+                <div class="delta-nrk-daynight-night" style="width:${Math.max(0, Math.min(100, item.nightPercent))}%;"></div>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    `;
+  };
+
+  const overallDonut = renderComparisonSliceDonutCard(
+    "День / ніч",
+    [
+      {label:"Денні", value: block.dayCount},
+      {label:"Нічні", value: block.nightCount},
+    ],
+    "Не вдалося визначити час місій.",
+    ["#4f88ff", "#1f2d4a"]
+  );
+
+  return `
+    <div class="item analytics-block delta-nrk-daynight">
+      <div class="row"><div class="name">День / ніч</div></div>
+      <div class="delta-nrk-daynight-grid">
+        <div class="delta-nrk-daynight-donut">${overallDonut}</div>
+        <div class="delta-nrk-daynight-sections">
+          ${renderSection("День / ніч по підрозділах", block.units, `${analytics.title || "Delta / НРК"} · День / ніч · Підрозділи`)}
+          ${renderSection("День / ніч по платформах", block.assets, `${analytics.title || "Delta / НРК"} · День / ніч · Платформи`)}
+        </div>
+      </div>
+    </div>
+  `;
+
+}
+
 function buildDeltaNrkTimeQualityHtml(analytics){
 
   const q = analytics?.timeQuality;
@@ -6053,18 +6197,20 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     const asset = columns.asset >= 0 ? String(row?.[columns.asset] || "").trim() : "";
     const unit = columns.unit >= 0 ? String(row?.[columns.unit] || "").trim() : "";
     const result = columns.result >= 0 ? String(row?.[columns.result] || "").trim() : "";
+    const circumstances = columns.circumstances >= 0 ? String(row?.[columns.circumstances] || "").trim() : "";
     const taskType = columns.taskType >= 0 ? String(row?.[columns.taskType] || "").trim() : "";
     const startAt = columns.startAt >= 0 ? row?.[columns.startAt] : "";
     const endAt = columns.endAt >= 0 ? row?.[columns.endAt] : "";
     const durationRaw = columns.duration >= 0 ? row?.[columns.duration] : "";
     const cargo = columns.cargo >= 0 ? String(row?.[columns.cargo] || "").trim() : "";
     const assetStatus = columns.assetStatus >= 0 ? String(row?.[columns.assetStatus] || "").trim() : "";
+    const lossCircumstances = columns.lossCircumstances >= 0 ? String(row?.[columns.lossCircumstances] || "").trim() : "";
     const primaryLink = columns.primaryLink >= 0 ? String(row?.[columns.primaryLink] || "").trim() : "";
     const reserveLink = columns.reserveLink >= 0 ? String(row?.[columns.reserveLink] || "").trim() : "";
     const resultAt = columns.resultAt >= 0 ? String(row?.[columns.resultAt] || "").trim() : "";
     const cargoWeight = columns.cargoWeight >= 0 ? parseAnalyticsNumber(row?.[columns.cargoWeight]) : null;
 
-    const hasData = [asset, unit, result, taskType, cargo, assetStatus, primaryLink, reserveLink, resultAt, String(startAt || "").trim(), String(endAt || "").trim(), String(durationRaw || "").trim()]
+    const hasData = [asset, unit, result, circumstances, taskType, cargo, assetStatus, lossCircumstances, primaryLink, reserveLink, resultAt, String(startAt || "").trim(), String(endAt || "").trim(), String(durationRaw || "").trim()]
       .some(Boolean) || Number.isFinite(cargoWeight);
     if(!hasData) return null;
 
@@ -6079,6 +6225,7 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     const missionDurationMinutes = Number.isFinite(computedDurationMinutes) && computedDurationMinutes >= 0
       ? computedDurationMinutes
       : (Number.isFinite(providedDurationMinutes) && providedDurationMinutes >= 0 ? providedDurationMinutes : null);
+    const dayNight = splitDeltaDayNight(startAtTs, endAtTs, resultAtTs);
     const effectiveDateRaw = resultAt || endAt || startAt || "";
 
     return {
@@ -6086,9 +6233,11 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
       asset,
       unit,
       result,
+      circumstances,
       taskType,
       cargo,
       assetStatus,
+      lossCircumstances,
       primaryLink,
       reserveLink,
       resultAt,
@@ -6102,6 +6251,9 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
       computedDurationMinutes,
       missionDurationMinutes,
       invalidTimeline,
+      dayNightKind: dayNight.kind,
+      dayMinutes: dayNight.dayMinutes,
+      nightMinutes: dayNight.nightMinutes,
       effectiveDateRaw,
       cargoWeight: Number.isFinite(cargoWeight) ? Number(cargoWeight) : 0,
     };
@@ -6147,6 +6299,15 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
       reserveLinks: [],
       unitsByMissions: [],
       unitsByWeight: [],
+      dayNight: {
+        dayCount: 0,
+        nightCount: 0,
+        total: 0,
+        dayPercent: 0,
+        nightPercent: 0,
+        units: [],
+        assets: [],
+      },
       months: [],
       timeQuality: {
         totalCount: 0,
@@ -6212,6 +6373,68 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     unitsByWeightMap.set(key, (unitsByWeightMap.get(key) || 0) + (Number(item.cargoWeight) || 0));
   });
   const unitsByWeight = Array.from(unitsByWeightMap.entries()).map(([label, value])=>({label, value})).sort((a,b)=>b.value-a.value || String(a.label).localeCompare(String(b.label), "uk"));
+
+  const dayNightByUnitMap = new Map();
+  const dayNightByAssetMap = new Map();
+  let dayCount = 0;
+  let nightCount = 0;
+  items.forEach(item=>{
+    const kind = item.dayNightKind;
+    if(kind !== "day" && kind !== "night") return;
+    const unitKey = String(item.unit || "Без підрозділу").trim();
+    if(!dayNightByUnitMap.has(unitKey)){
+      dayNightByUnitMap.set(unitKey, {label:unitKey, total:0, dayCount:0, nightCount:0});
+    }
+    const unitBucket = dayNightByUnitMap.get(unitKey);
+    unitBucket.total += 1;
+    if(kind === "day"){
+      unitBucket.dayCount += 1;
+      dayCount += 1;
+    } else {
+      unitBucket.nightCount += 1;
+      nightCount += 1;
+    }
+
+    const assetRaw = String(item.asset || "Без платформи").trim();
+    const assetKey = normalizeAnalyticsHeader(assetRaw) || assetRaw;
+    if(!dayNightByAssetMap.has(assetKey)){
+      dayNightByAssetMap.set(assetKey, {label:assetRaw, total:0, dayCount:0, nightCount:0, variants:new Map()});
+    }
+    const assetBucket = dayNightByAssetMap.get(assetKey);
+    assetBucket.total += 1;
+    assetBucket.variants.set(assetRaw, (assetBucket.variants.get(assetRaw) || 0) + 1);
+    if(kind === "day"){
+      assetBucket.dayCount += 1;
+    } else {
+      assetBucket.nightCount += 1;
+    }
+  });
+  const dayNightUnits = Array.from(dayNightByUnitMap.values()).map(item=>({
+    ...item,
+    dayPercent: item.total ? Math.round((item.dayCount / item.total) * 100) : 0,
+    nightPercent: item.total ? Math.round((item.nightCount / item.total) * 100) : 0,
+  })).sort((a,b)=>b.nightCount-a.nightCount || b.total-a.total || String(a.label).localeCompare(String(b.label), "uk"));
+  const dayNightAssets = Array.from(dayNightByAssetMap.values()).map(item=>{
+    const displayLabel = Array.from(item.variants.entries())
+      .sort((a,b)=>b[1]-a[1] || String(a[0]).localeCompare(String(b[0]), "uk"))[0]?.[0] || item.label;
+    return {
+      label: displayLabel,
+      total: item.total,
+      dayCount: item.dayCount,
+      nightCount: item.nightCount,
+      dayPercent: item.total ? Math.round((item.dayCount / item.total) * 100) : 0,
+      nightPercent: item.total ? Math.round((item.nightCount / item.total) * 100) : 0,
+    };
+  }).sort((a,b)=>b.nightCount-a.nightCount || b.total-a.total || String(a.label).localeCompare(String(b.label), "uk"));
+  const dayNight = {
+    dayCount,
+    nightCount,
+    total: dayCount + nightCount,
+    dayPercent: (dayCount + nightCount) ? Math.round((dayCount / (dayCount + nightCount)) * 100) : 0,
+    nightPercent: (dayCount + nightCount) ? Math.round((nightCount / (dayCount + nightCount)) * 100) : 0,
+    units: dayNightUnits,
+    assets: dayNightAssets,
+  };
 
   const cargoCategoryMap = new Map();
   const cargoComboMap = new Map();
@@ -6339,6 +6562,7 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     reserveLinks,
     unitsByMissions,
     unitsByWeight,
+    dayNight,
     months,
     timeQuality,
     topTaskType: taskTypes[0] || null,
@@ -6410,8 +6634,8 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
       <div class="report-tile"><div class="k">Доставлено</div><div class="v mono">${fmtNum(analytics.deliveredCount)}</div><div class="s">${fmtNum(analytics.missionCount ? Math.round((analytics.deliveredCount / analytics.missionCount) * 100) : 0)}%</div></div>
       <div class="report-tile"><div class="k">Не доставлено</div><div class="v mono">${fmtNum(analytics.notDeliveredCount)}</div><div class="s">&nbsp;</div></div>
       <div class="report-tile"><div class="k">Евакуаційні</div><div class="v mono">${fmtNum(analytics.evacuationCount)}</div><div class="s">&nbsp;</div></div>
-      <div class="report-tile"><div class="k">Загальна вага</div><div class="v mono">${fmtNum(analytics.totalWeight)}</div><div class="s">кг</div></div>
-      <div class="report-tile"><div class="k">Сер. вага</div><div class="v mono">${fmtNum(analytics.avgWeight)}</div><div class="s">кг</div></div>
+      <div class="report-tile"><div class="k">Загальна вага</div><div class="v mono">${fmtNum(analytics.totalWeight)}&nbsp;кг</div><div class="s">&nbsp;</div></div>
+      <div class="report-tile"><div class="k">Сер. вага</div><div class="v mono">${fmtNum(analytics.avgWeight)}&nbsp;кг</div><div class="s">&nbsp;</div></div>
       <div class="report-tile"><div class="k">Втрати</div><div class="v mono">${fmtNum(analytics.lossCount)}</div><div class="s">${fmtNum(analytics.returnRate)}% повернення</div></div>
     </div>
   `;
@@ -6516,6 +6740,8 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
         item.asset ? `Платформа: ${item.asset}` : "",
         item.taskType ? `Тип задачі: ${item.taskType}` : "",
         item.result ? `Результат: ${item.result}` : "",
+        item.circumstances ? `Обставини: ${item.circumstances}` : "",
+        item.lossCircumstances ? `Втрати/пошкодження: ${item.lossCircumstances}` : "",
         item.cargoComboLabel || item.cargo ? `Вантаж: ${item.cargoComboLabel || item.cargo}` : "",
         Number(item.cargoWeight) > 0 ? `Вага: ${fmtNum(item.cargoWeight)} кг` : "",
         item.missionDurationMinutes ? `Час: ${formatDurationMinutes(item.missionDurationMinutes)}` : "",
@@ -6703,6 +6929,7 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
         ${missionResultDonut}
         ${statusDonut}
       </div>
+      ${buildDeltaNrkDayNightHtml(analytics)}
       ${buildDeltaNrkMonthlyAnalyticsHtml(analytics)}
       <div class="control-grid">
         ${platformsBlock}
@@ -6983,12 +7210,14 @@ function buildStandaloneRenderedModalHtml(){
   const title = String(sheetTitle?.textContent || "Аналітика");
   const shell = document.createElement("div");
   shell.className = "print-shell";
-  shell.style.maxWidth = "1200px";
-  shell.style.margin = "0 auto";
+  shell.style.maxWidth = "none";
+  shell.style.width = "max-content";
+  shell.style.minWidth = "100%";
+  shell.style.margin = "0";
   shell.style.background = "#ffffff";
   shell.style.borderRadius = "24px";
   shell.style.boxShadow = "0 18px 50px rgba(24,39,75,.14)";
-  shell.style.overflow = "hidden";
+  shell.style.overflow = "visible";
 
   const head = document.createElement("div");
   head.className = "print-head";
@@ -7032,18 +7261,39 @@ function buildStandaloneRenderedModalHtml(){
         <style>
           body{
             margin:0;
-            padding:24px;
+            padding:18px;
             background:#f4f7fc;
             color:#1f2d4a;
             font-family:"Segoe UI", Arial, sans-serif;
+          }
+          .standalone-wrap{
+            width:100%;
+            overflow:auto;
+            padding-bottom:12px;
+          }
+          .print-shell{
+            max-width:none !important;
+            width:max-content !important;
+            min-width:100%;
+            overflow:visible !important;
+          }
+          .print-shell .table-modal-body{
+            max-height:none !important;
+            height:auto !important;
+            overflow:visible !important;
           }
           @media print{
             body{
               padding:0;
               background:#fff;
             }
+            .standalone-wrap{
+              overflow:visible;
+            }
             .print-shell{
               max-width:none !important;
+              width:auto !important;
+              min-width:0 !important;
               box-shadow:none !important;
               border-radius:0 !important;
             }
@@ -7051,7 +7301,7 @@ function buildStandaloneRenderedModalHtml(){
         </style>
       </head>
       <body>
-        ${shell.outerHTML}
+        <div class="standalone-wrap">${shell.outerHTML}</div>
       </body>
     </html>
   `;
