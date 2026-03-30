@@ -4435,6 +4435,39 @@ function renderComparisonTopListAsc(title, rows, metricKey, metricLabel, unit=""
 
 function buildComparisonOverallRankingHelpHtml(){
 
+  const universal = COMPARISON_PROFILE_CONFIG.universal;
+  const weightRows = (universal?.weights || []).map(item=>{
+    const labels = {
+      systemPrice: "Ціна комплексу",
+      payload: "Навантаження",
+      distance: "Дальність",
+      flightTime: "Час польоту",
+      speed: "Швидкість",
+      radius: "Радіус",
+      wind: "Стійкість до вітру",
+      deployTime: "Час розгортання",
+      height: "Висота",
+      thermal: "Тепловізор",
+      codified: "Кодифікація",
+    };
+
+    const label = labels[item.key] || item.key;
+    const percent = Math.round(Number(item.weight || 0) * 100);
+    const isPrimary = item.key === "systemPrice";
+    return `
+      <div class="comparison-weight-row ${isPrimary ? "is-primary" : ""}">
+        <div class="comparison-weight-head">
+          <div class="comparison-weight-label">${htmlesc(label)}</div>
+          <div class="comparison-weight-value mono">${percent}%</div>
+        </div>
+        <div class="comparison-weight-bar">
+          <div class="comparison-weight-fill" style="width:${Math.max(4, Math.min(percent, 100))}%"></div>
+        </div>
+        <div class="comparison-weight-note">${item.inverse ? "Менше = краще" : "Більше = краще"}</div>
+      </div>
+    `;
+  }).join("");
+
   return `
     <div class="comparison-help-modal">
       <div class="comparison-help-block">
@@ -4443,25 +4476,26 @@ function buildComparisonOverallRankingHelpHtml(){
           Це інтегральний рейтинг для швидкого вибору моделі без переплати.
         </div>
       </div>
-      <div class="comparison-help-block">
-        <div class="comparison-help-title">Що має найбільший пріоритет</div>
-        <ul class="report-list comparison-help-list">
-          <li><div class="report-meta">1. <b>Ціна комплексу</b> — найдешевші моделі з близькими характеристиками піднімаються вище.</div></li>
-          <li><div class="report-meta">2. <b>Навантаження</b> і <b>дальність</b> — як основні робочі можливості.</div></li>
-          <li><div class="report-meta">3. <b>Час польоту</b>, <b>швидкість</b> і <b>радіус</b> — як підсилювачі ефективності.</div></li>
-          <li><div class="report-meta">4. <b>Стійкість до вітру</b> і <b>час розгортання</b> — як практичні фактори використання.</div></li>
-        </ul>
+      <div class="comparison-help-block comparison-help-primary">
+        <div class="comparison-help-title">Головний акцент</div>
+        <div class="comparison-help-text">
+          У “Загальному” рейтингу <b>ціна комплексу — пріоритет №1</b>. Якщо дві моделі близькі за можливостями, вище буде та, що дає схожий результат за менші гроші.
+        </div>
       </div>
       <div class="comparison-help-block">
-        <div class="comparison-help-title">Як це читати</div>
+        <div class="comparison-help-title">Ваги критеріїв</div>
+        <div class="comparison-weight-grid">${weightRows}</div>
+      </div>
+      <div class="comparison-help-block">
+        <div class="comparison-help-title">Приклад</div>
         <div class="comparison-help-text">
-          Якщо дві моделі близькі за характеристиками, вище буде та, що коштує менше. Тобто “Загальний” рейтинг спеціально зсунений у бік <b>не переплачувати</b> за подібний результат.
+          Якщо модель <b>A</b> коштує <b>1,2 млн</b>, а модель <b>B</b> — <b>2,4 млн</b>, і при цьому різниця по дальності / навантаженню / часу польоту невелика, то вище у “Загальному” рейтингу буде <b>A</b>. Тобто рейтинг спеціально зсунений у бік <b>не переплачувати</b> за близькі можливості.
         </div>
       </div>
       <div class="comparison-help-block">
         <div class="comparison-help-title">Що важливо</div>
         <div class="comparison-help-text">
-          Це не остаточний вирок, а зручний стартовий орієнтир. Далі модель все одно варто відкривати й дивитися детальні характеристики.
+          Якщо одна модель істотно сильніша за ключовими характеристиками, вона все одно може піднятись вище, навіть якщо дорожча. Тобто це не “найдешевше будь-якою ціною”, а <b>розумний баланс із пріоритетом ціни</b>.
         </div>
       </div>
     </div>
