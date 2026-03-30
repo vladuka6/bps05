@@ -6730,6 +6730,7 @@ function openRenderedTableModal(key){
     </div>
     <div class="actions" style="margin-top:14px;">
       <button class="btn ghost" data-action="exportCurrentRenderedModalPng">Скрин PNG</button>
+      <button class="btn ghost" data-action="printCurrentRenderedModal">PDF / Друк</button>
       <button class="btn primary" data-action="hideSheet">Закрити</button>
     </div>
   `, {stack:true});
@@ -6864,8 +6865,105 @@ async function exportCurrentRenderedModalPng(){
     showToast("PNG збережено.", "ok");
   } catch(err){
     console.error(err);
-    showToast("Не вдалося зберегти PNG.", "warn");
+    showToast("PNG не вдався. Спробуй PDF / Друк.", "warn");
   }
+
+}
+
+function printCurrentRenderedModal(){
+
+  const bodySource = document.querySelector(".table-modal-body");
+  if(!bodySource){
+    showToast("Немає відкритої аналітики для друку.", "warn");
+    return;
+  }
+
+  const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1200,height=900");
+  if(!printWindow){
+    showToast("Браузер заблокував вікно друку.", "warn");
+    return;
+  }
+
+  const styleTags = Array.from(document.querySelectorAll("style, link[rel='stylesheet']")).map(el=>el.outerHTML).join("\n");
+  const title = String(sheetTitle?.textContent || "Аналітика");
+  const html = `
+    <!doctype html>
+    <html lang="uk">
+      <head>
+        <meta charset="utf-8" />
+        <title>${htmlesc(title)}</title>
+        ${styleTags}
+        <style>
+          body{
+            margin:0;
+            padding:24px;
+            background:#f4f7fc;
+          }
+          .print-shell{
+            max-width:1200px;
+            margin:0 auto;
+            background:#fff;
+            border-radius:24px;
+            box-shadow:0 18px 50px rgba(24,39,75,.14);
+            overflow:hidden;
+          }
+          .print-head{
+            padding:20px 22px 14px;
+            border-bottom:1px solid rgba(150,170,205,.18);
+          }
+          .print-title{
+            font-size:20px;
+            font-weight:900;
+            line-height:1.25;
+            color:#1f2d4a;
+          }
+          .print-body{
+            padding:0;
+          }
+          .print-body .table-modal-body{
+            max-height:none !important;
+            height:auto !important;
+            overflow:visible !important;
+          }
+          @media print{
+            body{
+              padding:0;
+              background:#fff;
+            }
+            .print-shell{
+              max-width:none;
+              box-shadow:none;
+              border-radius:0;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="print-shell">
+          <div class="print-head">
+            <div class="print-title">${htmlesc(title)}</div>
+          </div>
+          <div class="print-body">
+            <div class="table-modal-body">${bodySource.innerHTML}</div>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  printWindow.document.open();
+  printWindow.document.write(html);
+  printWindow.document.close();
+  printWindow.focus();
+  printWindow.onload = ()=>{
+    setTimeout(()=>{
+      try{
+        printWindow.print();
+      }catch(err){
+        console.error(err);
+      }
+    }, 250);
+  };
 
 }
 
@@ -23327,6 +23425,7 @@ const ACTIONS = {
 
   hideSheet,
   exportCurrentRenderedModalPng,
+  printCurrentRenderedModal,
   switchComparisonTopPanel,
   applyDeltaNrkAnalyticsFilters,
   resetDeltaNrkAnalyticsFilters,
