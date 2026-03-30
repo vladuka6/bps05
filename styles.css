@@ -1380,6 +1380,16 @@
         grid-template-columns:repeat(4, minmax(0,1fr));
         gap:7px;
       }
+    [data-staffing-view-mode="progress"] .staffing-unit-metrics{
+        display:none;
+      }
+    [data-staffing-view-mode="cards"] .staffing-unit-progress-view{
+        display:none;
+      }
+    .staffing-view-buttons{
+        gap:6px;
+        margin-bottom:6px;
+      }
     .staffing-unit-metric{
         min-width:0;
         border:1px solid rgba(181,197,229,.62);
@@ -1409,6 +1419,42 @@
         line-height:1.05;
         font-weight:1000;
         color:var(--text);
+      }
+    .staffing-unit-progress-view{
+        display:flex;
+        flex-direction:column;
+        gap:8px;
+      }
+    .staffing-unit-progress-meta{
+        display:flex;
+        flex-wrap:wrap;
+        gap:6px 10px;
+        font-size:11px;
+        color:var(--muted);
+        font-weight:700;
+      }
+    .staffing-unit-progress-meta b{
+        color:var(--text);
+        font-weight:900;
+      }
+    .staffing-unit-progress-track{
+        width:100%;
+        min-height:12px;
+        border-radius:999px;
+        overflow:hidden;
+        background:rgba(153,171,206,.18);
+        display:flex;
+        box-shadow:inset 0 0 0 1px rgba(173,189,220,.22);
+      }
+    .staffing-unit-progress-segment{
+        min-width:0;
+        transition:width .55s ease;
+      }
+    .staffing-unit-progress-segment.is-fact{
+        background:linear-gradient(90deg, #6dcf8a, #42b36f);
+      }
+    .staffing-unit-progress-segment.is-gap{
+        background:linear-gradient(90deg, #ffda8a, #f3b357);
       }
     .staffing-units-search{
         margin:0 0 6px;
@@ -4989,6 +5035,10 @@
       background:linear-gradient(180deg, rgba(58,42,19,.88), rgba(44,33,15,.82));
       border-color:rgba(227,176,92,.32);
     }
+    body.theme-dark .staffing-unit-progress-track{
+      background:rgba(59,74,106,.34);
+      box-shadow:inset 0 0 0 1px rgba(69,84,118,.42);
+    }
     body.theme-dark .staffing-units-search-input{
       background:linear-gradient(180deg, rgba(27,34,50,.94), rgba(21,25,37,.88));
       border-color:rgba(55,69,98,.72);
@@ -5250,6 +5300,10 @@
     padding:8px 9px;
     gap:7px;
     border-radius:12px;
+  }
+  .staffing-unit-progress-meta{
+    font-size:10px;
+    gap:5px 8px;
   }
   .staffing-scope-buttons{
     flex-wrap:wrap;

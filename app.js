@@ -3751,6 +3751,18 @@ function renderStaffingUnitList(items, sortKey="shortage", panelId=""){
                     <div class="staffing-unit-metric-v mono">${fmtNum(item.percent)}%</div>
                   </div>
                 </div>
+                <div class="staffing-unit-progress-view">
+                  <div class="staffing-unit-progress-meta">
+                    <span><b>План</b> ${fmtNum(item.plan)}</span>
+                    <span><b>Факт</b> ${fmtNum(item.fact)}</span>
+                    <span><b>Нестача</b> ${fmtNum(item.shortage)}</span>
+                    <span><b>%</b> ${fmtNum(item.percent)}%</span>
+                  </div>
+                  <div class="staffing-unit-progress-track">
+                    <span class="staffing-unit-progress-segment is-fact" style="width:${Math.max(0, Math.min(100, Number(item.percent || 0)))}%"></span>
+                    <span class="staffing-unit-progress-segment is-gap" style="width:${Math.max(0, Math.min(100, 100 - Number(item.percent || 0)))}%"></span>
+                  </div>
+                </div>
               </div>
             </li>
           `).join("")
@@ -3824,7 +3836,23 @@ function renderStaffingUnitsCombinedBlock(title, items, defaultKey="shortage"){
           data-arg1="${groupId}"
         />
       </div>
-      <div class="comparison-switcher" data-topswitch-group="${groupId}" data-staffing-scope="plan">
+      <div class="comparison-switcher-buttons staffing-view-buttons" data-staffing-view-group="${groupId}">
+        <button
+          type="button"
+          class="comparison-switcher-btn is-active"
+          data-action="setStaffingUnitsViewMode"
+          data-arg1="${groupId}"
+          data-arg2="cards"
+        >Картки</button>
+        <button
+          type="button"
+          class="comparison-switcher-btn"
+          data-action="setStaffingUnitsViewMode"
+          data-arg1="${groupId}"
+          data-arg2="progress"
+        >Прогрес</button>
+      </div>
+      <div class="comparison-switcher" data-topswitch-group="${groupId}" data-staffing-scope="plan" data-staffing-view-mode="cards">
         <div class="comparison-switcher-buttons staffing-sort-buttons">
           ${buttons.map(btn=>`
             <button
@@ -5440,6 +5468,25 @@ function setStaffingUnitsScope(groupId, scope="plan"){
   }
 
   filterStaffingUnitsBlock(groupId);
+
+}
+
+function setStaffingUnitsViewMode(groupId, mode="cards"){
+
+  if(!groupId) return;
+
+  const switcher = [...document.querySelectorAll("[data-topswitch-group]")].find(el=>el.getAttribute("data-topswitch-group") === groupId);
+  if(!switcher) return;
+
+  const nextMode = mode === "progress" ? "progress" : "cards";
+  switcher.setAttribute("data-staffing-view-mode", nextMode);
+
+  const modeWrap = switcher.parentElement?.querySelector(`[data-staffing-view-group="${groupId}"]`);
+  if(modeWrap){
+    modeWrap.querySelectorAll(".comparison-switcher-btn").forEach(btn=>{
+      btn.classList.toggle("is-active", btn.dataset.arg2 === nextMode);
+    });
+  }
 
 }
 
@@ -21508,6 +21555,7 @@ const ACTIONS = {
   switchComparisonTopPanel,
   filterStaffingUnitsBlock,
   setStaffingUnitsScope,
+  setStaffingUnitsViewMode,
   toggleStaffingUnitsExpand,
 
   logout,
