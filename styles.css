@@ -766,6 +766,30 @@
 .delta-nrk-card .comparison-compact-meta{
   text-transform:none;
 }
+.delta-nrk-diagnostics-grid{
+  display:grid;
+  grid-template-columns:repeat(3, minmax(0,1fr));
+  gap:8px;
+}
+.delta-nrk-diagnostics-item{
+  border:1px solid rgba(150,170,205,.28);
+  border-radius:12px;
+  padding:8px 10px;
+  background:linear-gradient(180deg, rgba(255,255,255,.94), rgba(247,250,255,.9));
+}
+.delta-nrk-diagnostics-k{
+  font-size:10px;
+  font-weight:800;
+  color:var(--muted);
+}
+.delta-nrk-diagnostics-v{
+  margin-top:4px;
+  font-size:13px;
+  font-weight:900;
+  color:var(--text);
+  line-height:1.15;
+  overflow-wrap:anywhere;
+}
 .ref-note-body{font-size:13px;line-height:1.55;color:var(--text);white-space:pre-wrap;overflow-wrap:anywhere;}
 .ref-note-actions{flex-shrink:0;}
 .ref-note-link{padding:0;border:0;background:none;text-align:left;font-weight:900;font-size:15px;line-height:1.35;color:var(--blue);cursor:pointer;overflow-wrap:anywhere;}
@@ -5294,6 +5318,16 @@
   }
   .staffing-linechart-legend-item{
     font-size:10px;
+  }
+  .delta-nrk-diagnostics-grid{
+    grid-template-columns:1fr;
+    gap:6px;
+  }
+  .delta-nrk-diagnostics-item{
+    padding:7px 8px;
+  }
+  .delta-nrk-diagnostics-v{
+    font-size:12px;
   }
   .staffing-barchart-svg{
     height:200px;

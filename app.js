@@ -5425,6 +5425,46 @@ function detectDeltaNrkColumns(headerRow){
     }
   });
 
+  const matchedCore = [
+    result.unit,
+    result.taskType,
+    result.result,
+    result.cargo,
+    result.cargoWeight,
+    result.assetStatus,
+    result.asset,
+  ].filter(idx=>idx >= 0).length;
+
+  const width = headers.length;
+  if(matchedCore < 4){
+    // Delta NRK export without UUID columns
+    if(width >= 28){
+      if(result.unit < 0) result.unit = 1;
+      if(result.taskType < 0) result.taskType = 4;
+      if(result.resultAt < 0) result.resultAt = 6;
+      if(result.result < 0) result.result = 12;
+      if(result.cargo < 0) result.cargo = 14;
+      if(result.cargoWeight < 0) result.cargoWeight = 15;
+      if(result.assetStatus < 0) result.assetStatus = 21;
+      if(result.asset < 0) result.asset = 23;
+      if(result.primaryLink < 0) result.primaryLink = 24;
+      if(result.reserveLink < 0) result.reserveLink = 25;
+    }
+    // Delta NRK export with UUID/reporter columns in front
+    if(width >= 30 && /uuid/.test(headers[0] || "")){
+      if(result.unit < 0) result.unit = 2;
+      if(result.taskType < 0) result.taskType = 6;
+      if(result.resultAt < 0) result.resultAt = 8;
+      if(result.result < 0) result.result = 14;
+      if(result.cargo < 0) result.cargo = 16;
+      if(result.cargoWeight < 0) result.cargoWeight = 17;
+      if(result.assetStatus < 0) result.assetStatus = 23;
+      if(result.asset < 0) result.asset = 25;
+      if(result.primaryLink < 0) result.primaryLink = 26;
+      if(result.reserveLink < 0) result.reserveLink = 27;
+    }
+  }
+
   return result;
 
 }
@@ -5505,6 +5545,7 @@ function buildDeltaNrkAnalytics(rows, title=""){
   if(grid.length < 2) return null;
 
   const columns = detectDeltaNrkColumns(grid[0]);
+  const detectedFormat = columns.resultAt === 6 && columns.result === 12 ? "Delta NRK 28 колонок" : (columns.resultAt === 8 && columns.result === 14 ? "Delta NRK 30 колонок" : "Delta NRK / alias-map");
   const items = grid.slice(1).map((row, index)=>{
     const asset = columns.asset >= 0 ? String(row?.[columns.asset] || "").trim() : "";
     const unit = columns.unit >= 0 ? String(row?.[columns.unit] || "").trim() : "";
@@ -5577,6 +5618,9 @@ function buildDeltaNrkAnalytics(rows, title=""){
 
   return {
     title,
+    detectedFormat,
+    sourceRows: Math.max(0, grid.length - 1),
+    parsedRows: items.length,
     items,
     missionCount,
     deliveredCount,
@@ -5618,6 +5662,26 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title=""){
       <div class="report-tile"><div class="k">Загальна вага</div><div class="v mono">${fmtNum(analytics.totalWeight)}</div><div class="s">кг</div></div>
       <div class="report-tile"><div class="k">Сер. вага</div><div class="v mono">${fmtNum(analytics.avgWeight)}</div><div class="s">кг</div></div>
       <div class="report-tile"><div class="k">Втрати</div><div class="v mono">${fmtNum(analytics.lossCount)}</div><div class="s">${fmtNum(analytics.returnRate)}% повернення</div></div>
+    </div>
+  `;
+
+  const diagnosticsBlock = `
+    <div class="item analytics-block delta-nrk-diagnostics">
+      <div class="row"><div class="name">Перевірка імпорту</div></div>
+      <div class="delta-nrk-diagnostics-grid">
+        <div class="delta-nrk-diagnostics-item">
+          <div class="delta-nrk-diagnostics-k">Формат</div>
+          <div class="delta-nrk-diagnostics-v">${htmlesc(analytics.detectedFormat || "—")}</div>
+        </div>
+        <div class="delta-nrk-diagnostics-item">
+          <div class="delta-nrk-diagnostics-k">Рядків у таблиці</div>
+          <div class="delta-nrk-diagnostics-v mono">${fmtNum(analytics.sourceRows)}</div>
+        </div>
+        <div class="delta-nrk-diagnostics-item">
+          <div class="delta-nrk-diagnostics-k">Розпізнано місій</div>
+          <div class="delta-nrk-diagnostics-v mono">${fmtNum(analytics.parsedRows)}</div>
+        </div>
+      </div>
     </div>
   `;
 
@@ -5686,6 +5750,7 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title=""){
   return `
     <div class="staffing-analytics-modal comparison-analytics-modal delta-nrk-analytics-modal">
       ${summaryGrid}
+      ${diagnosticsBlock}
       ${buildDeltaNrkAutoSummaryHtml(analytics)}
       <div class="control-grid">
         ${platformsBlock}
