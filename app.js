@@ -6884,46 +6884,61 @@ function printCurrentRenderedModal(){
     return;
   }
 
-  const styleTags = Array.from(document.querySelectorAll("style, link[rel='stylesheet']")).map(el=>el.outerHTML).join("\n");
   const title = String(sheetTitle?.textContent || "Аналітика");
+  const shell = document.createElement("div");
+  shell.className = "print-shell";
+  shell.style.maxWidth = "1200px";
+  shell.style.margin = "0 auto";
+  shell.style.background = "#ffffff";
+  shell.style.borderRadius = "24px";
+  shell.style.boxShadow = "0 18px 50px rgba(24,39,75,.14)";
+  shell.style.overflow = "hidden";
+
+  const head = document.createElement("div");
+  head.className = "print-head";
+  head.style.padding = "20px 22px 14px";
+  head.style.borderBottom = "1px solid rgba(150,170,205,.18)";
+  head.style.background = "#ffffff";
+
+  const titleNode = document.createElement("div");
+  titleNode.className = "print-title";
+  titleNode.textContent = title;
+  titleNode.style.fontSize = "20px";
+  titleNode.style.fontWeight = "900";
+  titleNode.style.lineHeight = "1.25";
+  titleNode.style.color = "#1f2d4a";
+  head.appendChild(titleNode);
+
+  const clone = bodySource.cloneNode(true);
+  copyComputedStylesDeep(bodySource, clone);
+  clone.style.maxHeight = "none";
+  clone.style.height = "auto";
+  clone.style.overflow = "visible";
+  clone.style.padding = clone.style.padding || "18px 20px 22px";
+  clone.querySelectorAll("*").forEach(node=>{
+    if(node instanceof HTMLElement){
+      node.style.maxHeight = node.style.maxHeight === "none" ? "none" : node.style.maxHeight;
+      if(node.classList.contains("comparison-switch-panel") && !node.classList.contains("is-active")){
+        node.style.display = "none";
+      }
+    }
+  });
+
+  shell.appendChild(head);
+  shell.appendChild(clone);
   const html = `
     <!doctype html>
     <html lang="uk">
       <head>
         <meta charset="utf-8" />
         <title>${htmlesc(title)}</title>
-        ${styleTags}
         <style>
           body{
             margin:0;
             padding:24px;
             background:#f4f7fc;
-          }
-          .print-shell{
-            max-width:1200px;
-            margin:0 auto;
-            background:#fff;
-            border-radius:24px;
-            box-shadow:0 18px 50px rgba(24,39,75,.14);
-            overflow:hidden;
-          }
-          .print-head{
-            padding:20px 22px 14px;
-            border-bottom:1px solid rgba(150,170,205,.18);
-          }
-          .print-title{
-            font-size:20px;
-            font-weight:900;
-            line-height:1.25;
             color:#1f2d4a;
-          }
-          .print-body{
-            padding:0;
-          }
-          .print-body .table-modal-body{
-            max-height:none !important;
-            height:auto !important;
-            overflow:visible !important;
+            font-family: "Segoe UI", Arial, sans-serif;
           }
           @media print{
             body{
@@ -6939,14 +6954,7 @@ function printCurrentRenderedModal(){
         </style>
       </head>
       <body>
-        <div class="print-shell">
-          <div class="print-head">
-            <div class="print-title">${htmlesc(title)}</div>
-          </div>
-          <div class="print-body">
-            <div class="table-modal-body">${bodySource.innerHTML}</div>
-          </div>
-        </div>
+        ${shell.outerHTML}
       </body>
     </html>
   `;
