@@ -763,6 +763,42 @@
 .delta-nrk-kpis{
   margin-bottom:2px;
 }
+.delta-nrk-primary-kpis{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));
+  gap:10px;
+}
+.delta-nrk-primary-card{
+  padding:12px 14px 11px;
+  border:1px solid rgba(150,170,205,.24);
+  border-radius:16px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.98), rgba(246,250,255,.94));
+  box-shadow:
+    0 1px 0 rgba(255,255,255,.9) inset,
+    0 10px 24px rgba(68,102,170,.06);
+  display:grid;
+  gap:4px;
+  min-width:0;
+}
+.delta-nrk-primary-k{
+  font-size:clamp(11px, .9vw, 13px);
+  font-weight:800;
+  color:var(--muted);
+  line-height:1.15;
+}
+.delta-nrk-primary-v{
+  font-size:clamp(23px, 1.75vw, 31px);
+  font-weight:900;
+  color:var(--text);
+  line-height:1.02;
+  white-space:nowrap;
+}
+.delta-nrk-primary-s{
+  font-size:clamp(11px, .85vw, 13px);
+  color:var(--text-soft);
+  line-height:1.2;
+}
 .delta-nrk-kpis .report-tile{
   padding:clamp(10px, 1.2vw, 14px) clamp(11px, 1.3vw, 16px);
   gap:clamp(3px, .45vw, 6px);
@@ -5812,6 +5848,16 @@ body.dark .text-table-import-col{
 }
 
 @media (max-width: 720px){
+  .delta-nrk-primary-kpis{
+    grid-template-columns:repeat(2, minmax(0,1fr));
+  }
+  .delta-nrk-primary-card{
+    padding:11px 12px 10px;
+    border-radius:14px;
+  }
+  .delta-nrk-primary-v{
+    white-space:normal;
+  }
   .delta-nrk-filter-grid{
     grid-template-columns:1fr;
   }
@@ -5830,4 +5876,10 @@ body.dark .delta-monthly-card{
 }
 body.dark .delta-monthly-progress{
   background:rgba(255,255,255,.08);
+}
+body.dark .delta-nrk-primary-card{
+  background:linear-gradient(180deg, rgba(18,24,38,.92), rgba(12,18,30,.96));
+  box-shadow:
+    0 1px 0 rgba(255,255,255,.04) inset,
+    0 10px 24px rgba(0,0,0,.18);
 }

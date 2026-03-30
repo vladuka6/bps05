@@ -5690,6 +5690,11 @@ function buildDeltaNrkAutoSummaryHtml(analytics){
 
   const cards = [
     {
+      label:"Місії",
+      value: fmtNum(analytics.missionCount),
+      text: `Доставлено ${fmtNum(analytics.deliveredCount)} · Не доставлено ${fmtNum(analytics.notDeliveredCount)} · Евакуаційні ${fmtNum(analytics.evacuationCount)}`,
+    },
+    {
       label:"Основний тип",
       value: analytics.topTaskType?.label || "—",
       text: analytics.topTaskType ? `${fmtNum(analytics.topTaskType.value)} місій у вибірці.` : "Тип місій не визначено.",
@@ -5700,16 +5705,21 @@ function buildDeltaNrkAutoSummaryHtml(analytics){
       text: analytics.topAsset ? `${fmtNum(analytics.topAsset.value)} місій на цьому засобі.` : "Даних по засобах недостатньо.",
     },
     {
-      label:"Вантаж",
-      value: analytics.avgWeight > 0 ? `${fmtNum(analytics.avgWeight)} кг` : "—",
-      text: analytics.totalWeight > 0 ? `Загалом перевезено ${fmtNum(analytics.totalWeight)} кг.` : "По вазі вантажу даних поки немає.",
+      label:"Вага",
+      value: analytics.totalWeight > 0 ? `${fmtNum(analytics.totalWeight)} кг` : "—",
+      text: analytics.avgWeight > 0 ? `Сер. вага ${fmtNum(analytics.avgWeight)} кг.` : "По вазі вантажу даних поки немає.",
+    },
+    {
+      label:"Макс. вантаж",
+      value: analytics.maxCargoAsset?.maxWeight > 0 ? `${fmtNum(analytics.maxCargoAsset.maxWeight)} кг` : "—",
+      text: analytics.maxCargoAsset
+        ? `${analytics.maxCargoAsset.label} · сер. ${fmtNum(analytics.maxCargoAsset.avgWeight)} кг`
+        : "По платформах вага поки не визначена.",
     },
     {
       label:"Надійність",
       value: `${fmtNum(analytics.returnRate)}%`,
-      text: analytics.lossCount > 0
-        ? `Втрат засобів: ${fmtNum(analytics.lossCount)}.`
-        : "Критичних втрат засобів не зафіксовано.",
+      text: `Повернення ${fmtNum(analytics.returnedCount)} · Пошкоджено ${fmtNum(analytics.damagedCount)} · Втрати ${fmtNum(analytics.lossCount)}`,
     },
   ];
 
@@ -5720,6 +5730,35 @@ function buildDeltaNrkAutoSummaryHtml(analytics){
           <div class="staffing-summary-k">${card.label}</div>
           <div class="staffing-summary-v">${card.value}</div>
           <div class="staffing-summary-s">${card.text}</div>
+        </div>
+      `).join("")}
+    </div>
+  `;
+
+}
+
+function buildDeltaNrkPrimaryKpisHtml(analytics){
+
+  if(!analytics) return "";
+
+  const deliveredPercent = analytics.missionCount ? Math.round((analytics.deliveredCount / analytics.missionCount) * 100) : 0;
+  const cards = [
+    {label:"Місій", value: fmtNum(analytics.missionCount), text:"У вибірці"},
+    {label:"Доставлено", value: fmtNum(analytics.deliveredCount), text:`${fmtNum(deliveredPercent)}% успішно`},
+    {label:"Не доставлено", value: fmtNum(analytics.notDeliveredCount), text:"Проблемні місії"},
+    {label:"Евакуаційні", value: fmtNum(analytics.evacuationCount), text:"Окремий тип задач"},
+    {label:"Загальна вага", value: `${fmtNum(analytics.totalWeight)} кг`, text:"Усі перевезення"},
+    {label:"Сер. вага", value: `${fmtNum(analytics.avgWeight)} кг`, text:"На одну місію з вагою"},
+    {label:"Втрати", value: fmtNum(analytics.lossCount), text:`${fmtNum(analytics.returnRate)}% повернення`},
+  ];
+
+  return `
+    <div class="delta-nrk-primary-kpis">
+      ${cards.map(card=>`
+        <div class="delta-nrk-primary-card">
+          <div class="delta-nrk-primary-k">${card.label}</div>
+          <div class="delta-nrk-primary-v mono">${card.value}</div>
+          <div class="delta-nrk-primary-s">${card.text}</div>
         </div>
       `).join("")}
     </div>
@@ -6330,6 +6369,8 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
       },
       topTaskType: null,
       topAsset: null,
+      assetStats: [],
+      maxCargoAsset: null,
       unitOptions,
       taskTypeOptions,
       assetOptions,
@@ -6363,6 +6404,45 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
 
   const taskTypes = countBy(item=>item.taskType);
   const assets = summarizeNormalizedLabelCounts(items, item=>item.asset);
+  const assetStatsMap = new Map();
+  items.forEach(item=>{
+    const rawLabel = String(item.asset || "").trim();
+    if(!rawLabel) return;
+    const key = normalizeAnalyticsHeader(rawLabel) || rawLabel;
+    if(!assetStatsMap.has(key)){
+      assetStatsMap.set(key, {
+        label: rawLabel,
+        total: 0,
+        totalWeight: 0,
+        maxWeight: 0,
+        weightCount: 0,
+        variants: new Map(),
+      });
+    }
+    const bucket = assetStatsMap.get(key);
+    bucket.total += 1;
+    bucket.variants.set(rawLabel, (bucket.variants.get(rawLabel) || 0) + 1);
+    const weight = Number(item.cargoWeight) || 0;
+    bucket.totalWeight += weight;
+    if(weight > 0){
+      bucket.weightCount += 1;
+      bucket.maxWeight = Math.max(bucket.maxWeight, weight);
+    }
+  });
+  const assetStats = Array.from(assetStatsMap.values()).map(bucket=>{
+    const displayLabel = Array.from(bucket.variants.entries())
+      .sort((a,b)=>b[1]-a[1] || String(a[0]).localeCompare(String(b[0]), "uk"))[0]?.[0] || bucket.label;
+    return {
+      label: displayLabel,
+      total: bucket.total,
+      totalWeight: bucket.totalWeight,
+      avgWeight: bucket.weightCount ? (bucket.totalWeight / bucket.weightCount) : 0,
+      maxWeight: bucket.maxWeight,
+    };
+  }).sort((a,b)=>b.total-a.total || b.maxWeight-a.maxWeight || String(a.label).localeCompare(String(b.label), "uk"));
+  const maxCargoAsset = assetStats
+    .slice()
+    .sort((a,b)=>b.maxWeight-a.maxWeight || b.avgWeight-a.avgWeight || b.total-a.total || String(a.label).localeCompare(String(b.label), "uk"))[0] || null;
   const primaryLinks = countBy(item=>item.primaryLink);
   const reserveLinks = countBy(item=>item.reserveLink);
   const unitsByMissions = countBy(item=>item.unit);
@@ -6567,6 +6647,8 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     timeQuality,
     topTaskType: taskTypes[0] || null,
     topAsset: assets[0] || null,
+    assetStats,
+    maxCargoAsset,
     unitOptions,
     taskTypeOptions,
     assetOptions,
@@ -6628,18 +6710,6 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
     </div>
   `;
 
-  const summaryGrid = `
-    <div class="report-grid staffing-analytics-kpis delta-nrk-kpis">
-      <div class="report-tile"><div class="k">Місій</div><div class="v mono">${fmtNum(analytics.missionCount)}</div><div class="s">&nbsp;</div></div>
-      <div class="report-tile"><div class="k">Доставлено</div><div class="v mono">${fmtNum(analytics.deliveredCount)}</div><div class="s">${fmtNum(analytics.missionCount ? Math.round((analytics.deliveredCount / analytics.missionCount) * 100) : 0)}%</div></div>
-      <div class="report-tile"><div class="k">Не доставлено</div><div class="v mono">${fmtNum(analytics.notDeliveredCount)}</div><div class="s">&nbsp;</div></div>
-      <div class="report-tile"><div class="k">Евакуаційні</div><div class="v mono">${fmtNum(analytics.evacuationCount)}</div><div class="s">&nbsp;</div></div>
-      <div class="report-tile"><div class="k">Загальна вага</div><div class="v mono">${fmtNum(analytics.totalWeight)}&nbsp;кг</div><div class="s">&nbsp;</div></div>
-      <div class="report-tile"><div class="k">Сер. вага</div><div class="v mono">${fmtNum(analytics.avgWeight)}&nbsp;кг</div><div class="s">&nbsp;</div></div>
-      <div class="report-tile"><div class="k">Втрати</div><div class="v mono">${fmtNum(analytics.lossCount)}</div><div class="s">${fmtNum(analytics.returnRate)}% повернення</div></div>
-    </div>
-  `;
-
   const diagnosticsBlock = `
     <div class="item analytics-block delta-nrk-diagnostics">
       <div class="row"><div class="name">Перевірка імпорту</div></div>
@@ -6664,8 +6734,9 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
     return `
       <div class="staffing-analytics-modal comparison-analytics-modal delta-nrk-analytics-modal">
         ${filtersBlock}
-        ${summaryGrid}
         ${diagnosticsBlock}
+        ${buildDeltaNrkPrimaryKpisHtml(analytics)}
+        ${buildDeltaNrkAutoSummaryHtml(analytics)}
         <div class="item analytics-block">
           <div class="hint">За поточними фільтрами місій не знайдено. Спробуй інший підрозділ або платформу.</div>
         </div>
@@ -6694,10 +6765,10 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
     ["#4f88ff", "#6bc46d", "#ff7b87"]
   );
 
-  const platformsRows = analytics.assets.map(item=>({
+  const platformsRows = (analytics.assetStats || []).map(item=>({
     label: item.label,
-    valueText: fmtNum(item.value),
-    meta: `${fmtNum(analytics.missionCount ? Math.round((item.value / analytics.missionCount) * 100) : 0)}% місій`,
+    valueText: fmtNum(item.total),
+    meta: `${fmtNum(analytics.missionCount ? Math.round((item.total / analytics.missionCount) * 100) : 0)}% місій · сер. ${fmtNum(item.avgWeight)} кг · макс. ${fmtNum(item.maxWeight)} кг`,
     tone: "b-blue",
   }));
   const cargoRows = analytics.cargoes.map(item=>({
@@ -6921,8 +6992,8 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
   return `
     <div class="staffing-analytics-modal comparison-analytics-modal delta-nrk-analytics-modal">
       ${filtersBlock}
-      ${summaryGrid}
       ${diagnosticsBlock}
+      ${buildDeltaNrkPrimaryKpisHtml(analytics)}
       ${buildDeltaNrkAutoSummaryHtml(analytics)}
       ${buildDeltaNrkTimeQualityHtml(analytics)}
       <div class="eval-donut-grid">
