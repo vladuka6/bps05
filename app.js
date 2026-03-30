@@ -5398,6 +5398,9 @@ function detectDeltaNrkColumns(headerRow){
     taskType:-1,
     result:-1,
     resultAt:-1,
+    startAt:-1,
+    endAt:-1,
+    duration:-1,
     cargo:-1,
     cargoWeight:-1,
     assetStatus:-1,
@@ -5421,6 +5424,18 @@ function detectDeltaNrkColumns(headerRow){
     }
     if(result.resultAt < 0 && /(дата і час результату|час результату|дата результату)/.test(header)){
       result.resultAt = idx;
+      return;
+    }
+    if(result.startAt < 0 && /(дата і час початку місії|час початку місії|початок місії)/.test(header)){
+      result.startAt = idx;
+      return;
+    }
+    if(result.endAt < 0 && /(дата і час завершення місії|час завершення місії|завершення місії)/.test(header)){
+      result.endAt = idx;
+      return;
+    }
+    if(result.duration < 0 && /(тривалість місії|час місії|тривалість)/.test(header)){
+      result.duration = idx;
       return;
     }
     if(result.cargo < 0 && /(^вантаж$|тип вантажу)/.test(header)){
@@ -5465,6 +5480,9 @@ function detectDeltaNrkColumns(headerRow){
       if(result.unit < 0) result.unit = 1;
       if(result.taskType < 0) result.taskType = 4;
       if(result.resultAt < 0) result.resultAt = 6;
+      if(result.startAt < 0) result.startAt = 8;
+      if(result.endAt < 0) result.endAt = 9;
+      if(result.duration < 0) result.duration = 10;
       if(result.result < 0) result.result = 12;
       if(result.cargo < 0) result.cargo = 14;
       if(result.cargoWeight < 0) result.cargoWeight = 15;
@@ -5478,6 +5496,9 @@ function detectDeltaNrkColumns(headerRow){
       if(result.unit < 0) result.unit = 2;
       if(result.taskType < 0) result.taskType = 6;
       if(result.resultAt < 0) result.resultAt = 8;
+      if(result.startAt < 0) result.startAt = 10;
+      if(result.endAt < 0) result.endAt = 11;
+      if(result.duration < 0) result.duration = 12;
       if(result.result < 0) result.result = 14;
       if(result.cargo < 0) result.cargo = 16;
       if(result.cargoWeight < 0) result.cargoWeight = 17;
@@ -5634,6 +5655,160 @@ function formatDeltaMonthLabel(key=""){
 
 }
 
+function parseDeltaDateTimeValue(value){
+
+  if(value instanceof Date){
+    const ts = value.getTime();
+    return Number.isFinite(ts) ? ts : null;
+  }
+
+  const raw = String(value || "").replace(/\u00A0/g, " ").trim();
+  if(!raw) return null;
+
+  let match = raw.match(/(\d{1,2})[./-](\d{1,2})[./-](\d{4})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if(match){
+    const dt = new Date(
+      Number(match[3]),
+      Number(match[2]) - 1,
+      Number(match[1]),
+      Number(match[4] || 0),
+      Number(match[5] || 0),
+      Number(match[6] || 0)
+    );
+    const ts = dt.getTime();
+    return Number.isFinite(ts) ? ts : null;
+  }
+
+  match = raw.match(/(\d{4})[./-](\d{1,2})[./-](\d{1,2})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if(match){
+    const dt = new Date(
+      Number(match[1]),
+      Number(match[2]) - 1,
+      Number(match[3]),
+      Number(match[4] || 0),
+      Number(match[5] || 0),
+      Number(match[6] || 0)
+    );
+    const ts = dt.getTime();
+    return Number.isFinite(ts) ? ts : null;
+  }
+
+  const parsed = Date.parse(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+
+}
+
+function parseDeltaDurationMinutes(value){
+
+  const raw = String(value || "").replace(/\u00A0/g, " ").trim();
+  if(!raw) return null;
+
+  let match = raw.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if(match){
+    const hours = Number(match[1] || 0);
+    const mins = Number(match[2] || 0);
+    const secs = Number(match[3] || 0);
+    return Math.round((hours * 3600 + mins * 60 + secs) / 60);
+  }
+
+  const hoursMatch = raw.match(/(\d+(?:[.,]\d+)?)\s*год/iu);
+  const minsMatch = raw.match(/(\d+(?:[.,]\d+)?)\s*(хв|min|мин)/iu);
+  if(hoursMatch || minsMatch){
+    const hours = Number(String(hoursMatch?.[1] || "0").replace(",", "."));
+    const mins = Number(String(minsMatch?.[1] || "0").replace(",", "."));
+    const total = (Number.isFinite(hours) ? hours * 60 : 0) + (Number.isFinite(mins) ? mins : 0);
+    return total > 0 ? Math.round(total) : null;
+  }
+
+  const num = parseAnalyticsNumber(raw);
+  return Number.isFinite(num) ? Number(num) : null;
+
+}
+
+function formatDurationMinutes(minutes){
+
+  const total = Math.round(Number(minutes) || 0);
+  if(total <= 0) return "—";
+  if(total < 60) return `${fmtNum(total)} хв`;
+  const hours = Math.floor(total / 60);
+  const mins = total % 60;
+  return mins ? `${fmtNum(hours)} год ${fmtNum(mins)} хв` : `${fmtNum(hours)} год`;
+
+}
+
+function buildDeltaNrkTimeQualityHtml(analytics){
+
+  const q = analytics?.timeQuality;
+  if(!q) return "";
+
+  const fillItems = [
+    {label:"Початок місії", value:q.startFilledCount, percent:q.startFilledPercent},
+    {label:"Завершення місії", value:q.endFilledCount, percent:q.endFilledPercent},
+    {label:"Час результату", value:q.resultFilledCount, percent:q.resultFilledPercent},
+    {label:"Тривалість місії", value:q.durationFilledCount, percent:q.durationFilledPercent},
+    {label:"Повний часовий ланцюжок", value:q.fullTimelineCount, percent:q.fullTimelinePercent},
+  ];
+
+  const qualityDonut = renderComparisonSliceDonutCard(
+    "Якість заповнення часу",
+    [
+      {label:"Повний ланцюжок", value: q.fullTimelineCount},
+      {label:"Частково заповнено", value: Math.max(0, q.anyTimeCount - q.fullTimelineCount)},
+      {label:"Без часу", value: Math.max(0, q.totalCount - q.anyTimeCount)},
+    ],
+    "По часових полях даних поки немає.",
+    ["#4f88ff", "#ffb547", "#d5deef"]
+  );
+
+  const durationDonut = renderComparisonSliceDonutCard(
+    "Тривалість місій",
+    [
+      {label:"Валідно пораховано", value: q.validDurationCount},
+      {label:"Некоректні часові пари", value: q.invalidTimelineCount},
+      {label:"Без тривалості", value: Math.max(0, q.totalCount - q.validDurationCount - q.invalidTimelineCount)},
+    ],
+    "Тривалість місій поки не визначена.",
+    ["#6bc46d", "#ff7b87", "#d5deef"]
+  );
+
+  return `
+    <div class="item analytics-block delta-nrk-time-quality">
+      <div class="row">
+        <div class="name">Час і заповнення</div>
+        <div class="hint">Окремий зріз по часових полях та тривалості місій.</div>
+      </div>
+      <div class="report-grid staffing-analytics-kpis delta-nrk-kpis delta-nrk-time-kpis">
+        <div class="report-tile"><div class="k">Початок</div><div class="v mono">${fmtNum(q.startFilledPercent)}%</div><div class="s">${fmtNum(q.startFilledCount)} із ${fmtNum(q.totalCount)}</div></div>
+        <div class="report-tile"><div class="k">Завершення</div><div class="v mono">${fmtNum(q.endFilledPercent)}%</div><div class="s">${fmtNum(q.endFilledCount)} із ${fmtNum(q.totalCount)}</div></div>
+        <div class="report-tile"><div class="k">Повний ланцюжок</div><div class="v mono">${fmtNum(q.fullTimelinePercent)}%</div><div class="s">${fmtNum(q.fullTimelineCount)} місій</div></div>
+        <div class="report-tile"><div class="k">Сер. час місії</div><div class="v mono">${htmlesc(formatDurationMinutes(q.avgDurationMinutes))}</div><div class="s">${fmtNum(q.validDurationCount)} валідних</div></div>
+      </div>
+      <div class="eval-donut-grid">
+        ${qualityDonut}
+        ${durationDonut}
+      </div>
+      <div class="delta-nrk-fill-grid">
+        ${fillItems.map(item=>`
+          <div class="delta-nrk-fill-card">
+            <div class="delta-nrk-fill-top">
+              <div class="delta-nrk-fill-label">${htmlesc(item.label)}</div>
+              <div class="delta-nrk-fill-value mono">${fmtNum(item.percent)}%</div>
+            </div>
+            <div class="delta-nrk-fill-bar"><div class="delta-nrk-fill-bar-in" style="width:${Math.max(0, Math.min(100, item.percent))}%;"></div></div>
+            <div class="delta-nrk-fill-meta">${fmtNum(item.value)} із ${fmtNum(q.totalCount)} записів</div>
+          </div>
+        `).join("")}
+      </div>
+      <div class="delta-nrk-time-summary">
+        <span class="delta-nrk-filter-chip">Медіана: ${htmlesc(formatDurationMinutes(q.medianDurationMinutes))}</span>
+        <span class="delta-nrk-filter-chip">Макс: ${htmlesc(formatDurationMinutes(q.maxDurationMinutes))}</span>
+        <span class="delta-nrk-filter-chip">Некоректні пари часу: ${fmtNum(q.invalidTimelineCount)}</span>
+      </div>
+    </div>
+  `;
+
+}
+
 function buildDeltaNrkMonthlyAnalyticsHtml(analytics){
 
   if(!analytics?.months?.length) return "";
@@ -5760,6 +5935,9 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     const unit = columns.unit >= 0 ? String(row?.[columns.unit] || "").trim() : "";
     const result = columns.result >= 0 ? String(row?.[columns.result] || "").trim() : "";
     const taskType = columns.taskType >= 0 ? String(row?.[columns.taskType] || "").trim() : "";
+    const startAt = columns.startAt >= 0 ? row?.[columns.startAt] : "";
+    const endAt = columns.endAt >= 0 ? row?.[columns.endAt] : "";
+    const durationRaw = columns.duration >= 0 ? row?.[columns.duration] : "";
     const cargo = columns.cargo >= 0 ? String(row?.[columns.cargo] || "").trim() : "";
     const assetStatus = columns.assetStatus >= 0 ? String(row?.[columns.assetStatus] || "").trim() : "";
     const primaryLink = columns.primaryLink >= 0 ? String(row?.[columns.primaryLink] || "").trim() : "";
@@ -5767,9 +5945,22 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     const resultAt = columns.resultAt >= 0 ? String(row?.[columns.resultAt] || "").trim() : "";
     const cargoWeight = columns.cargoWeight >= 0 ? parseAnalyticsNumber(row?.[columns.cargoWeight]) : null;
 
-    const hasData = [asset, unit, result, taskType, cargo, assetStatus, primaryLink, reserveLink, resultAt]
+    const hasData = [asset, unit, result, taskType, cargo, assetStatus, primaryLink, reserveLink, resultAt, String(startAt || "").trim(), String(endAt || "").trim(), String(durationRaw || "").trim()]
       .some(Boolean) || Number.isFinite(cargoWeight);
     if(!hasData) return null;
+
+    const resultAtTs = parseDeltaDateTimeValue(resultAt);
+    const startAtTs = parseDeltaDateTimeValue(startAt);
+    const endAtTs = parseDeltaDateTimeValue(endAt);
+    const providedDurationMinutes = parseDeltaDurationMinutes(durationRaw);
+    const computedDurationMinutes = (Number.isFinite(startAtTs) && Number.isFinite(endAtTs) && endAtTs >= startAtTs)
+      ? Math.round((endAtTs - startAtTs) / 60000)
+      : null;
+    const invalidTimeline = Number.isFinite(startAtTs) && Number.isFinite(endAtTs) && endAtTs < startAtTs;
+    const missionDurationMinutes = Number.isFinite(computedDurationMinutes) && computedDurationMinutes >= 0
+      ? computedDurationMinutes
+      : (Number.isFinite(providedDurationMinutes) && providedDurationMinutes >= 0 ? providedDurationMinutes : null);
+    const effectiveDateRaw = resultAt || endAt || startAt || "";
 
     return {
       id: index + 1,
@@ -5782,6 +5973,17 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
       primaryLink,
       reserveLink,
       resultAt,
+      resultAtTs,
+      startAt: String(startAt || "").trim(),
+      startAtTs,
+      endAt: String(endAt || "").trim(),
+      endAtTs,
+      durationRaw: String(durationRaw || "").trim(),
+      providedDurationMinutes,
+      computedDurationMinutes,
+      missionDurationMinutes,
+      invalidTimeline,
+      effectiveDateRaw,
       cargoWeight: Number.isFinite(cargoWeight) ? Number(cargoWeight) : 0,
     };
   }).filter(Boolean);
@@ -5824,6 +6026,25 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
       unitsByMissions: [],
       unitsByWeight: [],
       months: [],
+      timeQuality: {
+        totalCount: 0,
+        startFilledCount: 0,
+        endFilledCount: 0,
+        resultFilledCount: 0,
+        durationFilledCount: 0,
+        fullTimelineCount: 0,
+        anyTimeCount: 0,
+        validDurationCount: 0,
+        invalidTimelineCount: 0,
+        startFilledPercent: 0,
+        endFilledPercent: 0,
+        resultFilledPercent: 0,
+        durationFilledPercent: 0,
+        fullTimelinePercent: 0,
+        avgDurationMinutes: 0,
+        medianDurationMinutes: 0,
+        maxDurationMinutes: 0,
+      },
       topTaskType: null,
       topAsset: null,
       unitOptions,
@@ -5870,9 +6091,47 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
   });
   const unitsByWeight = Array.from(unitsByWeightMap.entries()).map(([label, value])=>({label, value})).sort((a,b)=>b.value-a.value || String(a.label).localeCompare(String(b.label), "uk"));
 
+  const startFilledCount = items.filter(item=>!!item.startAt).length;
+  const endFilledCount = items.filter(item=>!!item.endAt).length;
+  const resultFilledCount = items.filter(item=>!!item.resultAt).length;
+  const durationFilledCount = items.filter(item=>!!item.durationRaw).length;
+  const fullTimelineCount = items.filter(item=>item.startAt && item.endAt && item.resultAt).length;
+  const anyTimeCount = items.filter(item=>item.startAt || item.endAt || item.resultAt || item.durationRaw).length;
+  const invalidTimelineCount = items.filter(item=>item.invalidTimeline).length;
+  const durationValues = items
+    .map(item=>Number(item.missionDurationMinutes))
+    .filter(value=>Number.isFinite(value) && value >= 0);
+  const validDurationCount = durationValues.length;
+  const durationSorted = durationValues.slice().sort((a,b)=>a-b);
+  const avgDurationMinutes = validDurationCount ? durationValues.reduce((sum, value)=>sum + value, 0) / validDurationCount : 0;
+  const medianDurationMinutes = !validDurationCount ? 0 : (validDurationCount % 2
+    ? durationSorted[(validDurationCount - 1) / 2]
+    : ((durationSorted[(validDurationCount / 2) - 1] + durationSorted[validDurationCount / 2]) / 2));
+  const maxDurationMinutes = validDurationCount ? durationSorted[durationSorted.length - 1] : 0;
+  const percentOf = (value)=> missionCount ? Math.round((value / missionCount) * 100) : 0;
+  const timeQuality = {
+    totalCount: missionCount,
+    startFilledCount,
+    endFilledCount,
+    resultFilledCount,
+    durationFilledCount,
+    fullTimelineCount,
+    anyTimeCount,
+    validDurationCount,
+    invalidTimelineCount,
+    startFilledPercent: percentOf(startFilledCount),
+    endFilledPercent: percentOf(endFilledCount),
+    resultFilledPercent: percentOf(resultFilledCount),
+    durationFilledPercent: percentOf(durationFilledCount),
+    fullTimelinePercent: percentOf(fullTimelineCount),
+    avgDurationMinutes,
+    medianDurationMinutes,
+    maxDurationMinutes,
+  };
+
   const monthMap = new Map();
   items.forEach(item=>{
-    const monthKey = parseDeltaMonthKey(item.resultAt) || "no-date";
+    const monthKey = parseDeltaMonthKey(item.resultAt || item.endAt || item.startAt || item.effectiveDateRaw) || "no-date";
     const existing = monthMap.get(monthKey) || {
       key: monthKey,
       label: monthKey === "no-date" ? "Без дати" : formatDeltaMonthLabel(monthKey),
@@ -5940,6 +6199,7 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     unitsByMissions,
     unitsByWeight,
     months,
+    timeQuality,
     topTaskType: taskTypes[0] || null,
     topAsset: assets[0] || null,
     unitOptions,
@@ -6224,6 +6484,7 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
       ${summaryGrid}
       ${diagnosticsBlock}
       ${buildDeltaNrkAutoSummaryHtml(analytics)}
+      ${buildDeltaNrkTimeQualityHtml(analytics)}
       <div class="eval-donut-grid">
         ${missionResultDonut}
         ${statusDonut}

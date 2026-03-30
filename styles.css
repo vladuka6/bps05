@@ -821,6 +821,55 @@
   font-size:12px;
   font-weight:700;
 }
+.delta-nrk-fill-grid{
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0,1fr));
+  gap:10px;
+}
+.delta-nrk-fill-card{
+  border:1px solid rgba(150,170,205,.24);
+  border-radius:14px;
+  padding:10px 12px;
+  background:linear-gradient(180deg, rgba(255,255,255,.94), rgba(247,250,255,.88));
+}
+.delta-nrk-fill-top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.delta-nrk-fill-label{
+  font-size:12px;
+  font-weight:800;
+  color:var(--text);
+}
+.delta-nrk-fill-value{
+  font-size:12px;
+  font-weight:900;
+  color:var(--blue);
+}
+.delta-nrk-fill-bar{
+  margin-top:8px;
+  height:8px;
+  border-radius:999px;
+  background:rgba(150,170,205,.18);
+  overflow:hidden;
+}
+.delta-nrk-fill-bar-in{
+  height:100%;
+  border-radius:inherit;
+  background:linear-gradient(90deg, #4f88ff, #7db2ff);
+}
+.delta-nrk-fill-meta{
+  margin-top:6px;
+  font-size:11px;
+  color:var(--muted);
+}
+.delta-nrk-time-summary{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
 .delta-nrk-diagnostics-grid{
   display:grid;
   grid-template-columns:repeat(3, minmax(0,1fr));
@@ -5677,6 +5726,9 @@ body.dark .text-table-import-col{
   }
   .delta-nrk-filter-actions{
     justify-content:flex-start;
+  }
+  .delta-nrk-fill-grid{
+    grid-template-columns:1fr;
   }
 }
 body.dark .delta-monthly-card{
