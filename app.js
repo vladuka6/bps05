@@ -3037,6 +3037,142 @@ function buildSparklineSvg(values, color="#5a84ea"){
 
 }
 
+function abbreviateStaffingUnitLabel(value){
+
+  const text = String(value || "").trim();
+  if(!text) return "—";
+  if(text.length <= 12) return text;
+
+  const words = text.split(/\s+/).filter(Boolean);
+  if(words.length >= 2){
+    const first = words[0];
+    const rest = words.slice(1).map(word=>word[0]).join("");
+    const compact = `${first} ${rest}`.trim();
+    if(compact.length <= 12) return compact;
+  }
+
+  return `${text.slice(0, 10)}…`;
+
+}
+
+function buildStaffingLineChartSvg(seriesList, labels){
+
+  const series = Array.isArray(seriesList) ? seriesList.filter(item=>Array.isArray(item?.values) && item.values.some(Number.isFinite)) : [];
+  const unitLabels = Array.isArray(labels) ? labels : [];
+  if(!series.length || unitLabels.length < 2) return "";
+
+  const width = Math.max(560, unitLabels.length * 72);
+  const height = 220;
+  const padTop = 18;
+  const padRight = 18;
+  const padBottom = 44;
+  const padLeft = 18;
+
+  const allValues = series.flatMap(item=>item.values.map(value=>Number(value)).filter(Number.isFinite));
+  if(!allValues.length) return "";
+
+  const min = Math.min(...allValues);
+  const max = Math.max(...allValues);
+  const range = Math.max(max - min, 1);
+  const chartHeight = height - padTop - padBottom;
+  const stepX = (width - padLeft - padRight) / Math.max(unitLabels.length - 1, 1);
+  const gridValues = Array.from({length:4}, (_, idx)=>min + ((range / 3) * idx));
+
+  const paths = series.map((serie, serieIndex)=>{
+    const points = serie.values.map((value, index)=>{
+      const num = Number(value);
+      const safe = Number.isFinite(num) ? num : min;
+      const x = padLeft + stepX * index;
+      const y = height - padBottom - (((safe - min) / range) * chartHeight);
+      return {x, y, value: safe};
+    });
+
+    const d = points.map((point, index)=>`${index===0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(" ");
+    const area = `${d} L ${points[points.length - 1].x.toFixed(2)} ${(height - padBottom).toFixed(2)} L ${points[0].x.toFixed(2)} ${(height - padBottom).toFixed(2)} Z`;
+    return {serie, points, d, area, delay: serieIndex * 120};
+  });
+
+  const xLabels = unitLabels.map((label, index)=>{
+    const x = padLeft + stepX * index;
+    return `<text class="staffing-linechart-xlabel" x="${x.toFixed(2)}" y="${(height - 16).toFixed(2)}" text-anchor="middle">${htmlesc(abbreviateStaffingUnitLabel(label))}</text>`;
+  }).join("");
+
+  const yGrid = gridValues.map(value=>{
+    const y = height - padBottom - (((value - min) / range) * chartHeight);
+    return `
+      <line class="staffing-linechart-gridline" x1="${padLeft}" y1="${y.toFixed(2)}" x2="${(width - padRight).toFixed(2)}" y2="${y.toFixed(2)}"></line>
+      <text class="staffing-linechart-ylabel" x="${(padLeft - 6).toFixed(2)}" y="${(y + 4).toFixed(2)}" text-anchor="end">${htmlesc(fmtNum(value))}</text>
+    `;
+  }).join("");
+
+  return `
+    <div class="staffing-linechart-scroll">
+      <svg class="staffing-linechart-svg" viewBox="0 0 ${width} ${height}" style="min-width:${width}px" preserveAspectRatio="none" aria-hidden="true">
+        ${yGrid}
+        ${paths.map(path=>`
+          <path class="staffing-linechart-area is-animated-linechart" d="${path.area}" style="--line-color:${path.serie.color}; --line-delay:${path.delay}ms;"></path>
+          <path class="staffing-linechart-line is-animated-linechart" d="${path.d}" style="--line-color:${path.serie.color}; --line-delay:${path.delay}ms;"></path>
+          ${path.points.map((point, pointIndex)=>`
+            <circle class="staffing-linechart-dot ${pointIndex===path.points.length-1 ? "is-last" : ""}" cx="${point.x.toFixed(2)}" cy="${point.y.toFixed(2)}" r="${pointIndex===path.points.length-1 ? "4" : "2.8"}" style="--line-color:${path.serie.color}; --line-delay:${path.delay + pointIndex * 25}ms;"></circle>
+          `).join("")}
+        `).join("")}
+        ${xLabels}
+      </svg>
+    </div>
+  `;
+
+}
+
+function buildStaffingUnitChartsHtml(items){
+
+  const rows = Array.isArray(items) ? items.filter(item=>Number(item?.plan || 0) > 0) : [];
+  if(rows.length < 2) return "";
+
+  const labels = rows.map(item=>item.name);
+  const quantityChart = buildStaffingLineChartSvg([
+    {label:"План", color:"#6d8ff5", values: rows.map(item=>Number(item.plan || 0))},
+    {label:"Факт", color:"#44b678", values: rows.map(item=>Number(item.fact || 0))},
+    {label:"Нестача", color:"#ffb347", values: rows.map(item=>Number(item.shortage || 0))},
+  ], labels);
+
+  const percentChart = buildStaffingLineChartSvg([
+    {label:"% укомплектованості", color:"#7a6cf3", values: rows.map(item=>Number(item.percent || 0))},
+  ], labels);
+
+  const legend = (items)=>items.map(item=>`
+    <div class="staffing-linechart-legend-item">
+      <span class="staffing-linechart-legend-dot" style="background:${item.color}"></span>
+      <span>${htmlesc(item.label)}</span>
+    </div>
+  `).join("");
+
+  return `
+    <div class="control-grid staffing-linecharts-grid">
+      <div class="item analytics-block staffing-linechart-card">
+        <div class="row"><div class="name">План / Факт / Нестача по підрозділах</div></div>
+        <div class="staffing-linechart-legend">
+          ${legend([
+            {label:"План", color:"#6d8ff5"},
+            {label:"Факт", color:"#44b678"},
+            {label:"Нестача", color:"#ffb347"},
+          ])}
+        </div>
+        <div class="hint staffing-linechart-note">По осі X — підрозділи, по осі Y — кількість.</div>
+        ${quantityChart}
+      </div>
+      <div class="item analytics-block staffing-linechart-card">
+        <div class="row"><div class="name">% укомплектованості по підрозділах</div></div>
+        <div class="staffing-linechart-legend">
+          ${legend([{label:"% укомплектованості", color:"#7a6cf3"}])}
+        </div>
+        <div class="hint staffing-linechart-note">Дозволяє одразу побачити, де показник провалюється.</div>
+        ${percentChart}
+      </div>
+    </div>
+  `;
+
+}
+
 function buildStaffingTrendBlockHtml(points){
 
   const items = Array.isArray(points) ? points : [];
@@ -3533,6 +3669,7 @@ function buildStaffingAnalyticsModalHtml(rows, title="", opts={}){
     <div class="staffing-analytics-modal">
       ${summaryGrid}
       ${buildStaffingAutoSummaryHtml({items, totalPlan, totalFact, totalAssets, totalShortage, completion, topShortage, bestFilled}, previousAnalytics)}
+      ${buildStaffingUnitChartsHtml(items)}
       ${buildStaffingTrendBlockHtml(trendPoints)}
       <div class="eval-donut-grid">
         ${totalDonutCard}
