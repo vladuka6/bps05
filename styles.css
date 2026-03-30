@@ -760,6 +760,12 @@
   box-shadow:0 0 0 3px rgba(110,168,254,.12);
   flex:0 0 auto;
 }
+.delta-nrk-kpis{
+  margin-bottom:2px;
+}
+.delta-nrk-card .comparison-compact-meta{
+  text-transform:none;
+}
 .ref-note-body{font-size:13px;line-height:1.55;color:var(--text);white-space:pre-wrap;overflow-wrap:anywhere;}
 .ref-note-actions{flex-shrink:0;}
 .ref-note-link{padding:0;border:0;background:none;text-align:left;font-weight:900;font-size:15px;line-height:1.35;color:var(--blue);cursor:pointer;overflow-wrap:anywhere;}
