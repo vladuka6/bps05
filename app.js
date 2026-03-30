@@ -6128,7 +6128,6 @@ function buildDeltaNrkTimeQualityHtml(analytics){
     <div class="item analytics-block delta-nrk-time-quality">
       <div class="row">
         <div class="name">Час і заповнення</div>
-        <div class="hint">Окремий зріз по часових полях та тривалості місій.</div>
       </div>
       <div class="report-grid staffing-analytics-kpis delta-nrk-kpis delta-nrk-time-kpis">
         <div class="report-tile"><div class="k">Початок</div><div class="v mono">${fmtNum(q.startFilledPercent)}%</div><div class="s">${fmtNum(q.startFilledCount)} із ${fmtNum(q.totalCount)}</div></div>
