@@ -5698,41 +5698,43 @@ function buildDeltaNrkAutoSummaryHtml(analytics){
     {
       label:"Результат",
       value: fmtNum(analytics.deliveredCount),
-      text: `${fmtNum(deliveredPercent)}% успішно · Не доставлено ${fmtNum(analytics.notDeliveredCount)} · Евакуаційні ${fmtNum(analytics.evacuationCount)}`,
+      text: `${fmtNum(deliveredPercent)}% успішно · Не дост. ${fmtNum(analytics.notDeliveredCount)} · Евак. ${fmtNum(analytics.evacuationCount)}`,
+      tone: analytics.notDeliveredCount > 0 ? "warn" : "ok",
+    },
+    {
+      label:"Платформа",
+      value: analytics.topAsset?.label || "—",
+      text: analytics.topAsset ? `${fmtNum(analytics.topAsset.value)} місій` : "Немає даних",
+    },
+    {
+      label:"Тип",
+      value: analytics.topTaskType?.label || "—",
+      text: analytics.topTaskType ? `${fmtNum(analytics.topTaskType.value)} місій` : "Немає даних",
     },
     {
       label:"Вага",
       value: analytics.totalWeight > 0 ? `${fmtNum(analytics.totalWeight)} кг` : "—",
-      text: analytics.avgWeight > 0 ? `Сер. ${fmtNum(analytics.avgWeight)} кг` : "По вазі даних поки немає.",
-    },
-    {
-      label:"Надійність",
-      value: `${fmtNum(analytics.returnRate)}%`,
-      text: `Втрати ${fmtNum(analytics.lossCount)} · Пошкоджено ${fmtNum(analytics.damagedCount)}`,
-    },
-    {
-      label:"Основний тип",
-      value: analytics.topTaskType?.label || "—",
-      text: analytics.topTaskType ? `${fmtNum(analytics.topTaskType.value)} місій у вибірці.` : "Тип місій не визначено.",
-    },
-    {
-      label:"Головна платформа",
-      value: analytics.topAsset?.label || "—",
-      text: analytics.topAsset ? `${fmtNum(analytics.topAsset.value)} місій на цьому засобі.` : "Даних по засобах недостатньо.",
+      text: analytics.avgWeight > 0 ? `Сер. ${fmtNum(analytics.avgWeight)} кг` : "Немає даних",
     },
     {
       label:"Макс. вантаж",
       value: analytics.maxCargoAsset?.maxWeight > 0 ? `${fmtNum(analytics.maxCargoAsset.maxWeight)} кг` : "—",
       text: analytics.maxCargoAsset
         ? `${analytics.maxCargoAsset.label} · сер. ${fmtNum(analytics.maxCargoAsset.avgWeight)} кг`
-        : "По платформах вага поки не визначена.",
+        : "Немає даних",
+    },
+    {
+      label:"Надійність",
+      value: `${fmtNum(analytics.returnRate)}%`,
+      text: `Втрати ${fmtNum(analytics.lossCount)} · Пошк. ${fmtNum(analytics.damagedCount)}`,
+      tone: (analytics.lossCount > 0 || analytics.damagedCount > 0) ? "danger" : "ok",
     },
   ];
 
   return `
     <div class="delta-nrk-summary-row">
       ${cards.map(card=>`
-        <div class="delta-nrk-summary-card">
+        <div class="delta-nrk-summary-card ${card.tone ? `is-${card.tone}` : ""}">
           <div class="delta-nrk-summary-k">${card.label}</div>
           <div class="delta-nrk-summary-v">${card.value}</div>
           <div class="delta-nrk-summary-s">${card.text}</div>
