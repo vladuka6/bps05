@@ -2643,6 +2643,10 @@ function renderTextTableEditor(textareaId, rows, focusPos=null){
 
   if(!el) return;
 
+  const summary = document.querySelector(`.text-table-import-summary[data-for="${textareaId}"]`);
+
+  if(summary) summary.remove();
+
   let wrap = document.querySelector(`.text-table-editor[data-for="${textareaId}"]`);
 
   if(!wrap){
@@ -2676,8 +2680,15 @@ function insertTextTable(textareaId){
   if(!el) return;
 
   const existing = findStoredTableBlock(el.dataset.tableRaw || "");
+  const rows = existing?.rows || defaultTextTableRows();
 
-  renderTextTableEditor(textareaId, existing?.rows || defaultTextTableRows());
+  if(textareaId === "referenceEntryText"){
+    const tableType = normalizeReferenceTableType(document.getElementById("referenceEntryTableType")?.value || "none");
+    renderReferenceEntryTableWorkspace(textareaId, tableType, rows);
+    return;
+  }
+
+  renderTextTableEditor(textareaId, rows);
 
 }
 
@@ -2810,6 +2821,10 @@ function closeTextTableEditor(textareaId){
   const wrap = document.querySelector(`.text-table-editor[data-for="${textareaId}"]`);
 
   if(wrap) wrap.remove();
+
+  const summary = document.querySelector(`.text-table-import-summary[data-for="${textareaId}"]`);
+
+  if(summary) summary.remove();
 
 }
 
@@ -5959,7 +5974,7 @@ async function pasteTextTableFromClipboard(textareaId){
 
   if(!(navigator?.clipboard?.readText)){
 
-    showToast("Буфер обміну недоступний у цьому браузері.", "warn");
+    showToast("????? ?????? ??????????? ? ????? ????????.", "warn");
 
     return;
 
@@ -5973,7 +5988,7 @@ async function pasteTextTableFromClipboard(textareaId){
 
     if(!rows.length){
 
-      showToast("У буфері немає табличних даних.", "warn");
+      showToast("? ?????? ????? ????????? ?????.", "warn");
 
       return;
 
@@ -5981,16 +5996,247 @@ async function pasteTextTableFromClipboard(textareaId){
 
     writeTextTableToTextarea(textareaId, rows);
 
-    renderTextTableEditor(textareaId, rows);
+    if(textareaId === "referenceEntryText") {
+      const tableType = normalizeReferenceTableType(document.getElementById("referenceEntryTableType")?.value || "none");
+      renderReferenceEntryTableWorkspace(textareaId, tableType, rows);
+    } else {
+      renderTextTableEditor(textareaId, rows);
+    }
 
-    showToast("Таблицю вставлено з буфера", "ok");
+    showToast("??????? ????????? ? ??????", "ok");
 
   } catch(err){
 
     console.warn("clipboard read failed", err);
 
-    showToast("Не вдалося прочитати буфер. Скопіюй таблицю ще раз і повтори.", "warn");
+    showToast("?? ??????? ????????? ?????. ??????? ??????? ?? ??? ? ???????.", "warn");
 
+  }
+
+}
+
+function canUseWorkbookImport(){
+
+  return typeof FileReader !== "undefined" && typeof XLSX !== "undefined" && typeof XLSX.read === "function" && XLSX.utils;
+
+}
+
+function getCurrentTextareaTableRows(textareaId){
+
+  const el = document.getElementById(textareaId);
+
+  if(!el) return [];
+
+  if(document.querySelector(`.text-table-editor[data-for="${textareaId}"]`)){
+    return readTextTableEditorRows(textareaId);
+  }
+
+  const block = findStoredTableBlock(el.dataset.tableRaw || "");
+
+  return cloneStoredTableRows(block?.rows || []);
+
+}
+
+function shouldRenderCompactTableSummary(tableType, rows){
+
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const rowCount = safeRows.length;
+  const colCount = rowCount ? Math.max(0, ...safeRows.map(row=>Array.isArray(row) ? row.length : 0)) : 0;
+
+  if(!rowCount || !colCount) return false;
+
+  if(tableType === "delta_nrk") return rowCount > 40 || (rowCount * colCount) > 480;
+
+  return false;
+
+}
+
+function buildTextTableImportSummaryHtml(textareaId, rows, opts={}){
+
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const header = safeRows[0] || [];
+  const colCount = header.length || Math.max(0, ...safeRows.map(row=>Array.isArray(row) ? row.length : 0));
+  const rowCount = Math.max(0, safeRows.length - 1);
+  const headerLabels = header.map(x=>String(x || "").trim()).filter(Boolean);
+  const visibleHeaders = headerLabels.slice(0, 6);
+  const moreHeaders = Math.max(0, headerLabels.length - visibleHeaders.length);
+  const typeLabel = getReferenceTableTypeLabel(opts.tableType || "none");
+
+  return `
+    <div class="text-table-import-summary" data-for="${textareaId}">
+      <div class="text-table-import-summary-head">
+        <div>
+          <div class="text-table-import-summary-title">??????? ???????????</div>
+          <div class="hint">${htmlesc(typeLabel)} ? ${rowCount} ?????? ? ${colCount} ???????</div>
+        </div>
+        <div class="text-table-import-summary-badges">
+          <span class="ref-table-type-pill">?????? .xlsx</span>
+        </div>
+      </div>
+      <div class="hint">??? ???????? ????? ??????????? ?? ????????? ?????????. ???? ????? ??????? ???? ? ???????? ???? ?? ???.</div>
+      ${visibleHeaders.length ? `
+        <div class="text-table-import-summary-columns">
+          ${visibleHeaders.map(item=>`<span class="text-table-import-col">${htmlesc(item)}</span>`).join("")}
+          ${moreHeaders ? `<span class="text-table-import-col more">+${moreHeaders}</span>` : ""}
+        </div>
+      ` : ""}
+      <div class="actions" style="margin-top:10px;">
+        <button type="button" class="btn danger btn-mini" data-action="deleteTextTableFromTextarea" data-arg1="${textareaId}">???????? ???????</button>
+      </div>
+    </div>
+  `;
+
+}
+
+function renderReferenceEntryTableWorkspace(textareaId, tableType, rows){
+
+  const el = document.getElementById(textareaId);
+
+  if(!el) return;
+
+  closeTextTableEditor(textareaId);
+
+  const safeRows = Array.isArray(rows) ? rows : [];
+
+  if(!safeRows.length) return;
+
+  if(shouldRenderCompactTableSummary(tableType, safeRows)){
+    el.insertAdjacentHTML("afterend", buildTextTableImportSummaryHtml(textareaId, safeRows, {tableType}));
+    return;
+  }
+
+  renderTextTableEditor(textareaId, safeRows);
+
+}
+
+function normalizeImportedWorksheetRows(rows){
+
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const normalized = safeRows.map(row=>(Array.isArray(row) ? row : []).map(cell=>String(cell ?? "").replace(/\r?\n+/g, " ").trim()));
+  const nonEmptyRows = normalized.filter(row=>row.some(cell=>String(cell || "").trim()));
+
+  if(!nonEmptyRows.length) return [];
+
+  let maxCols = 0;
+
+  nonEmptyRows.forEach(row=>{
+    for(let i = row.length - 1; i >= 0; i--){
+      if(String(row[i] || "").trim()){
+        maxCols = Math.max(maxCols, i + 1);
+        break;
+      }
+    }
+  });
+
+  return nonEmptyRows.map(row=>{
+    const next = row.slice(0, maxCols);
+    while(next.length < maxCols) next.push("");
+    return next;
+  });
+
+}
+
+function pickWorkbookSheetName(workbook, preferredName=""){
+
+  const names = Array.isArray(workbook?.SheetNames) ? workbook.SheetNames : [];
+  if(!names.length) return "";
+
+  const normalize = value=>String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+  const preferred = normalize(preferredName);
+
+  if(preferred){
+    const exact = names.find(name=>normalize(name) === preferred);
+    if(exact) return exact;
+    const partial = names.find(name=>normalize(name).includes(preferred));
+    if(partial) return partial;
+  }
+
+  const firstWithData = names.find(name=>workbook.Sheets?.[name]?.["!ref"]);
+
+  return firstWithData || names[0] || "";
+
+}
+
+function importReferenceDeltaWorkbook(){
+
+  const tableType = normalizeReferenceTableType(document.getElementById("referenceEntryTableType")?.value || "none");
+
+  if(tableType !== "delta_nrk"){
+    showToast("??? ?????? ????????? ??? ???? ??????? Delta / ???.", "warn");
+    return;
+  }
+
+  if(!canUseWorkbookImport()){
+    showToast("?????? .xlsx ????? ??????????? ? ????? ????????.", "warn");
+    return;
+  }
+
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".xlsx,.xls,.xlsm";
+
+  input.addEventListener("change", ()=>{
+    const file = input.files?.[0];
+    if(!file) return;
+
+    const reader = new FileReader();
+
+    reader.onload = ()=>{
+      try{
+        const workbook = XLSX.read(reader.result, {type:"array"});
+        const sheetName = pickWorkbookSheetName(workbook, "???");
+        const sheet = sheetName ? workbook.Sheets?.[sheetName] : null;
+
+        if(!sheet){
+          showToast("?? ??????? ?????? ????? ??? ? ?????.", "warn");
+          return;
+        }
+
+        const importedRows = normalizeImportedWorksheetRows(XLSX.utils.sheet_to_json(sheet, {header:1, defval:"", raw:false, blankrows:false}));
+
+        if(importedRows.length < 2){
+          showToast("? ????? ?? ???????? ?????? ??????? ??? ???????.", "warn");
+          return;
+        }
+
+        const textarea = document.getElementById("referenceEntryText");
+        if(!textarea) return;
+
+        if(!String(textarea.value || "").trim()){
+          textarea.value = `?????? ?? Delta / ??? ? ${file.name}`;
+        }
+
+        writeTextTableToTextarea("referenceEntryText", importedRows);
+        renderReferenceEntryTableWorkspace("referenceEntryText", "delta_nrk", importedRows);
+        showToast(`??????????? ${Math.max(0, importedRows.length - 1)} ?????? ? ?????? ${sheetName}`, "ok");
+      } catch(err){
+        console.warn("delta workbook import failed", err);
+        showToast("?? ??????? ????????? Excel-????. ??????? ?? ??? ??? ??????? ???? ??????.", "warn");
+      }
+    };
+
+    reader.onerror = ()=>{
+      showToast("?? ??????? ????????? ???????? ????.", "warn");
+    };
+
+    reader.readAsArrayBuffer(file);
+  }, {once:true});
+
+  input.click();
+
+}
+
+function syncReferenceEntryImportUi(){
+
+  const row = document.getElementById("referenceDeltaImportRow");
+  const type = normalizeReferenceTableType(document.getElementById("referenceEntryTableType")?.value || "none");
+
+  if(row) row.hidden = type !== "delta_nrk";
+
+  const rows = getCurrentTextareaTableRows("referenceEntryText");
+
+  if(rows.length){
+    renderReferenceEntryTableWorkspace("referenceEntryText", type, rows);
   }
 
 }
@@ -10072,6 +10318,12 @@ function openReferenceEntry(entryId=""){
         ${tableTypeOptions}
       </select>
       <div class="hint">Поки що це підготовка під аналітику для таблиць у записі.</div>
+      ${readOnly ? "" : `
+        <div class="reference-import-row" id="referenceDeltaImportRow" hidden>
+          <button type="button" class="btn ghost btn-mini" data-action="importReferenceDeltaWorkbook">Імпорт .xlsx</button>
+          <div class="hint">Для <span class="mono">Delta / НРК</span> можна завантажити весь Excel-файл напряму — без копіювання шматків таблиці.</div>
+        </div>
+      `}
     </div>
     ${readOnly ? `
       <div class="field">
@@ -10100,7 +10352,10 @@ function openReferenceEntry(entryId=""){
 
     const existingTable = findStoredTableBlock(entry?.text || "");
 
-    if(existingTable) renderTextTableEditor("referenceEntryText", existingTable.rows);
+    if(existingTable) renderReferenceEntryTableWorkspace("referenceEntryText", tableType, existingTable.rows);
+
+    document.getElementById("referenceEntryTableType")?.addEventListener("change", syncReferenceEntryImportUi);
+    syncReferenceEntryImportUi();
 
   }
 
@@ -21980,6 +22235,8 @@ const ACTIONS = {
 
   pasteTextTableFromClipboard,
 
+  importReferenceDeltaWorkbook,
+
   mutateTextTableEditor,
 
   applyTextTableEditor,
@@ -22795,6 +23052,9 @@ render();
 initAutoSync();
 
 initOverdueTicker();
+
+
+
 
 
 
