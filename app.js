@@ -5589,6 +5589,18 @@ function getDeltaReliabilityKind(value){
 
 }
 
+function getDeltaMissionResultKind(resultValue, taskTypeValue=""){
+
+  const result = String(resultValue || "").trim();
+  const taskType = String(taskTypeValue || "").trim();
+
+  if(/не доставлено/i.test(result)) return "not_delivered";
+  if(/евакуй/i.test(result) || /евакуац/i.test(taskType)) return "evac";
+  if(/доставлено/i.test(result)) return "delivered";
+  return "";
+
+}
+
 function normalizeDeltaCargoTag(value){
 
   const normalized = normalizeAnalyticsHeader(value);
@@ -6398,9 +6410,9 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
   };
 
   const missionCount = items.length;
-  const deliveredCount = items.filter(item=>/доставлено/i.test(item.result)).length;
-  const notDeliveredCount = items.filter(item=>/не доставлено/i.test(item.result)).length;
-  const evacuationCount = items.filter(item=>/евакуй/i.test(item.result) || /евакуац/i.test(item.taskType)).length;
+  const deliveredCount = items.filter(item=>getDeltaMissionResultKind(item.result, item.taskType) === "delivered").length;
+  const notDeliveredCount = items.filter(item=>getDeltaMissionResultKind(item.result, item.taskType) === "not_delivered").length;
+  const evacuationCount = items.filter(item=>getDeltaMissionResultKind(item.result, item.taskType) === "evac").length;
   const lossCount = items.filter(item=>/втрата/i.test(item.assetStatus)).length;
   const damagedCount = items.filter(item=>/пошкоджен/i.test(item.assetStatus)).length;
   const returnedCount = items.filter(item=>/повернення/i.test(item.assetStatus)).length;
@@ -6598,9 +6610,10 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
       weightCount: 0,
     };
     existing.missionCount += 1;
-    if(/доставлено/i.test(item.result)) existing.deliveredCount += 1;
-    if(/не доставлено/i.test(item.result)) existing.notDeliveredCount += 1;
-    if(/евакуй/i.test(item.result) || /евакуац/i.test(item.taskType)) existing.evacuationCount += 1;
+    const resultKind = getDeltaMissionResultKind(item.result, item.taskType);
+    if(resultKind === "delivered") existing.deliveredCount += 1;
+    if(resultKind === "not_delivered") existing.notDeliveredCount += 1;
+    if(resultKind === "evac") existing.evacuationCount += 1;
     if(/втрата/i.test(item.assetStatus)) existing.lossCount += 1;
     if(/пошкоджен/i.test(item.assetStatus)) existing.damagedCount += 1;
     if(/повернення/i.test(item.assetStatus)) existing.returnedCount += 1;
