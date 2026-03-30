@@ -2887,7 +2887,15 @@ function renderTaskDescWithTableToggle(text, label, opts={}){
     } else if(analyticsType === "delta_nrk"){
       analyticsModalKey = registerRenderedTableModal(
         `Аналітика: ${opts.analyticsTitle || label || "Delta / НРК"}`,
-        buildDeltaNrkAnalyticsModalHtml(currentTable.rows, opts.analyticsTitle || label || "Delta / НРК")
+        ""
+      );
+      UI.renderedTableModals[analyticsModalKey].deltaRows = currentTable.rows;
+      UI.renderedTableModals[analyticsModalKey].deltaTitle = opts.analyticsTitle || label || "Delta / НРК";
+      UI.renderedTableModals[analyticsModalKey].deltaFilters = {unit:"", asset:""};
+      UI.renderedTableModals[analyticsModalKey].bodyHtml = buildDeltaNrkAnalyticsModalHtml(
+        currentTable.rows,
+        opts.analyticsTitle || label || "Delta / НРК",
+        {modalKey: analyticsModalKey, filters: UI.renderedTableModals[analyticsModalKey].deltaFilters}
       );
     }
 
@@ -5588,14 +5596,166 @@ function buildDeltaNrkAutoSummaryHtml(analytics){
 
 }
 
-function buildDeltaNrkAnalytics(rows, title=""){
+function parseDeltaMonthKey(value=""){
+
+  const raw = String(value || "").trim();
+  if(!raw) return "";
+
+  let match = raw.match(/(\d{4})[./-](\d{1,2})[./-](\d{1,2})/);
+  if(match){
+    return `${match[1]}-${String(match[2]).padStart(2, "0")}`;
+  }
+
+  match = raw.match(/(\d{1,2})[./-](\d{1,2})[./-](\d{4})/);
+  if(match){
+    return `${match[3]}-${String(match[2]).padStart(2, "0")}`;
+  }
+
+  match = raw.match(/(\d{4})[./-](\d{1,2})/);
+  if(match){
+    return `${match[1]}-${String(match[2]).padStart(2, "0")}`;
+  }
+
+  return "";
+
+}
+
+function formatDeltaMonthLabel(key=""){
+
+  const raw = String(key || "").trim();
+  if(!raw) return "Без дати";
+
+  const match = raw.match(/^(\d{4})-(\d{2})$/);
+  if(!match) return raw;
+
+  const monthNames = ["січ", "лют", "бер", "квіт", "трав", "черв", "лип", "серп", "вер", "жовт", "лист", "груд"];
+  const monthIndex = Math.max(1, Math.min(12, Number(match[2] || 1))) - 1;
+  return `${monthNames[monthIndex]} ${match[1]}`;
+
+}
+
+function buildDeltaNrkMonthlyAnalyticsHtml(analytics){
+
+  if(!analytics?.months?.length) return "";
+
+  const groupId = uid("delta_month");
+  const monthMetrics = [
+    {
+      key: "missions",
+      label: "Місії",
+      value: item=>item.missionCount,
+      valueText: item=>fmtNum(item.missionCount),
+      meta: item=>`Доставлено ${fmtNum(item.deliveredCount)} · Не доставлено ${fmtNum(item.notDeliveredCount)}`,
+      tone: "blue",
+    },
+    {
+      key: "delivered",
+      label: "Доставлено",
+      value: item=>item.deliveredCount,
+      valueText: item=>fmtNum(item.deliveredCount),
+      meta: item=>`${fmtNum(item.successRate)}% успішності`,
+      tone: "green",
+    },
+    {
+      key: "not_delivered",
+      label: "Не доставлено",
+      value: item=>item.notDeliveredCount,
+      valueText: item=>fmtNum(item.notDeliveredCount),
+      meta: item=>`${fmtNum(item.missionCount)} місій у місяці`,
+      tone: "orange",
+    },
+    {
+      key: "evac",
+      label: "Евакуація",
+      value: item=>item.evacuationCount,
+      valueText: item=>fmtNum(item.evacuationCount),
+      meta: item=>`${fmtNum(item.missionCount)} місій у місяці`,
+      tone: "violet",
+    },
+    {
+      key: "weight",
+      label: "Вага",
+      value: item=>item.totalWeight,
+      valueText: item=>`${fmtNum(item.totalWeight)} кг`,
+      meta: item=>`Сер. вага ${fmtNum(item.avgWeight)} кг`,
+      tone: "blue",
+    },
+    {
+      key: "avg_weight",
+      label: "Сер. вага",
+      value: item=>item.avgWeight,
+      valueText: item=>`${fmtNum(item.avgWeight)} кг`,
+      meta: item=>`Макс. вага ${fmtNum(item.maxWeight)} кг`,
+      tone: "green",
+    },
+    {
+      key: "losses",
+      label: "Втрати",
+      value: item=>item.lossCount,
+      valueText: item=>fmtNum(item.lossCount),
+      meta: item=>`Пошкоджено ${fmtNum(item.damagedCount)}`,
+      tone: "red",
+    },
+    {
+      key: "success_rate",
+      label: "Успішність %",
+      value: item=>item.successRate,
+      valueText: item=>`${fmtNum(item.successRate)}%`,
+      meta: item=>`Повернення ${fmtNum(item.returnRate)}%`,
+      tone: "green",
+      maxValue: 100,
+    },
+  ];
+
+  return `
+    <div class="item analytics-block delta-monthly-block">
+      <div class="comparison-switcher-head">
+        <div class="name">Аналітика по місяцях</div>
+        <div class="comparison-switcher-buttons">
+          ${monthMetrics.map((metric, index)=>`
+            <button class="comparison-switcher-btn ${index === 0 ? "is-active" : ""}" data-action="switchComparisonTopPanel" data-arg1="${groupId}" data-arg2="${metric.key}">${htmlesc(metric.label)}</button>
+          `).join("")}
+        </div>
+      </div>
+      ${monthMetrics.map((metric, index)=>{
+        const values = analytics.months.map(item=>Number(metric.value(item) || 0));
+        const maxValue = metric.maxValue || Math.max(1, ...values);
+        return `
+          <div class="comparison-switch-panel ${index === 0 ? "is-active" : ""}" data-topswitch-panel="${groupId}:${metric.key}">
+            <div class="delta-monthly-grid">
+              ${analytics.months.map(item=>{
+                const currentValue = Number(metric.value(item) || 0);
+                const percent = maxValue > 0 ? Math.max(4, Math.round((currentValue / maxValue) * 100)) : 0;
+                return `
+                  <div class="delta-monthly-card tone-${metric.tone || "blue"}">
+                    <div class="delta-monthly-head">
+                      <div class="delta-monthly-month">${htmlesc(item.label)}</div>
+                      <div class="delta-monthly-value mono">${htmlesc(metric.valueText(item))}</div>
+                    </div>
+                    <div class="delta-monthly-meta">${htmlesc(metric.meta(item))}</div>
+                    <div class="delta-monthly-progress">
+                      <div class="delta-monthly-progress-fill" style="width:${percent}%;"></div>
+                    </div>
+                  </div>
+                `;
+              }).join("")}
+            </div>
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+
+}
+
+function buildDeltaNrkAnalytics(rows, title="", filters={}){
 
   const grid = Array.isArray(rows) ? rows : [];
   if(grid.length < 2) return null;
 
   const columns = detectDeltaNrkColumns(grid[0]);
   const detectedFormat = columns.resultAt === 6 && columns.result === 12 ? "Delta NRK 28 колонок" : (columns.resultAt === 8 && columns.result === 14 ? "Delta NRK 30 колонок" : "Delta NRK / alias-map");
-  const items = grid.slice(1).map((row, index)=>{
+  const allItems = grid.slice(1).map((row, index)=>{
     const asset = columns.asset >= 0 ? String(row?.[columns.asset] || "").trim() : "";
     const unit = columns.unit >= 0 ? String(row?.[columns.unit] || "").trim() : "";
     const result = columns.result >= 0 ? String(row?.[columns.result] || "").trim() : "";
@@ -5626,7 +5786,52 @@ function buildDeltaNrkAnalytics(rows, title=""){
     };
   }).filter(Boolean);
 
-  if(!items.length) return null;
+  if(!allItems.length) return null;
+
+  const unitFilter = String(filters.unit || "").trim();
+  const assetFilter = String(filters.asset || "").trim();
+  const unitOptions = Array.from(new Set(allItems.map(item=>String(item.unit || "").trim()).filter(Boolean))).sort((a,b)=>a.localeCompare(b, "uk"));
+  const assetOptions = Array.from(new Set(allItems.map(item=>String(item.asset || "").trim()).filter(Boolean))).sort((a,b)=>a.localeCompare(b, "uk"));
+  const items = allItems.filter(item=>{
+    if(unitFilter && item.unit !== unitFilter) return false;
+    if(assetFilter && item.asset !== assetFilter) return false;
+    return true;
+  });
+
+  if(!items.length){
+    return {
+      title,
+      detectedFormat,
+      sourceRows: Math.max(0, grid.length - 1),
+      parsedRows: 0,
+      items: [],
+      missionCount: 0,
+      deliveredCount: 0,
+      notDeliveredCount: 0,
+      evacuationCount: 0,
+      lossCount: 0,
+      damagedCount: 0,
+      returnedCount: 0,
+      returnRate: 0,
+      totalWeight: 0,
+      avgWeight: 0,
+      maxWeight: 0,
+      taskTypes: [],
+      assets: [],
+      cargoes: [],
+      primaryLinks: [],
+      reserveLinks: [],
+      unitsByMissions: [],
+      unitsByWeight: [],
+      months: [],
+      topTaskType: null,
+      topAsset: null,
+      unitOptions,
+      assetOptions,
+      filters: {unit: unitFilter, asset: assetFilter},
+      totalParsedRows: allItems.length,
+    };
+  }
 
   const countBy = (getter)=> {
     const map = new Map();
@@ -5665,6 +5870,51 @@ function buildDeltaNrkAnalytics(rows, title=""){
   });
   const unitsByWeight = Array.from(unitsByWeightMap.entries()).map(([label, value])=>({label, value})).sort((a,b)=>b.value-a.value || String(a.label).localeCompare(String(b.label), "uk"));
 
+  const monthMap = new Map();
+  items.forEach(item=>{
+    const monthKey = parseDeltaMonthKey(item.resultAt) || "no-date";
+    const existing = monthMap.get(monthKey) || {
+      key: monthKey,
+      label: monthKey === "no-date" ? "Без дати" : formatDeltaMonthLabel(monthKey),
+      missionCount: 0,
+      deliveredCount: 0,
+      notDeliveredCount: 0,
+      evacuationCount: 0,
+      lossCount: 0,
+      damagedCount: 0,
+      returnedCount: 0,
+      totalWeight: 0,
+      maxWeight: 0,
+      weightCount: 0,
+    };
+    existing.missionCount += 1;
+    if(/доставлено/i.test(item.result)) existing.deliveredCount += 1;
+    if(/не доставлено/i.test(item.result)) existing.notDeliveredCount += 1;
+    if(/евакуй/i.test(item.result) || /евакуац/i.test(item.taskType)) existing.evacuationCount += 1;
+    if(/втрата/i.test(item.assetStatus)) existing.lossCount += 1;
+    if(/пошкоджен/i.test(item.assetStatus)) existing.damagedCount += 1;
+    if(/повернення/i.test(item.assetStatus)) existing.returnedCount += 1;
+    const weight = Number(item.cargoWeight) || 0;
+    existing.totalWeight += weight;
+    if(weight > 0){
+      existing.weightCount += 1;
+      existing.maxWeight = Math.max(existing.maxWeight, weight);
+    }
+    monthMap.set(monthKey, existing);
+  });
+  const months = Array.from(monthMap.values())
+    .map(item=>({
+      ...item,
+      avgWeight: item.weightCount ? (item.totalWeight / item.weightCount) : 0,
+      successRate: item.missionCount ? Math.round((item.deliveredCount / item.missionCount) * 100) : 0,
+      returnRate: item.missionCount ? Math.round((item.returnedCount / item.missionCount) * 100) : 0,
+    }))
+    .sort((a,b)=>{
+      if(a.key === "no-date") return 1;
+      if(b.key === "no-date") return -1;
+      return String(a.key).localeCompare(String(b.key), "uk");
+    });
+
   return {
     title,
     detectedFormat,
@@ -5689,18 +5939,60 @@ function buildDeltaNrkAnalytics(rows, title=""){
     reserveLinks,
     unitsByMissions,
     unitsByWeight,
+    months,
     topTaskType: taskTypes[0] || null,
     topAsset: assets[0] || null,
+    unitOptions,
+    assetOptions,
+    filters: {unit: unitFilter, asset: assetFilter},
+    totalParsedRows: allItems.length,
   };
 
 }
 
-function buildDeltaNrkAnalyticsModalHtml(rows, title=""){
+function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
 
-  const analytics = buildDeltaNrkAnalytics(rows, title);
+  const modalKey = String(opts.modalKey || "");
+  const currentFilters = opts.filters && typeof opts.filters === "object" ? opts.filters : {};
+  const analytics = buildDeltaNrkAnalytics(rows, title, currentFilters);
   if(!analytics){
     return `<div class="hint">Не вдалося розпізнати Delta / НРК. Очікуються колонки на кшталт: Підрозділ, Тип задачі, Результат, Вантаж, Вага вантажу, Статус засобу, Засіб.</div>`;
   }
+
+  const filtersBlock = `
+    <div class="item analytics-block delta-nrk-filters">
+      <div class="row">
+        <div class="name">Фільтри</div>
+        <div class="hint">Можна звузити зріз по підрозділу або платформі.</div>
+      </div>
+      <div class="delta-nrk-filter-grid">
+        <label class="delta-nrk-filter-field">
+          <span>Підрозділ</span>
+          <select id="deltaUnitFilter_${modalKey}">
+            <option value="">Усі підрозділи</option>
+            ${analytics.unitOptions.map(item=>`<option value="${attrEsc(item)}" ${item === analytics.filters.unit ? "selected" : ""}>${htmlesc(item)}</option>`).join("")}
+          </select>
+        </label>
+        <label class="delta-nrk-filter-field">
+          <span>Платформа</span>
+          <select id="deltaAssetFilter_${modalKey}">
+            <option value="">Усі платформи</option>
+            ${analytics.assetOptions.map(item=>`<option value="${attrEsc(item)}" ${item === analytics.filters.asset ? "selected" : ""}>${htmlesc(item)}</option>`).join("")}
+          </select>
+        </label>
+        <div class="delta-nrk-filter-actions">
+          <button class="btn primary btn-mini" data-action="applyDeltaNrkAnalyticsFilters" data-arg1="${modalKey}">Застосувати</button>
+          <button class="btn ghost btn-mini" data-action="resetDeltaNrkAnalyticsFilters" data-arg1="${modalKey}">Скинути</button>
+        </div>
+      </div>
+      <div class="delta-nrk-filter-summary">
+        <span class="delta-nrk-filter-chip">${analytics.filters.unit ? `Підрозділ: ${htmlesc(analytics.filters.unit)}` : "Усі підрозділи"}</span>
+        <span class="delta-nrk-filter-chip">${analytics.filters.asset ? `Платформа: ${htmlesc(analytics.filters.asset)}` : "Усі платформи"}</span>
+        <span class="delta-nrk-filter-chip mono">Місій у зрізі: ${fmtNum(analytics.parsedRows)}</span>
+        ${analytics.totalParsedRows !== analytics.parsedRows ? `<span class="delta-nrk-filter-chip mono">Із загалу: ${fmtNum(analytics.totalParsedRows)}</span>` : ""}
+      </div>
+    </div>
+  `;
 
   const summaryGrid = `
     <div class="report-grid staffing-analytics-kpis delta-nrk-kpis">
@@ -5733,6 +6025,40 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title=""){
       </div>
     </div>
   `;
+
+  if(!analytics.items.length){
+    return `
+      <div class="staffing-analytics-modal comparison-analytics-modal delta-nrk-analytics-modal">
+        ${filtersBlock}
+        ${summaryGrid}
+        ${diagnosticsBlock}
+        <div class="item analytics-block">
+          <div class="hint">За поточними фільтрами місій не знайдено. Спробуй інший підрозділ або платформу.</div>
+        </div>
+      </div>
+    `;
+  }
+
+  const missionResultDonut = renderComparisonSliceDonutCard(
+    "Структура місій",
+    [
+      {label:"Доставлено", value: analytics.deliveredCount},
+      {label:"Не доставлено", value: analytics.notDeliveredCount},
+      {label:"Евакуаційні", value: analytics.evacuationCount},
+    ],
+    "Даних по результатах місій поки немає.",
+    ["#4f88ff", "#ffb547", "#8f67ff"]
+  );
+  const statusDonut = renderComparisonSliceDonutCard(
+    "Статус засобів",
+    [
+      {label:"Повернення", value: analytics.returnedCount},
+      {label:"Пошкоджено", value: analytics.damagedCount},
+      {label:"Втрачено", value: analytics.lossCount},
+    ],
+    "Даних по статусу засобів поки немає.",
+    ["#4f88ff", "#6bc46d", "#ff7b87"]
+  );
 
   const platformsRows = analytics.assets.map(item=>({
     label: item.label,
@@ -5894,9 +6220,15 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title=""){
 
   return `
     <div class="staffing-analytics-modal comparison-analytics-modal delta-nrk-analytics-modal">
+      ${filtersBlock}
       ${summaryGrid}
       ${diagnosticsBlock}
       ${buildDeltaNrkAutoSummaryHtml(analytics)}
+      <div class="eval-donut-grid">
+        ${missionResultDonut}
+        ${statusDonut}
+      </div>
+      ${buildDeltaNrkMonthlyAnalyticsHtml(analytics)}
       <div class="control-grid">
         ${platformsBlock}
         ${cargoBlock}
@@ -5918,7 +6250,7 @@ function openRenderedTableModal(key){
   if(!item) return;
 
   showSheet(item.title, `
-    <div class="table-modal-body">
+    <div class="table-modal-body" data-rendered-modal-key="${attrEsc(key)}">
       ${item.bodyHtml}
     </div>
     <div class="actions" style="margin-top:14px;">
@@ -5929,6 +6261,50 @@ function openRenderedTableModal(key){
   requestAnimationFrame(()=>{
     animateRenderedDonuts(document.querySelector('.sheet'));
   });
+
+}
+
+function rerenderDeltaNrkAnalyticsModal(key, filters={}){
+
+  const item = UI.renderedTableModals?.[key];
+  if(!item?.deltaRows?.length) return;
+
+  const nextFilters = {
+    unit: String(filters.unit || "").trim(),
+    asset: String(filters.asset || "").trim(),
+  };
+
+  item.deltaFilters = nextFilters;
+  item.bodyHtml = buildDeltaNrkAnalyticsModalHtml(
+    item.deltaRows,
+    item.deltaTitle || item.title || "Delta / НРК",
+    {modalKey: key, filters: nextFilters}
+  );
+
+  const body = document.querySelector(`.table-modal-body[data-rendered-modal-key="${key}"]`);
+  if(body){
+    body.innerHTML = item.bodyHtml;
+    requestAnimationFrame(()=>{
+      animateRenderedDonuts(document.querySelector(".sheet"));
+    });
+  }
+
+}
+
+function applyDeltaNrkAnalyticsFilters(key){
+
+  if(!key) return;
+
+  const unit = String(document.getElementById(`deltaUnitFilter_${key}`)?.value || "").trim();
+  const asset = String(document.getElementById(`deltaAssetFilter_${key}`)?.value || "").trim();
+  rerenderDeltaNrkAnalyticsModal(key, {unit, asset});
+
+}
+
+function resetDeltaNrkAnalyticsFilters(key){
+
+  if(!key) return;
+  rerenderDeltaNrkAnalyticsModal(key, {unit:"", asset:""});
 
 }
 
@@ -22344,6 +22720,8 @@ const ACTIONS = {
 
   hideSheet,
   switchComparisonTopPanel,
+  applyDeltaNrkAnalyticsFilters,
+  resetDeltaNrkAnalyticsFilters,
   filterStaffingUnitsBlock,
   setStaffingUnitsScope,
   setStaffingUnitsViewMode,
