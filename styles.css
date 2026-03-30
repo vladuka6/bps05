@@ -1921,6 +1921,13 @@
         flex-direction:column;
         gap:8px;
       }
+    .comparison-switcher-head{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:8px;
+        flex-wrap:wrap;
+      }
     .comparison-switcher-buttons{
         display:flex;
         flex-wrap:wrap;
@@ -1951,8 +1958,46 @@
         color:#2d5fbd;
         box-shadow:0 1px 0 rgba(255,255,255,.72) inset;
       }
+    .comparison-switcher-help{
+        white-space:nowrap;
+        min-height:28px;
+      }
     .comparison-switch-panel{
         display:none;
+      }
+    .comparison-help-modal{
+        display:flex;
+        flex-direction:column;
+        gap:10px;
+      }
+    .comparison-help-block{
+        border:1px solid rgba(150,170,205,.34);
+        border-radius:12px;
+        background:linear-gradient(180deg, rgba(255,255,255,.96), rgba(248,251,255,.92));
+        padding:10px 12px;
+        display:flex;
+        flex-direction:column;
+        gap:4px;
+      }
+    .comparison-help-title{
+        font-size:12px;
+        font-weight:900;
+        color:var(--text);
+      }
+    .comparison-help-text{
+        font-size:11px;
+        line-height:1.35;
+        color:var(--text);
+        opacity:.9;
+      }
+    .comparison-help-list{
+        gap:4px;
+        margin:0;
+      }
+    .comparison-help-list li{
+        padding:0;
+        border:none;
+        background:transparent;
       }
     .comparison-switch-panel.is-active{
         display:block;
@@ -2058,10 +2103,16 @@
         .comparison-switcher-buttons{
             gap:5px;
         }
+        .comparison-switcher-head{
+            align-items:stretch;
+        }
         .comparison-switcher-btn{
             padding:4px 8px;
             font-size:10px;
             min-height:26px;
+        }
+        .comparison-switcher-help{
+            align-self:flex-start;
         }
         .comparison-analytics-modal .report-grid{
             grid-template-columns:repeat(2, minmax(0,1fr));
@@ -4832,6 +4883,10 @@
       background:linear-gradient(180deg, rgba(95,142,245,.18), rgba(95,142,245,.09));
       color:#d7e6ff;
       box-shadow:none;
+    }
+    body.theme-dark .comparison-help-block{
+      border-color:rgba(55,69,98,.72);
+      background:linear-gradient(180deg, rgba(27,34,50,.94), rgba(21,25,37,.88));
     }
     body.theme-dark .comparison-card-btn:hover{
       border-color:rgba(95,142,245,.34);

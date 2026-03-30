@@ -4104,15 +4104,17 @@ const COMPARISON_PROFILE_CONFIG = {
     shortLabel: "Універсальний",
     tone: "blue",
     weights: [
-      {key:"payload", weight:0.18, inverse:false},
-      {key:"distance", weight:0.2, inverse:false},
-      {key:"speed", weight:0.12, inverse:false},
-      {key:"flightTime", weight:0.15, inverse:false},
-      {key:"radius", weight:0.1, inverse:false},
-      {key:"height", weight:0.07, inverse:false},
-      {key:"wind", weight:0.08, inverse:false},
-      {key:"systemPrice", weight:0.06, inverse:true},
-      {key:"deployTime", weight:0.04, inverse:true},
+      {key:"systemPrice", weight:0.24, inverse:true},
+      {key:"payload", weight:0.16, inverse:false},
+      {key:"distance", weight:0.15, inverse:false},
+      {key:"flightTime", weight:0.11, inverse:false},
+      {key:"speed", weight:0.1, inverse:false},
+      {key:"radius", weight:0.08, inverse:false},
+      {key:"wind", weight:0.06, inverse:false},
+      {key:"deployTime", weight:0.05, inverse:true},
+      {key:"height", weight:0.03, inverse:false},
+      {kind:"flag", key:"thermal", weight:0.01},
+      {kind:"flag", key:"codified", weight:0.01},
     ],
   },
   strike_multirotor: {
@@ -4425,6 +4427,42 @@ function renderComparisonTopListAsc(title, rows, metricKey, metricLabel, unit=""
             }).join("")
           : `<div class="hint">Даних для цього рейтингу поки немає.</div>`
         }
+      </div>
+    </div>
+  `;
+
+}
+
+function buildComparisonOverallRankingHelpHtml(){
+
+  return `
+    <div class="comparison-help-modal">
+      <div class="comparison-help-block">
+        <div class="comparison-help-title">Як рахується “Загальний” рейтинг</div>
+        <div class="comparison-help-text">
+          Це інтегральний рейтинг для швидкого вибору моделі без переплати.
+        </div>
+      </div>
+      <div class="comparison-help-block">
+        <div class="comparison-help-title">Що має найбільший пріоритет</div>
+        <ul class="report-list comparison-help-list">
+          <li><div class="report-meta">1. <b>Ціна комплексу</b> — найдешевші моделі з близькими характеристиками піднімаються вище.</div></li>
+          <li><div class="report-meta">2. <b>Навантаження</b> і <b>дальність</b> — як основні робочі можливості.</div></li>
+          <li><div class="report-meta">3. <b>Час польоту</b>, <b>швидкість</b> і <b>радіус</b> — як підсилювачі ефективності.</div></li>
+          <li><div class="report-meta">4. <b>Стійкість до вітру</b> і <b>час розгортання</b> — як практичні фактори використання.</div></li>
+        </ul>
+      </div>
+      <div class="comparison-help-block">
+        <div class="comparison-help-title">Як це читати</div>
+        <div class="comparison-help-text">
+          Якщо дві моделі близькі за характеристиками, вище буде та, що коштує менше. Тобто “Загальний” рейтинг спеціально зсунений у бік <b>не переплачувати</b> за подібний результат.
+        </div>
+      </div>
+      <div class="comparison-help-block">
+        <div class="comparison-help-title">Що важливо</div>
+        <div class="comparison-help-text">
+          Це не остаточний вирок, а зручний стартовий орієнтир. Далі модель все одно варто відкривати й дивитися детальні характеристики.
+        </div>
       </div>
     </div>
   `;
@@ -4760,6 +4798,7 @@ function renderComparisonSwitchTopBlock(title, itemsByKey, defaultKey="price"){
   if(!buttons.length) return "";
 
   const groupId = `cmp_top_${Math.random().toString(36).slice(2, 8)}`;
+  const helpKey = registerRenderedTableModal("Довідка: загальний рейтинг", buildComparisonOverallRankingHelpHtml());
 
   const panels = {
     overall: renderComparisonTopList("Рейтинг за загальним критерієм", itemsByKey.overall || [], "universalScore", "Загальний рейтинг", ""),
@@ -4777,7 +4816,8 @@ function renderComparisonSwitchTopBlock(title, itemsByKey, defaultKey="price"){
     <div class="item analytics-block comparison-switch-block">
       <div class="row"><div class="name">${htmlesc(title)}</div></div>
       <div class="comparison-switcher" data-topswitch-group="${groupId}">
-        <div class="comparison-switcher-buttons">
+        <div class="comparison-switcher-head">
+          <div class="comparison-switcher-buttons">
           ${buttons.map(btn=>`
             <button
               type="button"
@@ -4787,6 +4827,8 @@ function renderComparisonSwitchTopBlock(title, itemsByKey, defaultKey="price"){
               data-arg2="${btn.key}"
             >${htmlesc(btn.label)}</button>
           `).join("")}
+          </div>
+          <button type="button" class="btn ghost btn-mini comparison-switcher-help" data-action="openRenderedTableModal" data-arg1="${helpKey}">Довідка</button>
         </div>
         <div class="comparison-switch-panels">
           ${buttons.map(btn=>`
