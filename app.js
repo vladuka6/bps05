@@ -5595,9 +5595,20 @@ function getDeltaMissionResultKind(resultValue, taskTypeValue=""){
   const taskType = String(taskTypeValue || "").trim();
 
   if(/не доставлено/i.test(result)) return "not_delivered";
-  if(/евакуй/i.test(result) || /евакуац/i.test(taskType)) return "evac";
+  if(/евакуй/i.test(result)) return "evacuated";
   if(/доставлено/i.test(result)) return "delivered";
+  if(/евакуац/i.test(taskType)) return "evac_task";
   return "";
+
+}
+
+function getDeltaEvacCargoKind(cargoValue){
+
+  const cargo = normalizeAnalyticsHeader(cargoValue);
+  if(!cargo) return "";
+  if(/поранен/.test(cargo)) return "300";
+  if(/загибл/.test(cargo)) return "200";
+  return "other";
 
 }
 
@@ -5700,7 +5711,7 @@ function buildDeltaNrkAutoSummaryHtml(analytics){
 
   if(!analytics) return "";
 
-  const deliveredPercent = analytics.missionCount ? Math.round((analytics.deliveredCount / analytics.missionCount) * 100) : 0;
+  const deliveredPercent = analytics.successRate || 0;
   const cards = [
     {
       label:"Місій",
@@ -5709,7 +5720,7 @@ function buildDeltaNrkAutoSummaryHtml(analytics){
     },
     {
       label:"Результат",
-      value: fmtNum(analytics.deliveredCount),
+      value: fmtNum(analytics.successCount),
       text: `${fmtNum(deliveredPercent)}% успішно · Не дост. ${fmtNum(analytics.notDeliveredCount)} · Евак. ${fmtNum(analytics.evacuationCount)}`,
       tone: analytics.notDeliveredCount > 0 ? "warn" : "ok",
     },
@@ -6344,6 +6355,9 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
       deliveredCount: 0,
       notDeliveredCount: 0,
       evacuationCount: 0,
+      evacuatedCount: 0,
+      successCount: 0,
+      successRate: 0,
       lossCount: 0,
       damagedCount: 0,
       returnedCount: 0,
@@ -6391,6 +6405,10 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
       topAsset: null,
       assetStats: [],
       maxCargoAsset: null,
+      evacuationItems: [],
+      evacuation200Count: 0,
+      evacuation300Count: 0,
+      evacuationOtherCount: 0,
       unitOptions,
       taskTypeOptions,
       assetOptions,
@@ -6412,7 +6430,9 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
   const missionCount = items.length;
   const deliveredCount = items.filter(item=>getDeltaMissionResultKind(item.result, item.taskType) === "delivered").length;
   const notDeliveredCount = items.filter(item=>getDeltaMissionResultKind(item.result, item.taskType) === "not_delivered").length;
-  const evacuationCount = items.filter(item=>getDeltaMissionResultKind(item.result, item.taskType) === "evac").length;
+  const evacuationCount = items.filter(item=>/евакуац/i.test(String(item.taskType || ""))).length;
+  const evacuatedCount = items.filter(item=>getDeltaMissionResultKind(item.result, item.taskType) === "evacuated").length;
+  const successCount = deliveredCount + evacuatedCount;
   const lossCount = items.filter(item=>/втрата/i.test(item.assetStatus)).length;
   const damagedCount = items.filter(item=>/пошкоджен/i.test(item.assetStatus)).length;
   const returnedCount = items.filter(item=>/повернення/i.test(item.assetStatus)).length;
@@ -6421,6 +6441,7 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
   const avgWeight = weightCount ? (totalWeight / weightCount) : 0;
   const maxWeight = items.reduce((max, item)=>Math.max(max, Number(item.cargoWeight) || 0), 0);
   const returnRate = missionCount ? Math.round((returnedCount / missionCount) * 100) : 0;
+  const successRate = missionCount ? Math.round((successCount / missionCount) * 100) : 0;
 
   const taskTypes = countBy(item=>item.taskType);
   const assets = summarizeNormalizedLabelCounts(items, item=>item.asset);
@@ -6553,6 +6574,10 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
   });
   const cargoes = Array.from(cargoCategoryMap.entries()).map(([label, value])=>({label, value})).sort((a,b)=>b.value-a.value || String(a.label).localeCompare(String(b.label), "uk"));
   const cargoCombos = Array.from(cargoComboMap.entries()).map(([label, value])=>({label, value})).sort((a,b)=>b.value-a.value || String(a.label).localeCompare(String(b.label), "uk"));
+  const evacuationItems = items.filter(item=>/евакуац/i.test(String(item.taskType || "")));
+  const evacuation200Count = evacuationItems.filter(item=>getDeltaEvacCargoKind(item.cargo) === "200").length;
+  const evacuation300Count = evacuationItems.filter(item=>getDeltaEvacCargoKind(item.cargo) === "300").length;
+  const evacuationOtherCount = Math.max(0, evacuationItems.length - evacuation200Count - evacuation300Count);
 
   const startFilledCount = items.filter(item=>!!item.startAt).length;
   const endFilledCount = items.filter(item=>!!item.endAt).length;
@@ -6602,6 +6627,7 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
       deliveredCount: 0,
       notDeliveredCount: 0,
       evacuationCount: 0,
+      evacuatedCount: 0,
       lossCount: 0,
       damagedCount: 0,
       returnedCount: 0,
@@ -6613,7 +6639,8 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     const resultKind = getDeltaMissionResultKind(item.result, item.taskType);
     if(resultKind === "delivered") existing.deliveredCount += 1;
     if(resultKind === "not_delivered") existing.notDeliveredCount += 1;
-    if(resultKind === "evac") existing.evacuationCount += 1;
+    if(/евакуац/i.test(String(item.taskType || ""))) existing.evacuationCount += 1;
+    if(resultKind === "evacuated") existing.evacuatedCount = (existing.evacuatedCount || 0) + 1;
     if(/втрата/i.test(item.assetStatus)) existing.lossCount += 1;
     if(/пошкоджен/i.test(item.assetStatus)) existing.damagedCount += 1;
     if(/повернення/i.test(item.assetStatus)) existing.returnedCount += 1;
@@ -6629,7 +6656,8 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     .map(item=>({
       ...item,
       avgWeight: item.weightCount ? (item.totalWeight / item.weightCount) : 0,
-      successRate: item.missionCount ? Math.round((item.deliveredCount / item.missionCount) * 100) : 0,
+      successCount: item.deliveredCount + (item.evacuatedCount || 0),
+      successRate: item.missionCount ? Math.round(((item.deliveredCount + (item.evacuatedCount || 0)) / item.missionCount) * 100) : 0,
       returnRate: item.missionCount ? Math.round((item.returnedCount / item.missionCount) * 100) : 0,
     }))
     .sort((a,b)=>{
@@ -6648,6 +6676,9 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     deliveredCount,
     notDeliveredCount,
     evacuationCount,
+    evacuatedCount,
+    successCount,
+    successRate,
     lossCount,
     damagedCount,
     returnedCount,
@@ -6670,6 +6701,10 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     topAsset: assets[0] || null,
     assetStats,
     maxCargoAsset,
+    evacuationItems,
+    evacuation200Count,
+    evacuation300Count,
+    evacuationOtherCount,
     unitOptions,
     taskTypeOptions,
     assetOptions,
@@ -6803,6 +6838,29 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
     meta: `${fmtNum(analytics.missionCount ? Math.round((item.value / analytics.missionCount) * 100) : 0)}% місій з такою комбінацією`,
     tone: "b-blue",
   }));
+  const evacuationRows = [
+    {
+      label: "Евакуйовано",
+      value: analytics.evacuatedCount,
+      valueText: fmtNum(analytics.evacuatedCount),
+      meta: `${fmtNum(analytics.evacuationCount ? Math.round((analytics.evacuatedCount / analytics.evacuationCount) * 100) : 0)}% евакуаційних місій`,
+      tone: "b-ok",
+    },
+    {
+      label: "300 (поранені)",
+      value: analytics.evacuation300Count,
+      valueText: fmtNum(analytics.evacuation300Count),
+      meta: `${fmtNum(analytics.evacuationCount ? Math.round((analytics.evacuation300Count / analytics.evacuationCount) * 100) : 0)}% евакуаційних`,
+      tone: "b-blue",
+    },
+    {
+      label: "200 (загиблі)",
+      value: analytics.evacuation200Count,
+      valueText: fmtNum(analytics.evacuation200Count),
+      meta: `${fmtNum(analytics.evacuationCount ? Math.round((analytics.evacuation200Count / analytics.evacuationCount) * 100) : 0)}% евакуаційних`,
+      tone: "b-danger",
+    },
+  ].filter(item=>item.value > 0 || item.label === "Евакуйовано");
   const reliabilityGroups = [
     {
       label: "Повернення",
@@ -6911,6 +6969,45 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
       }
     ])
   );
+  const evacuationItems = analytics.evacuationItems || [];
+  const mapEvacDetailRow = (item)=>({
+    label: item.unit || "Без підрозділу",
+    valueText: item.resultAt || item.endAt || item.startAt || "Без дати",
+    meta: [
+      item.asset ? `Платформа: ${item.asset}` : "",
+      item.result ? `Результат: ${item.result}` : "",
+      item.cargo ? `Вантаж: ${item.cargo}` : "",
+      item.circumstances ? `Обставини: ${item.circumstances}` : "",
+      item.missionDurationMinutes ? `Час: ${formatDurationMinutes(item.missionDurationMinutes)}` : "",
+    ].filter(Boolean).join(" · "),
+    tone: getDeltaEvacCargoKind(item.cargo) === "200" ? "b-danger" : "b-blue",
+  });
+  const evacuationDetailRows = evacuationItems.map(mapEvacDetailRow);
+  const evacuation300Rows = evacuationItems.filter(item=>getDeltaEvacCargoKind(item.cargo) === "300").map(mapEvacDetailRow);
+  const evacuation200Rows = evacuationItems.filter(item=>getDeltaEvacCargoKind(item.cargo) === "200").map(mapEvacDetailRow);
+  const evacuationModalKey = registerRenderedTableModal(
+    `${analytics.title || "Delta / НРК"} · Евакуація`,
+    buildDeltaNrkInsightModalHtml([
+      {
+        title: "Евакуаційні місії",
+        summary: `Усього евакуаційних: ${fmtNum(analytics.evacuationCount)} · Евакуйовано: ${fmtNum(analytics.evacuatedCount)}`,
+        rows: evacuationRows,
+        emptyText: "Евакуаційних місій поки немає.",
+      },
+      {
+        title: "300 (поранені)",
+        summary: `${fmtNum(analytics.evacuation300Count)} евакуаційних місій з пораненими`,
+        rows: evacuation300Rows,
+        emptyText: "Місій категорії 300 поки немає.",
+      },
+      {
+        title: "200 (загиблі)",
+        summary: `${fmtNum(analytics.evacuation200Count)} евакуаційних місій із загиблими`,
+        rows: evacuation200Rows,
+        emptyText: "Місій категорії 200 поки немає.",
+      }
+    ])
+  );
   const unitsModalKey = registerRenderedTableModal(
     `${analytics.title || "Delta / НРК"} · Підрозділи`,
     buildDeltaNrkInsightModalHtml([
@@ -6963,6 +7060,15 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
     '<div class="row"><div class="name">Вантажі</div></div>',
     `<div class="row"><div class="name">Вантажі</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${cargoModalKey}">Детальніше</button></div>`
   );
+
+  const evacuationBlock = analytics.evacuationCount > 0 ? buildDeltaNrkTopList(
+    "Евакуація",
+    evacuationRows,
+    "Евакуаційних місій поки немає."
+  ).replace(
+    '<div class="row"><div class="name">Евакуація</div></div>',
+    `<div class="row"><div class="name">Евакуація</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${evacuationModalKey}">Детальніше</button></div>`
+  ) : "";
 
   const reliabilityBlock = `
     <div class="item analytics-block delta-nrk-list">
@@ -7025,11 +7131,10 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
         ${platformsBlock}
         ${cargoBlock}
       </div>
-      <div class="control-grid">
-        ${reliabilityBlock}
-        ${unitsBlock}
-      </div>
-      ${linksBlock}
+      ${evacuationBlock
+        ? `<div class="control-grid">${evacuationBlock}${reliabilityBlock}</div><div class="control-grid">${unitsBlock}${linksBlock}</div>`
+        : `<div class="control-grid">${reliabilityBlock}${unitsBlock}</div>${linksBlock}`
+      }
     </div>
   `;
 
