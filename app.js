@@ -5735,7 +5735,7 @@ function buildDeltaNrkAutoSummaryHtml(analytics){
     {
       label:"Результат",
       value: fmtNum(analytics.successCount),
-      text: `${fmtNum(deliveredPercent)}% успішно · Не дост. ${fmtNum(analytics.notDeliveredCount)} · Евак. ${fmtNum(analytics.evacuationCount)}`,
+      text: `${fmtNum(deliveredPercent)}% успішно · Не дост. ${fmtNum(analytics.notDeliveredCount)}`,
       tone: analytics.notDeliveredCount > 0 ? "warn" : "ok",
     },
     {
@@ -5749,8 +5749,8 @@ function buildDeltaNrkAutoSummaryHtml(analytics){
       text: analytics.topTaskType ? `${fmtNum(analytics.topTaskType.value)} місій` : "Немає даних",
     },
     ...(analytics.evacuationCount > 0 ? [{
-      label:"Евакуація",
-      value: fmtNum(analytics.evacuationCount),
+      label:"Тип",
+      value: "Евакуація",
       text: `300: ${fmtNum(analytics.evacuation300Count)} · 200: ${fmtNum(analytics.evacuation200Count)}`,
       tone: "ok",
     }] : []),

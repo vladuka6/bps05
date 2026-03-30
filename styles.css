@@ -801,13 +801,13 @@
 }
 .delta-nrk-summary-row{
   display:grid;
-  grid-template-columns:repeat(auto-fit, minmax(145px, 1fr));
-  gap:8px;
+  grid-template-columns:repeat(auto-fit, minmax(120px, 1fr));
+  gap:6px;
 }
 .delta-nrk-summary-card{
-  padding:9px 10px;
+  padding:8px 9px;
   border:1px solid rgba(150,170,205,.22);
-  border-radius:14px;
+  border-radius:12px;
   background:linear-gradient(180deg, rgba(255,255,255,.98), rgba(246,250,255,.94));
   box-shadow:
     0 1px 0 rgba(255,255,255,.88) inset,
@@ -828,22 +828,22 @@
   background:transparent;
 }
 .delta-nrk-summary-k{
-  font-size:clamp(10px, .72vw, 12px);
+  font-size:clamp(9px, .62vw, 11px);
   font-weight:800;
   color:var(--muted);
   line-height:1.1;
 }
 .delta-nrk-summary-v{
-  font-size:clamp(15px, 1.05vw, 21px);
+  font-size:clamp(14px, .92vw, 19px);
   font-weight:900;
   color:var(--text);
   line-height:1.02;
   white-space:nowrap;
 }
 .delta-nrk-summary-s{
-  font-size:clamp(10px, .72vw, 11.5px);
+  font-size:clamp(9px, .62vw, 10.5px);
   color:var(--text-soft);
-  line-height:1.25;
+  line-height:1.2;
 }
 .delta-nrk-summary-card.is-ok::before{
   background:linear-gradient(180deg, #67c977, #3fa95a);
@@ -5916,8 +5916,8 @@ body.dark .text-table-import-col{
     grid-template-columns:repeat(2, minmax(0, 1fr));
   }
   .delta-nrk-summary-card{
-    padding:9px 10px;
-    border-radius:14px;
+    padding:8px 9px;
+    border-radius:12px;
   }
   .delta-nrk-summary-v{
     white-space:normal;
