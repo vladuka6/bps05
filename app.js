@@ -3916,7 +3916,82 @@ function buildStaffingDynamicsModalHtml(currentRows, previousRows, title="", pre
 
 }
 
-function detectComparisonColumns(headerRow){
+const COMPARISON_SUBTYPE_KEYWORDS = {
+  fpv: /(fpv|камікадзе|коптер|оптоволокон|ов\b)/,
+  interceptor: /(перехоп|інтерцеп|intercept|зенітн|шахед)/,
+  logistics: /(логіст|логст|транспорт|вантаж)/,
+  fixedWing: /(літак|літаков|крил|fixed wing|катапульт|парашут|vtol)/,
+  multirotor: /(мультиротор|\bмр\b|бомбер|гексакоп|квадрокоп|октокоп|скид)/,
+  recon: /(розвід|спостереж)/,
+  strike: /(удар|бомбер|камікадзе)/,
+};
+
+const COMPARISON_HEADER_ALIASES = {
+  vendor: [/виробник/, /компан/, /постачальник/, /бренд/],
+  name: [/найменування бпак/, /найменування/, /назва виробу/, /назва бпак/, /назва моделі/, /назва/, /модель/, /виріб/],
+  systemPrice: [/орієнтовна вартість бпак/, /орієнтовна ціна за бпак/, /орієнтовна ціна бпак/, /орієнтовна ціна/, /вартість бпак/, /ціна за бпак/, /ціна бпак/, /вартість комплексу/, /ціна комплексу/],
+  unitPrice: [/орієнтовна вартість бпла/, /орієнтовна ціна за бпла/, /орієнтовна ціна бпла/, /вартість бпла/, /ціна за бпла/, /ціна бпла/],
+  quantity: [/кількість бпла в бпак/, /кількість бпла/, /кількість у комплексі/, /кількість апаратів/],
+  payload: [/корисне навантаження/, /вага корисного навантаження/, /макс корисне навантаження/, /навантаження кг/, /вантаж/],
+  distance: [/макс дальність передачі даних/, /макс дальність польоту з корисним навантаженням/, /макс дальність польоту/, /дальність польоту/, /макс дальність/, /дальність км/],
+  radius: [/тактичний радіус/, /радіус дії/, /робочий радіус/],
+  wind: [/допустима швидкість вітру/, /швидкість вітру/, /вітер/],
+  speed: [/максимальна швидкість з робочим навантаженням/, /швидкість максимальна/, /максимальна швидкість/, /макс швидкість/, /крейсерська швидкість/, /швидкість/],
+  flightTime: [/макс час польоту з робочим навантаженням/, /макс час польоту/, /час польоту/, /тривалість польоту/],
+  height: [/макс висота польоту/, /висота польоту/, /стеля/],
+  deployTime: [/час розгортання/, /розгортання згортання/, /розгортан/],
+  cameraType: [/тип камери/, /камера/, /тепловіз/, /нічна/, /денна/],
+  codified: [/кодифікація/, /кодифік/],
+};
+
+function detectComparisonSubtype(title="", headerRow=[]){
+
+  const source = normalizeAnalyticsHeader(`${title || ""} ${(headerRow || []).join(" ")}`);
+
+  if(COMPARISON_SUBTYPE_KEYWORDS.logistics.test(source)) return "logistics_multirotor";
+  if(COMPARISON_SUBTYPE_KEYWORDS.interceptor.test(source)) return "interceptor";
+  if(COMPARISON_SUBTYPE_KEYWORDS.fpv.test(source)) return "fpv";
+  if(COMPARISON_SUBTYPE_KEYWORDS.fixedWing.test(source) && COMPARISON_SUBTYPE_KEYWORDS.recon.test(source)) return "fixed_wing_recon";
+  if(COMPARISON_SUBTYPE_KEYWORDS.fixedWing.test(source) && COMPARISON_SUBTYPE_KEYWORDS.strike.test(source)) return "fixed_wing_strike";
+  if(COMPARISON_SUBTYPE_KEYWORDS.fixedWing.test(source)) return "fixed_wing";
+  if(COMPARISON_SUBTYPE_KEYWORDS.multirotor.test(source) && COMPARISON_SUBTYPE_KEYWORDS.recon.test(source)) return "multirotor_recon";
+  if(COMPARISON_SUBTYPE_KEYWORDS.multirotor.test(source) && COMPARISON_SUBTYPE_KEYWORDS.strike.test(source)) return "multirotor_strike";
+  if(COMPARISON_SUBTYPE_KEYWORDS.multirotor.test(source)) return "multirotor";
+
+  return "generic";
+
+}
+
+function comparisonHeaderMatches(header, aliasKey){
+
+  return (COMPARISON_HEADER_ALIASES[aliasKey] || []).some(pattern=>pattern.test(header));
+
+}
+
+function detectComparisonHeaderUnits(headerRow, columns){
+
+  const headers = Array.isArray(headerRow) ? headerRow : [];
+  const pick = (key)=>(columns?.[key] >= 0 ? normalizeAnalyticsHeader(headers[columns[key]]) : "");
+  const heightHeader = pick("height");
+  const flightTimeHeader = pick("flightTime");
+  const distanceHeader = pick("distance");
+  const radiusHeader = pick("radius");
+
+  return {
+    price: "грн",
+    payload: "кг",
+    speed: "км/год",
+    flightTime: /год/.test(flightTimeHeader) ? "год" : "хв",
+    height: /км/.test(heightHeader) ? "км" : "м",
+    distance: /м\b/.test(distanceHeader) && !/км/.test(distanceHeader) ? "м" : "км",
+    radius: /м\b/.test(radiusHeader) && !/км/.test(radiusHeader) ? "м" : "км",
+    wind: "м/с",
+    deployTime: "хв",
+  };
+
+}
+
+function detectComparisonColumns(headerRow, title=""){
 
   const headers = (headerRow || []).map(normalizeAnalyticsHeader);
   const result = {
@@ -3936,6 +4011,8 @@ function detectComparisonColumns(headerRow){
     deployTime:-1,
     cameraType:-1,
     codified:-1,
+    subtype: detectComparisonSubtype(title, headerRow),
+    units: null,
   };
 
   headers.forEach((header, idx)=>{
@@ -3946,82 +4023,82 @@ function detectComparisonColumns(headerRow){
     const hasFlightHeight = /((висот|стеля).*(польот|польоту))|((польот|польоту).*(висот|стеля))/.test(header);
     const hasFlightDistance = /((дальн|радіус).*(польот|польоту))|((польот|польоту).*(дальн|радіус))/.test(header);
 
-    if(result.vendor < 0 && /(виробник|компан|постачальник|бренд)/.test(header)){
+    if(result.vendor < 0 && comparisonHeaderMatches(header, "vendor")){
       result.vendor = idx;
       return;
     }
 
-    if(result.name < 0 && /(найменування|назва виробу|назва бпак|назва моделі|модель|виріб)/.test(header)){
+    if(result.name < 0 && comparisonHeaderMatches(header, "name")){
       result.name = idx;
       return;
     }
 
-    if(result.model < 0 && /(найменування|назва виробу|назва бпак|назва моделі|модель|виріб)/.test(header)){
+    if(result.model < 0 && comparisonHeaderMatches(header, "name")){
       result.model = idx;
       return;
     }
 
-    if(result.systemPrice < 0 && /(орієнтовна вартість бпак|вартість бпак|ціна бпак|вартість комплексу|ціна комплексу)/.test(header)){
+    if(result.systemPrice < 0 && comparisonHeaderMatches(header, "systemPrice") && !comparisonHeaderMatches(header, "unitPrice")){
       result.systemPrice = idx;
       return;
     }
 
-    if(result.unitPrice < 0 && /(орієнтовна вартість бпла|вартість бпла|ціна бпла)/.test(header)){
+    if(result.unitPrice < 0 && comparisonHeaderMatches(header, "unitPrice")){
       result.unitPrice = idx;
       return;
     }
 
-    if(result.quantity < 0 && /(кількість бпла|кількість у комплексі|кількість апаратів)/.test(header)){
+    if(result.quantity < 0 && comparisonHeaderMatches(header, "quantity")){
       result.quantity = idx;
       return;
     }
 
-    if(result.payload < 0 && /(корисне навантаження|вантаж|навантаження кг)/.test(header)){
+    if(result.payload < 0 && comparisonHeaderMatches(header, "payload")){
       result.payload = idx;
       return;
     }
 
-    if(result.distance < 0 && (hasFlightDistance || /(дальність корисним|макс дальність|дальність км)/.test(header))){
+    if(result.distance < 0 && (hasFlightDistance || comparisonHeaderMatches(header, "distance"))){
       result.distance = idx;
       return;
     }
 
-    if(result.radius < 0 && /(тактичний радіус|робочий радіус|радіус дії)/.test(header)){
+    if(result.radius < 0 && comparisonHeaderMatches(header, "radius")){
       result.radius = idx;
       return;
     }
 
-    if(result.wind < 0 && hasWind && /швидкіст/.test(header)){
+    if(result.wind < 0 && (comparisonHeaderMatches(header, "wind") || (hasWind && /швидкіст/.test(header)))){
       result.wind = idx;
       return;
     }
 
-    if(result.speed < 0 && !hasWind && /(швидкість|крейсерська швидкість|максимальна швидкість)/.test(header)){
+    if(result.speed < 0 && !hasWind && comparisonHeaderMatches(header, "speed")){
       result.speed = idx;
       return;
     }
 
-    if(result.flightTime < 0 && hasFlightTime && !hasDeploy){
+    if(result.flightTime < 0 && !hasDeploy && (hasFlightTime || comparisonHeaderMatches(header, "flightTime"))){
       result.flightTime = idx;
       return;
     }
 
-    if(result.height < 0 && (hasFlightHeight || /(висота польоту|стеля)/.test(header))){
+    if(result.height < 0 && (hasFlightHeight || comparisonHeaderMatches(header, "height"))){
       result.height = idx;
       return;
     }
 
-    if(result.deployTime < 0 && hasDeploy){
+    if(result.deployTime < 0 && (hasDeploy || comparisonHeaderMatches(header, "deployTime"))){
       result.deployTime = idx;
       return;
     }
 
-    if(result.cameraType < 0 && /(тип камери|камера|тепловіз|дневна|денна)/.test(header)){
+    if(result.cameraType < 0 && comparisonHeaderMatches(header, "cameraType")){
       result.cameraType = idx;
       return;
     }
 
-    if(result.codified < 0 && /(кодифікація|кодифік)/.test(header)){
+    if(result.codified < 0 && comparisonHeaderMatches(header, "codified")){
       result.codified = idx;
     }
 
@@ -4029,6 +4106,7 @@ function detectComparisonColumns(headerRow){
 
   if(result.name < 0) result.name = result.model >= 0 ? result.model : 0;
   if(result.model < 0) result.model = result.name;
+  result.units = detectComparisonHeaderUnits(headerRow, result);
 
   return result;
 
@@ -4217,9 +4295,9 @@ function detectComparisonScenario(title="", items=[]){
   const source = `${title || ""} ${(items || []).map(item=>item?.name || "").join(" ")}`.toLowerCase();
 
   if(/перехоп|шахед|інтерцеп|intercept/.test(source)) return "interceptor";
-  if(/розвід|літаков|крил|fixed wing|fw\b/.test(source)) return "recon_fixed_wing";
+  if(/розвід.*(літак|літаков|крил|fixed wing|fw\b)|((літак|літаков|крил|fixed wing|fw\b).*(розвід))/.test(source)) return "recon_fixed_wing";
   if(/логіст|транспорт|вантаж/.test(source)) return "logistics";
-  if(/удар|бомбер|мультиротор|multirotor/.test(source)) return "strike_multirotor";
+  if(/удар|бомбер|мультиротор|multirotor|\bмр\b|fpv/.test(source)) return "strike_multirotor";
 
   return "default";
 
@@ -4230,7 +4308,18 @@ function buildComparisonAnalytics(rows, title=""){
   const grid = Array.isArray(rows) ? rows : [];
   if(grid.length < 2) return null;
 
-  const columns = detectComparisonColumns(grid[0]);
+  const columns = detectComparisonColumns(grid[0], title);
+  const comparisonUnits = columns.units || {
+    price: "грн",
+    payload: "кг",
+    speed: "км/год",
+    flightTime: "хв",
+    height: "м",
+    distance: "км",
+    radius: "км",
+    wind: "м/с",
+    deployTime: "хв",
+  };
 
   const items = grid.slice(1).map((row, index)=>{
     const model = String(row?.[columns.model] || row?.[columns.name] || "").trim();
@@ -4256,6 +4345,8 @@ function buildComparisonAnalytics(rows, title=""){
       deployTime: columns.deployTime >= 0 ? parseAnalyticsNumber(row?.[columns.deployTime]) : null,
       cameraType: columns.cameraType >= 0 ? String(row?.[columns.cameraType] || "").trim() : "",
       codifiedRaw: columns.codified >= 0 ? String(row?.[columns.codified] || "").trim().toLowerCase() : "",
+      subtype: columns.subtype,
+      units: comparisonUnits,
     };
 
     const hasData = [
@@ -4339,6 +4430,8 @@ function buildComparisonAnalytics(rows, title=""){
 
   return {
     items,
+    subtype: columns.subtype,
+    units: comparisonUnits,
     scenario,
     scenarioProfiles,
     featuredProfiles,
@@ -4649,7 +4742,121 @@ function renderComparisonLeaderCards(title, cards){
 
 }
 
+function buildComparisonAutoSummaryHtml(analytics){
+
+  if(!analytics) return "";
+
+  const {
+    items=[],
+    scenario="default",
+    cheapestSystems=[],
+    bestOverall=null,
+    maxDistance=null,
+    maxPayload=null,
+    maxSpeed=null,
+    topFlightTime=[],
+    thermalCount=0,
+    vendorCount=0,
+  } = analytics;
+
+  const priceItems = items.filter(item=>Number.isFinite(item.systemPrice));
+  const minPrice = priceItems.length ? Math.min(...priceItems.map(item=>item.systemPrice)) : null;
+  const maxPrice = priceItems.length ? Math.max(...priceItems.map(item=>item.systemPrice)) : null;
+  const cheapest = cheapestSystems[0] || null;
+  const bestFlightTime = topFlightTime[0] || null;
+
+  let focusLeader = maxPayload;
+  let focusLabel = "Лідер по навантаженню";
+  let focusText = maxPayload
+    ? `Корисне навантаження ${fmtNum(maxPayload.payload)} ${analytics?.units?.payload || "кг"}.`
+    : "Ключового лідера за цим профілем поки не видно.";
+
+  if(scenario === "recon_fixed_wing"){
+    focusLeader = bestFlightTime || maxDistance;
+    focusLabel = bestFlightTime ? "Лідер по тривалості польоту" : "Лідер по дальності";
+    focusText = bestFlightTime
+      ? `Час польоту ${fmtNum(bestFlightTime.flightTime)} ${analytics?.units?.flightTime || "хв"}.`
+      : (maxDistance ? `Дальність ${fmtNum(maxDistance.distance)} ${analytics?.units?.distance || "км"}.` : "Ключового лідера поки не видно.");
+  } else if(scenario === "interceptor"){
+    focusLeader = maxSpeed || maxDistance;
+    focusLabel = maxSpeed ? "Лідер по швидкості" : "Лідер по дальності";
+    focusText = maxSpeed
+      ? `Максимальна швидкість ${fmtNum(maxSpeed.speed)} ${analytics?.units?.speed || "км/год"}.`
+      : (maxDistance ? `Дальність ${fmtNum(maxDistance.distance)} ${analytics?.units?.distance || "км"}.` : "Ключового лідера поки не видно.");
+  } else if(scenario === "logistics"){
+    focusLeader = maxPayload || bestFlightTime;
+    focusLabel = maxPayload ? "Лідер по вантажу" : "Лідер по часу польоту";
+    focusText = maxPayload
+      ? `Корисне навантаження ${fmtNum(maxPayload.payload)} ${analytics?.units?.payload || "кг"}.`
+      : (bestFlightTime ? `Час польоту ${fmtNum(bestFlightTime.flightTime)} ${analytics?.units?.flightTime || "хв"}.` : "Ключового лідера поки не видно.");
+  } else if(scenario === "strike_multirotor"){
+    focusLeader = maxPayload || maxDistance;
+    focusLabel = maxPayload ? "Лідер по навантаженню" : "Лідер по дальності";
+    focusText = maxPayload
+      ? `Корисне навантаження ${fmtNum(maxPayload.payload)} ${analytics?.units?.payload || "кг"}.`
+      : (maxDistance ? `Дальність ${fmtNum(maxDistance.distance)} ${analytics?.units?.distance || "км"}.` : "Ключового лідера поки не видно.");
+  }
+
+  const coverageText = thermalCount <= 0
+    ? `Тепловізійних камер у вибірці не зафіксовано. Виробників: ${fmtNum(vendorCount)}.`
+    : (thermalCount === items.length
+      ? `Усі ${fmtNum(items.length)} позицій мають тепловізійну камеру.`
+      : `Тепловізійна камера є у ${fmtNum(thermalCount)} з ${fmtNum(items.length)} позицій.`);
+
+  const cards = [
+    {
+      label: "Найдоступніший варіант",
+      value: cheapest ? htmlesc(cheapest.name) : "—",
+      text: cheapest && Number.isFinite(cheapest.systemPrice)
+        ? `Вартість комплексу: ${fmtCompactMoneyUa(cheapest.systemPrice)}.`
+        : "По ціні даних поки недостатньо.",
+    },
+    {
+      label: focusLabel,
+      value: focusLeader ? htmlesc(focusLeader.name) : "—",
+      text: focusText,
+    },
+    {
+      label: "Збалансований вибір",
+      value: bestOverall ? htmlesc(bestOverall.name) : "—",
+      text: bestOverall && Number.isFinite(bestOverall.systemPrice)
+        ? `Без переплати: ${fmtCompactMoneyUa(bestOverall.systemPrice)} за сильний загальний профіль.`
+        : "Загальний рейтинг поки не зібрав достатньо даних.",
+    },
+    {
+      label: "Зріз вибірки",
+      value: (minPrice != null && maxPrice != null) ? `${fmtCompactMoneyUa(minPrice)} – ${fmtCompactMoneyUa(maxPrice)}` : fmtNum(items.length),
+      text: coverageText,
+    },
+  ];
+
+  return `
+    <div class="staffing-summary-grid comparison-summary-grid">
+      ${cards.map(card=>`
+        <div class="staffing-summary-card comparison-summary-card">
+          <div class="staffing-summary-k">${card.label}</div>
+          <div class="staffing-summary-v">${card.value}</div>
+          <div class="staffing-summary-s">${card.text}</div>
+        </div>
+      `).join("")}
+    </div>
+  `;
+
+}
+
 function buildComparisonItemDetailHtml(item){
+
+  const units = item?.units || {
+    price: "грн",
+    payload: "кг",
+    speed: "км/год",
+    flightTime: "хв",
+    height: "м",
+    distance: "км",
+    radius: "км",
+    wind: "м/с",
+    deployTime: "хв",
+  };
 
   const classifyAccent = (key, value)=>{
     const num = Number(value);
@@ -4702,19 +4909,19 @@ function buildComparisonItemDetailHtml(item){
     {
       title: "Льотні характеристики",
       rows: [
-        {label:"Дальність", value:Number.isFinite(item.distance) ? `${fmtNum(item.distance)} км` : "—", accent:classifyAccent("distance", item.distance)},
-        {label:"Час польоту", value:Number.isFinite(item.flightTime) ? `${fmtNum(item.flightTime)} хв` : "—", accent:classifyAccent("flightTime", item.flightTime)},
-        {label:"Швидкість", value:Number.isFinite(item.speed) ? `${fmtNum(item.speed)} км/год` : "—", accent:classifyAccent("speed", item.speed)},
-        {label:"Радіус", value:Number.isFinite(item.radius) ? `${fmtNum(item.radius)} км` : "—", accent:classifyAccent("radius", item.radius)},
-        {label:"Висота", value:Number.isFinite(item.height) ? `${fmtNum(item.height)} м` : "—", accent:classifyAccent("height", item.height)},
-        {label:"Стійкість до вітру", value:Number.isFinite(item.wind) ? `${fmtNum(item.wind)} м/с` : "—", accent:classifyAccent("wind", item.wind)},
+        {label:"Дальність", value:Number.isFinite(item.distance) ? `${fmtNum(item.distance)} ${units.distance}` : "—", accent:classifyAccent("distance", item.distance)},
+        {label:"Час польоту", value:Number.isFinite(item.flightTime) ? `${fmtNum(item.flightTime)} ${units.flightTime}` : "—", accent:classifyAccent("flightTime", item.flightTime)},
+        {label:"Швидкість", value:Number.isFinite(item.speed) ? `${fmtNum(item.speed)} ${units.speed}` : "—", accent:classifyAccent("speed", item.speed)},
+        {label:"Радіус", value:Number.isFinite(item.radius) ? `${fmtNum(item.radius)} ${units.radius}` : "—", accent:classifyAccent("radius", item.radius)},
+        {label:"Висота", value:Number.isFinite(item.height) ? `${fmtNum(item.height)} ${units.height}` : "—", accent:classifyAccent("height", item.height)},
+        {label:"Стійкість до вітру", value:Number.isFinite(item.wind) ? `${fmtNum(item.wind)} ${units.wind}` : "—", accent:classifyAccent("wind", item.wind)},
       ],
     },
     {
       title: "Навантаження та розгортання",
       rows: [
-        {label:"Корисне навантаження", value:Number.isFinite(item.payload) ? `${fmtNum(item.payload)} кг` : "—", accent:classifyAccent("payload", item.payload)},
-        {label:"Час розгортання", value:Number.isFinite(item.deployTime) ? `${fmtNum(item.deployTime)} хв` : "—", accent:classifyAccent("deployTime", item.deployTime)},
+        {label:"Корисне навантаження", value:Number.isFinite(item.payload) ? `${fmtNum(item.payload)} ${units.payload}` : "—", accent:classifyAccent("payload", item.payload)},
+        {label:"Час розгортання", value:Number.isFinite(item.deployTime) ? `${fmtNum(item.deployTime)} ${units.deployTime}` : "—", accent:classifyAccent("deployTime", item.deployTime)},
       ],
     },
     {
@@ -4815,7 +5022,7 @@ function buildComparisonItemDetailHtml(item){
 
 }
 
-function renderComparisonSwitchTopBlock(title, itemsByKey, defaultKey="price"){
+function renderComparisonSwitchTopBlock(title, itemsByKey, units={}, defaultKey="price"){
 
   const buttons = [
     {key:"overall", label:"Загальний"},
@@ -4836,14 +5043,14 @@ function renderComparisonSwitchTopBlock(title, itemsByKey, defaultKey="price"){
 
   const panels = {
     overall: renderComparisonTopList("Рейтинг за загальним критерієм", itemsByKey.overall || [], "universalScore", "Загальний рейтинг", ""),
-    price: renderComparisonTopListAsc("Рейтинг за ціною", itemsByKey.price || [], "systemPrice", "Ціна", " грн"),
-    distance: renderComparisonTopList("Рейтинг за дальністю", itemsByKey.distance || [], "distance", "Дальність", " км"),
-    payload: renderComparisonTopList("Рейтинг за навантаженням", itemsByKey.payload || [], "payload", "Навантаження", " кг"),
-    speed: renderComparisonTopList("Рейтинг за швидкістю", itemsByKey.speed || [], "speed", "Швидкість", " км/год"),
-    flightTime: renderComparisonTopList("Рейтинг за часом польоту", itemsByKey.flightTime || [], "flightTime", "Час польоту", " хв"),
-    radius: renderComparisonTopList("Рейтинг за радіусом", itemsByKey.radius || [], "radius", "Радіус", " км"),
-    height: renderComparisonTopList("Рейтинг за висотою", itemsByKey.height || [], "height", "Висота", " м"),
-    wind: renderComparisonTopList("Рейтинг за стійкістю до вітру", itemsByKey.wind || [], "wind", "Вітер", " м/с"),
+    price: renderComparisonTopListAsc("Рейтинг за ціною", itemsByKey.price || [], "systemPrice", "Ціна", ` ${units.price || "грн"}`),
+    distance: renderComparisonTopList("Рейтинг за дальністю", itemsByKey.distance || [], "distance", "Дальність", ` ${units.distance || "км"}`),
+    payload: renderComparisonTopList("Рейтинг за навантаженням", itemsByKey.payload || [], "payload", "Навантаження", ` ${units.payload || "кг"}`),
+    speed: renderComparisonTopList("Рейтинг за швидкістю", itemsByKey.speed || [], "speed", "Швидкість", ` ${units.speed || "км/год"}`),
+    flightTime: renderComparisonTopList("Рейтинг за часом польоту", itemsByKey.flightTime || [], "flightTime", "Час польоту", ` ${units.flightTime || "хв"}`),
+    radius: renderComparisonTopList("Рейтинг за радіусом", itemsByKey.radius || [], "radius", "Радіус", ` ${units.radius || "км"}`),
+    height: renderComparisonTopList("Рейтинг за висотою", itemsByKey.height || [], "height", "Висота", ` ${units.height || "м"}`),
+    wind: renderComparisonTopList("Рейтинг за стійкістю до вітру", itemsByKey.wind || [], "wind", "Вітер", ` ${units.wind || "м/с"}`),
   };
 
   return `
@@ -4889,6 +5096,8 @@ function buildComparisonAnalyticsModalHtml(rows, title=""){
 
     const {
       items,
+      subtype,
+      units,
       avgSystemPrice,
     maxDistance,
     maxPayload,
@@ -4946,13 +5155,13 @@ function buildComparisonAnalyticsModalHtml(rows, title=""){
     `;
 
     const technicalLeaders = renderComparisonLeaderCards("Лідери за технічними критеріями", [
-    maxDistance ? {label:"Дальність", item:maxDistance, value:maxDistance.distance, metricLabel:"Дальність", unit:" км"} : null,
-    maxPayload ? {label:"Навантаження", item:maxPayload, value:maxPayload.payload, metricLabel:"Навантаження", unit:" кг"} : null,
-    maxSpeed ? {label:"Швидкість", item:maxSpeed, value:maxSpeed.speed, metricLabel:"Швидкість", unit:" км/год"} : null,
-    topFlightTime[0] ? {label:"Час польоту", item:topFlightTime[0], value:topFlightTime[0].flightTime, metricLabel:"Час польоту", unit:" хв"} : null,
-    maxRadius ? {label:"Радіус", item:maxRadius, value:maxRadius.radius, metricLabel:"Радіус", unit:" км"} : null,
-    maxHeight ? {label:"Висота", item:maxHeight, value:maxHeight.height, metricLabel:"Висота", unit:" м"} : null,
-    maxWind ? {label:"Стійкість до вітру", item:maxWind, value:maxWind.wind, metricLabel:"Вітер", unit:" м/с"} : null,
+    maxDistance ? {label:"Дальність", item:maxDistance, value:maxDistance.distance, metricLabel:"Дальність", unit:` ${units?.distance || "км"}`} : null,
+    maxPayload ? {label:"Навантаження", item:maxPayload, value:maxPayload.payload, metricLabel:"Навантаження", unit:` ${units?.payload || "кг"}`} : null,
+    maxSpeed ? {label:"Швидкість", item:maxSpeed, value:maxSpeed.speed, metricLabel:"Швидкість", unit:` ${units?.speed || "км/год"}`} : null,
+    topFlightTime[0] ? {label:"Час польоту", item:topFlightTime[0], value:topFlightTime[0].flightTime, metricLabel:"Час польоту", unit:` ${units?.flightTime || "хв"}`} : null,
+    maxRadius ? {label:"Радіус", item:maxRadius, value:maxRadius.radius, metricLabel:"Радіус", unit:` ${units?.radius || "км"}`} : null,
+    maxHeight ? {label:"Висота", item:maxHeight, value:maxHeight.height, metricLabel:"Висота", unit:` ${units?.height || "м"}`} : null,
+    maxWind ? {label:"Стійкість до вітру", item:maxWind, value:maxWind.wind, metricLabel:"Вітер", unit:` ${units?.wind || "м/с"}`} : null,
     ]);
   const switchTopBlock = renderComparisonSwitchTopBlock("Рейтинг по критерію", {
     overall: overallTop,
@@ -4964,11 +5173,12 @@ function buildComparisonAnalyticsModalHtml(rows, title=""){
     radius: topRadius,
     height: topHeight,
     wind: topWind,
-  }, "overall");
+  }, units, "overall");
 
     return `
       <div class="staffing-analytics-modal comparison-analytics-modal">
         ${summaryGrid}
+        ${buildComparisonAutoSummaryHtml(analytics)}
         ${technicalLeaders}
         ${switchTopBlock}
       </div>
