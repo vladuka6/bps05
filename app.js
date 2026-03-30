@@ -5688,11 +5688,27 @@ function buildDeltaNrkAutoSummaryHtml(analytics){
 
   if(!analytics) return "";
 
+  const deliveredPercent = analytics.missionCount ? Math.round((analytics.deliveredCount / analytics.missionCount) * 100) : 0;
   const cards = [
     {
-      label:"Місії",
+      label:"Місій",
       value: fmtNum(analytics.missionCount),
-      text: `Доставлено ${fmtNum(analytics.deliveredCount)} · Не доставлено ${fmtNum(analytics.notDeliveredCount)} · Евакуаційні ${fmtNum(analytics.evacuationCount)}`,
+      text: "У вибірці",
+    },
+    {
+      label:"Результат",
+      value: fmtNum(analytics.deliveredCount),
+      text: `${fmtNum(deliveredPercent)}% успішно · Не доставлено ${fmtNum(analytics.notDeliveredCount)} · Евакуаційні ${fmtNum(analytics.evacuationCount)}`,
+    },
+    {
+      label:"Вага",
+      value: analytics.totalWeight > 0 ? `${fmtNum(analytics.totalWeight)} кг` : "—",
+      text: analytics.avgWeight > 0 ? `Сер. ${fmtNum(analytics.avgWeight)} кг` : "По вазі даних поки немає.",
+    },
+    {
+      label:"Надійність",
+      value: `${fmtNum(analytics.returnRate)}%`,
+      text: `Втрати ${fmtNum(analytics.lossCount)} · Пошкоджено ${fmtNum(analytics.damagedCount)}`,
     },
     {
       label:"Основний тип",
@@ -5705,31 +5721,21 @@ function buildDeltaNrkAutoSummaryHtml(analytics){
       text: analytics.topAsset ? `${fmtNum(analytics.topAsset.value)} місій на цьому засобі.` : "Даних по засобах недостатньо.",
     },
     {
-      label:"Вага",
-      value: analytics.totalWeight > 0 ? `${fmtNum(analytics.totalWeight)} кг` : "—",
-      text: analytics.avgWeight > 0 ? `Сер. вага ${fmtNum(analytics.avgWeight)} кг.` : "По вазі вантажу даних поки немає.",
-    },
-    {
       label:"Макс. вантаж",
       value: analytics.maxCargoAsset?.maxWeight > 0 ? `${fmtNum(analytics.maxCargoAsset.maxWeight)} кг` : "—",
       text: analytics.maxCargoAsset
         ? `${analytics.maxCargoAsset.label} · сер. ${fmtNum(analytics.maxCargoAsset.avgWeight)} кг`
         : "По платформах вага поки не визначена.",
     },
-    {
-      label:"Надійність",
-      value: `${fmtNum(analytics.returnRate)}%`,
-      text: `Повернення ${fmtNum(analytics.returnedCount)} · Пошкоджено ${fmtNum(analytics.damagedCount)} · Втрати ${fmtNum(analytics.lossCount)}`,
-    },
   ];
 
   return `
-    <div class="staffing-summary-grid comparison-summary-grid">
+    <div class="delta-nrk-summary-row">
       ${cards.map(card=>`
-        <div class="staffing-summary-card comparison-summary-card">
-          <div class="staffing-summary-k">${card.label}</div>
-          <div class="staffing-summary-v">${card.value}</div>
-          <div class="staffing-summary-s">${card.text}</div>
+        <div class="delta-nrk-summary-card">
+          <div class="delta-nrk-summary-k">${card.label}</div>
+          <div class="delta-nrk-summary-v">${card.value}</div>
+          <div class="delta-nrk-summary-s">${card.text}</div>
         </div>
       `).join("")}
     </div>
@@ -6735,7 +6741,6 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
       <div class="staffing-analytics-modal comparison-analytics-modal delta-nrk-analytics-modal">
         ${filtersBlock}
         ${diagnosticsBlock}
-        ${buildDeltaNrkPrimaryKpisHtml(analytics)}
         ${buildDeltaNrkAutoSummaryHtml(analytics)}
         <div class="item analytics-block">
           <div class="hint">За поточними фільтрами місій не знайдено. Спробуй інший підрозділ або платформу.</div>
@@ -6993,7 +6998,6 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
     <div class="staffing-analytics-modal comparison-analytics-modal delta-nrk-analytics-modal">
       ${filtersBlock}
       ${diagnosticsBlock}
-      ${buildDeltaNrkPrimaryKpisHtml(analytics)}
       ${buildDeltaNrkAutoSummaryHtml(analytics)}
       ${buildDeltaNrkTimeQualityHtml(analytics)}
       <div class="eval-donut-grid">
