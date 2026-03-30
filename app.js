@@ -3055,68 +3055,77 @@ function abbreviateStaffingUnitLabel(value){
 
 }
 
-function buildStaffingLineChartSvg(seriesList, labels){
+function buildStaffingBarChartSvg(seriesList, labels, opts={}){
 
   const series = Array.isArray(seriesList) ? seriesList.filter(item=>Array.isArray(item?.values) && item.values.some(Number.isFinite)) : [];
   const unitLabels = Array.isArray(labels) ? labels : [];
-  if(!series.length || unitLabels.length < 2) return "";
+  if(!series.length || unitLabels.length < 1) return "";
 
-  const width = Math.max(560, unitLabels.length * 72);
-  const height = 220;
-  const padTop = 18;
+  const width = Math.max(560, unitLabels.length * (series.length > 1 ? 84 : 62));
+  const height = 228;
+  const padTop = 16;
   const padRight = 18;
-  const padBottom = 44;
-  const padLeft = 18;
-
+  const padBottom = 50;
+  const padLeft = 22;
+  const chartHeight = height - padTop - padBottom;
+  const chartWidth = width - padLeft - padRight;
+  const groupWidth = chartWidth / Math.max(unitLabels.length, 1);
+  const innerGap = series.length > 1 ? 4 : 0;
+  const usableGroupWidth = Math.max(groupWidth - 10, 18);
+  const barWidth = Math.max(Math.min((usableGroupWidth - innerGap * Math.max(series.length - 1, 0)) / Math.max(series.length, 1), 18), 8);
   const allValues = series.flatMap(item=>item.values.map(value=>Number(value)).filter(Number.isFinite));
   if(!allValues.length) return "";
 
-  const min = Math.min(...allValues);
-  const max = Math.max(...allValues);
+  const max = Math.max(...allValues, Number(opts.maxValue || 0), 1);
+  const min = Number(opts.minValue || 0);
   const range = Math.max(max - min, 1);
-  const chartHeight = height - padTop - padBottom;
-  const stepX = (width - padLeft - padRight) / Math.max(unitLabels.length - 1, 1);
   const gridValues = Array.from({length:4}, (_, idx)=>min + ((range / 3) * idx));
-
-  const paths = series.map((serie, serieIndex)=>{
-    const points = serie.values.map((value, index)=>{
-      const num = Number(value);
-      const safe = Number.isFinite(num) ? num : min;
-      const x = padLeft + stepX * index;
-      const y = height - padBottom - (((safe - min) / range) * chartHeight);
-      return {x, y, value: safe};
-    });
-
-    const d = points.map((point, index)=>`${index===0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(" ");
-    const area = `${d} L ${points[points.length - 1].x.toFixed(2)} ${(height - padBottom).toFixed(2)} L ${points[0].x.toFixed(2)} ${(height - padBottom).toFixed(2)} Z`;
-    return {serie, points, d, area, delay: serieIndex * 120};
-  });
-
-  const xLabels = unitLabels.map((label, index)=>{
-    const x = padLeft + stepX * index;
-    return `<text class="staffing-linechart-xlabel" x="${x.toFixed(2)}" y="${(height - 16).toFixed(2)}" text-anchor="middle">${htmlesc(abbreviateStaffingUnitLabel(label))}</text>`;
-  }).join("");
 
   const yGrid = gridValues.map(value=>{
     const y = height - padBottom - (((value - min) / range) * chartHeight);
     return `
-      <line class="staffing-linechart-gridline" x1="${padLeft}" y1="${y.toFixed(2)}" x2="${(width - padRight).toFixed(2)}" y2="${y.toFixed(2)}"></line>
-      <text class="staffing-linechart-ylabel" x="${(padLeft - 6).toFixed(2)}" y="${(y + 4).toFixed(2)}" text-anchor="end">${htmlesc(fmtNum(value))}</text>
+      <line class="staffing-barchart-gridline" x1="${padLeft}" y1="${y.toFixed(2)}" x2="${(width - padRight).toFixed(2)}" y2="${y.toFixed(2)}"></line>
+      <text class="staffing-barchart-ylabel" x="${(padLeft - 6).toFixed(2)}" y="${(y + 4).toFixed(2)}" text-anchor="end">${htmlesc(fmtNum(value))}</text>
+    `;
+  }).join("");
+
+  const bars = unitLabels.map((label, groupIndex)=>{
+    const groupX = padLeft + groupWidth * groupIndex + Math.max((groupWidth - usableGroupWidth) / 2, 0);
+    const xLabelX = padLeft + groupWidth * groupIndex + (groupWidth / 2);
+    const seriesBars = series.map((serie, serieIndex)=>{
+      const raw = Number(serie.values[groupIndex]);
+      const value = Number.isFinite(raw) ? raw : 0;
+      const barHeight = ((value - min) / range) * chartHeight;
+      const safeHeight = Math.max(barHeight, 0);
+      const x = groupX + (barWidth + innerGap) * serieIndex;
+      const y = height - padBottom - safeHeight;
+      return `
+        <rect
+          class="staffing-barchart-bar is-animated-barchart"
+          x="${x.toFixed(2)}"
+          y="${y.toFixed(2)}"
+          width="${barWidth.toFixed(2)}"
+          height="${safeHeight.toFixed(2)}"
+          rx="4"
+          ry="4"
+          style="--bar-color:${serie.color}; --bar-delay:${(groupIndex * 35) + (serieIndex * 80)}ms;"
+        ></rect>
+      `;
+    }).join("");
+
+    return `
+      <g class="staffing-barchart-group">
+        ${seriesBars}
+        <text class="staffing-barchart-xlabel" x="${xLabelX.toFixed(2)}" y="${(height - 18).toFixed(2)}" text-anchor="middle">${htmlesc(abbreviateStaffingUnitLabel(label))}</text>
+      </g>
     `;
   }).join("");
 
   return `
-    <div class="staffing-linechart-scroll">
-      <svg class="staffing-linechart-svg" viewBox="0 0 ${width} ${height}" style="min-width:${width}px" preserveAspectRatio="none" aria-hidden="true">
+    <div class="staffing-barchart-scroll">
+      <svg class="staffing-barchart-svg" viewBox="0 0 ${width} ${height}" style="min-width:${width}px" preserveAspectRatio="none" aria-hidden="true">
         ${yGrid}
-        ${paths.map(path=>`
-          <path class="staffing-linechart-area is-animated-linechart" d="${path.area}" style="--line-color:${path.serie.color}; --line-delay:${path.delay}ms;"></path>
-          <path class="staffing-linechart-line is-animated-linechart" d="${path.d}" style="--line-color:${path.serie.color}; --line-delay:${path.delay}ms;"></path>
-          ${path.points.map((point, pointIndex)=>`
-            <circle class="staffing-linechart-dot ${pointIndex===path.points.length-1 ? "is-last" : ""}" cx="${point.x.toFixed(2)}" cy="${point.y.toFixed(2)}" r="${pointIndex===path.points.length-1 ? "4" : "2.8"}" style="--line-color:${path.serie.color}; --line-delay:${path.delay + pointIndex * 25}ms;"></circle>
-          `).join("")}
-        `).join("")}
-        ${xLabels}
+        ${bars}
       </svg>
     </div>
   `;
@@ -3129,15 +3138,15 @@ function buildStaffingUnitChartsHtml(items){
   if(rows.length < 2) return "";
 
   const labels = rows.map(item=>item.name);
-  const quantityChart = buildStaffingLineChartSvg([
+  const quantityChart = buildStaffingBarChartSvg([
     {label:"План", color:"#6d8ff5", values: rows.map(item=>Number(item.plan || 0))},
     {label:"Факт", color:"#44b678", values: rows.map(item=>Number(item.fact || 0))},
     {label:"Нестача", color:"#ffb347", values: rows.map(item=>Number(item.shortage || 0))},
   ], labels);
 
-  const percentChart = buildStaffingLineChartSvg([
+  const percentChart = buildStaffingBarChartSvg([
     {label:"% укомплектованості", color:"#7a6cf3", values: rows.map(item=>Number(item.percent || 0))},
-  ], labels);
+  ], labels, {maxValue:100});
 
   const legend = (items)=>items.map(item=>`
     <div class="staffing-linechart-legend-item">
@@ -3165,7 +3174,7 @@ function buildStaffingUnitChartsHtml(items){
         <div class="staffing-linechart-legend">
           ${legend([{label:"% укомплектованості", color:"#7a6cf3"}])}
         </div>
-        <div class="hint staffing-linechart-note">Дозволяє одразу побачити, де показник провалюється.</div>
+        <div class="hint staffing-linechart-note">Шкала до 100%, щоб одразу бачити провали і лідерів.</div>
         ${percentChart}
       </div>
     </div>
