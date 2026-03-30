@@ -5574,6 +5574,12 @@ function buildDeltaNrkInsightModalHtml(sections){
 
 }
 
+function attrEsc(s){
+
+  return htmlesc(s);
+
+}
+
 function buildDeltaNrkAutoSummaryHtml(analytics){
 
   if(!analytics) return "";
