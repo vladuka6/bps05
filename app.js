@@ -3071,7 +3071,20 @@ function buildStaffingAutoSummaryHtml(currentAnalytics, previousAnalytics=null){
 
   const topShortageItem = (currentAnalytics.topShortage || [])[0] || null;
   const bestFilledItem = (currentAnalytics.bestFilled || [])[0] || null;
+  const topShortageGroup = topShortageItem
+    ? (currentAnalytics.items || []).filter(item=>Number(item.shortage || 0) === Number(topShortageItem.shortage || 0))
+    : [];
+  const bestFilledGroup = bestFilledItem
+    ? (currentAnalytics.items || []).filter(item=>Number(item.percent || 0) === Number(bestFilledItem.percent || 0))
+    : [];
   const criticalZero = (currentAnalytics.items || []).filter(item=>Number(item.percent || 0) <= 0 && Number(item.plan || 0) > 0).length;
+
+  const formatCompactUnitGroup = (items, limit=2)=>{
+    const list = Array.isArray(items) ? items.map(item=>String(item.name || "").trim()).filter(Boolean) : [];
+    if(!list.length) return "";
+    const head = list.slice(0, limit).join(", ");
+    return list.length > limit ? `${head} +${list.length - limit}` : head;
+  };
 
   let dynamicsText = "Суттєвих змін щодо попередньої версії поки не зафіксовано.";
   if(previousAnalytics){
@@ -3099,16 +3112,28 @@ function buildStaffingAutoSummaryHtml(currentAnalytics, previousAnalytics=null){
     },
     {
       label: "Найбільша проблема",
-      value: topShortageItem ? htmlesc(topShortageItem.name) : "—",
+      value: topShortageItem
+        ? (topShortageGroup.length > 1
+          ? `${fmtNum(topShortageItem.shortage)} у ${fmtNum(topShortageGroup.length)} підрозділів`
+          : htmlesc(topShortageItem.name))
+        : "—",
       text: topShortageItem
-        ? `Найбільший некомплект: ${fmtNum(topShortageItem.shortage)}.`
+        ? (topShortageGroup.length > 1
+          ? `Найбільша нестача повторюється у: ${htmlesc(formatCompactUnitGroup(topShortageGroup))}.`
+          : `Найбільший некомплект: ${fmtNum(topShortageItem.shortage)}.`)
         : "Некомплекту в таблиці не виявлено.",
     },
     {
       label: "Найкращий показник",
-      value: bestFilledItem ? htmlesc(bestFilledItem.name) : "—",
+      value: bestFilledItem
+        ? (bestFilledGroup.length > 1
+          ? `${fmtNum(bestFilledItem.percent)}% у ${fmtNum(bestFilledGroup.length)} підрозділів`
+          : htmlesc(bestFilledItem.name))
+        : "—",
       text: bestFilledItem
-        ? `Укомплектованість ${fmtNum(bestFilledItem.percent)}% при факті ${fmtNum(bestFilledItem.fact)}.`
+        ? (bestFilledGroup.length > 1
+          ? `Однаковий найкращий рівень мають: ${htmlesc(formatCompactUnitGroup(bestFilledGroup))}.`
+          : `Укомплектованість ${fmtNum(bestFilledItem.percent)}% при факті ${fmtNum(bestFilledItem.fact)}.`)
         : "Даних для рейтингу поки недостатньо.",
     },
     {
@@ -4257,23 +4282,21 @@ function buildComparisonAnalytics(rows, title=""){
   const maxRadius = pickTopComparisonRows(items, "radius", 1)[0] || null;
   const maxHeight = pickTopComparisonRows(items, "height", 1)[0] || null;
   const maxWind = pickTopComparisonRows(items, "wind", 1)[0] || null;
-  const topDistance = pickTopComparisonRows(items, "distance", 6);
-  const topPayload = pickTopComparisonRows(items, "payload", 6);
-  const topSpeed = pickTopComparisonRows(items, "speed", 6);
-  const topFlightTime = pickTopComparisonRows(items, "flightTime", 6);
-  const topRadius = pickTopComparisonRows(items, "radius", 6);
-  const topHeight = pickTopComparisonRows(items, "height", 6);
-  const topWind = pickTopComparisonRows(items, "wind", 6);
+  const topDistance = pickTopComparisonRows(items, "distance", items.length);
+  const topPayload = pickTopComparisonRows(items, "payload", items.length);
+  const topSpeed = pickTopComparisonRows(items, "speed", items.length);
+  const topFlightTime = pickTopComparisonRows(items, "flightTime", items.length);
+  const topRadius = pickTopComparisonRows(items, "radius", items.length);
+  const topHeight = pickTopComparisonRows(items, "height", items.length);
+  const topWind = pickTopComparisonRows(items, "wind", items.length);
   const cheapestSystems = items
     .filter(item=>Number.isFinite(item.systemPrice))
     .slice()
-    .sort((a,b)=>(a.systemPrice || 0) - (b.systemPrice || 0))
-    .slice(0, 6);
+    .sort((a,b)=>(a.systemPrice || 0) - (b.systemPrice || 0));
   const fastestDeploy = items
     .filter(item=>Number.isFinite(item.deployTime))
     .slice()
-    .sort((a,b)=>(a.deployTime || 0) - (b.deployTime || 0))
-    .slice(0, 6);
+    .sort((a,b)=>(a.deployTime || 0) - (b.deployTime || 0));
   const codifiedCount = items.filter(item=>item.codified).length;
   const thermalCount = items.filter(item=>item.thermal).length;
   const vendors = Array.from(new Set(items.map(item=>item.vendor).filter(Boolean)));
@@ -4291,8 +4314,7 @@ function buildComparisonAnalytics(rows, title=""){
     profileScores[profileId] = scoreKey;
     profileRankings[profileId] = items
       .slice()
-      .sort((a,b)=>(b[scoreKey] || 0) - (a[scoreKey] || 0))
-      .slice(0, 8);
+      .sort((a,b)=>(b[scoreKey] || 0) - (a[scoreKey] || 0));
   });
 
   const overallTop = profileRankings.universal || [];
@@ -4355,7 +4377,7 @@ function renderComparisonTopList(title, rows, metricKey, metricLabel, unit=""){
       <div class="row"><div class="name">${htmlesc(title)}</div></div>
       <div class="comparison-compact-grid">
         ${rows.length
-          ? rows.slice(0, 5).map((item, index)=>{
+          ? rows.map((item, index)=>{
               const detailKey = registerRenderedTableModal(`Модель: ${item.name}`, buildComparisonItemDetailHtml(item));
               return `
               <button type="button" class="comparison-compact-card comparison-card-btn" data-action="openRenderedTableModal" data-arg1="${detailKey}">
@@ -4388,7 +4410,7 @@ function renderComparisonTopListAsc(title, rows, metricKey, metricLabel, unit=""
       <div class="row"><div class="name">${htmlesc(title)}</div></div>
       <div class="comparison-compact-grid">
         ${rows.length
-          ? rows.slice(0, 5).map((item, index)=>{
+          ? rows.map((item, index)=>{
               const detailKey = registerRenderedTableModal(`Модель: ${item.name}`, buildComparisonItemDetailHtml(item));
               return `
               <button type="button" class="comparison-compact-card comparison-card-btn" data-action="openRenderedTableModal" data-arg1="${detailKey}">
@@ -4724,6 +4746,7 @@ function buildComparisonItemDetailHtml(item){
 function renderComparisonSwitchTopBlock(title, itemsByKey, defaultKey="price"){
 
   const buttons = [
+    {key:"overall", label:"Загальний"},
     {key:"price", label:"Ціна"},
     {key:"distance", label:"Дальність"},
     {key:"payload", label:"Навантаження"},
@@ -4739,14 +4762,15 @@ function renderComparisonSwitchTopBlock(title, itemsByKey, defaultKey="price"){
   const groupId = `cmp_top_${Math.random().toString(36).slice(2, 8)}`;
 
   const panels = {
-    price: renderComparisonTopListAsc("ТОП-5 за ціною", itemsByKey.price || [], "systemPrice", "Ціна", " грн"),
-    distance: renderComparisonTopList("ТОП-5 за дальністю", itemsByKey.distance || [], "distance", "Дальність", " км"),
-    payload: renderComparisonTopList("ТОП-5 за навантаженням", itemsByKey.payload || [], "payload", "Навантаження", " кг"),
-    speed: renderComparisonTopList("ТОП-5 за швидкістю", itemsByKey.speed || [], "speed", "Швидкість", " км/год"),
-    flightTime: renderComparisonTopList("ТОП-5 за часом польоту", itemsByKey.flightTime || [], "flightTime", "Час польоту", " хв"),
-    radius: renderComparisonTopList("ТОП-5 за радіусом", itemsByKey.radius || [], "radius", "Радіус", " км"),
-    height: renderComparisonTopList("ТОП-5 за висотою", itemsByKey.height || [], "height", "Висота", " м"),
-    wind: renderComparisonTopList("ТОП-5 за стійкістю до вітру", itemsByKey.wind || [], "wind", "Вітер", " м/с"),
+    overall: renderComparisonTopList("Рейтинг за загальним критерієм", itemsByKey.overall || [], "universalScore", "Загальний рейтинг", ""),
+    price: renderComparisonTopListAsc("Рейтинг за ціною", itemsByKey.price || [], "systemPrice", "Ціна", " грн"),
+    distance: renderComparisonTopList("Рейтинг за дальністю", itemsByKey.distance || [], "distance", "Дальність", " км"),
+    payload: renderComparisonTopList("Рейтинг за навантаженням", itemsByKey.payload || [], "payload", "Навантаження", " кг"),
+    speed: renderComparisonTopList("Рейтинг за швидкістю", itemsByKey.speed || [], "speed", "Швидкість", " км/год"),
+    flightTime: renderComparisonTopList("Рейтинг за часом польоту", itemsByKey.flightTime || [], "flightTime", "Час польоту", " хв"),
+    radius: renderComparisonTopList("Рейтинг за радіусом", itemsByKey.radius || [], "radius", "Радіус", " км"),
+    height: renderComparisonTopList("Рейтинг за висотою", itemsByKey.height || [], "height", "Висота", " м"),
+    wind: renderComparisonTopList("Рейтинг за стійкістю до вітру", itemsByKey.wind || [], "wind", "Вітер", " м/с"),
   };
 
   return `
@@ -4854,7 +4878,8 @@ function buildComparisonAnalyticsModalHtml(rows, title=""){
     maxHeight ? {label:"Висота", item:maxHeight, value:maxHeight.height, metricLabel:"Висота", unit:" м"} : null,
     maxWind ? {label:"Стійкість до вітру", item:maxWind, value:maxWind.wind, metricLabel:"Вітер", unit:" м/с"} : null,
     ]);
-  const switchTopBlock = renderComparisonSwitchTopBlock("Швидкий ТОП-5 по критерію", {
+  const switchTopBlock = renderComparisonSwitchTopBlock("Рейтинг по критерію", {
+    overall: overallTop,
     price: cheapestSystems,
     distance: topDistance,
     payload: topPayload,
@@ -4863,7 +4888,7 @@ function buildComparisonAnalyticsModalHtml(rows, title=""){
     radius: topRadius,
     height: topHeight,
     wind: topWind,
-  }, "price");
+  }, "overall");
 
     return `
       <div class="staffing-analytics-modal comparison-analytics-modal">
