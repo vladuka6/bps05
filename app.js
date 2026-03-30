@@ -6730,7 +6730,7 @@ function openRenderedTableModal(key){
     </div>
     <div class="actions" style="margin-top:14px;">
       <button class="btn ghost" data-action="exportCurrentRenderedModalPng">Скрин PNG</button>
-      <button class="btn ghost" data-action="printCurrentRenderedModal">PDF / Друк</button>
+      <button class="btn ghost" data-action="openCurrentRenderedModalStandalone">Повний звіт</button>
       <button class="btn primary" data-action="hideSheet">Закрити</button>
     </div>
   `, {stack:true});
@@ -6972,6 +6972,114 @@ function printCurrentRenderedModal(){
       }
     }, 250);
   };
+
+}
+
+function buildStandaloneRenderedModalHtml(){
+
+  const bodySource = document.querySelector(".table-modal-body");
+  if(!bodySource) return "";
+
+  const title = String(sheetTitle?.textContent || "Аналітика");
+  const shell = document.createElement("div");
+  shell.className = "print-shell";
+  shell.style.maxWidth = "1200px";
+  shell.style.margin = "0 auto";
+  shell.style.background = "#ffffff";
+  shell.style.borderRadius = "24px";
+  shell.style.boxShadow = "0 18px 50px rgba(24,39,75,.14)";
+  shell.style.overflow = "hidden";
+
+  const head = document.createElement("div");
+  head.className = "print-head";
+  head.style.padding = "20px 22px 14px";
+  head.style.borderBottom = "1px solid rgba(150,170,205,.18)";
+  head.style.background = "#ffffff";
+
+  const titleNode = document.createElement("div");
+  titleNode.className = "print-title";
+  titleNode.textContent = title;
+  titleNode.style.fontSize = "20px";
+  titleNode.style.fontWeight = "900";
+  titleNode.style.lineHeight = "1.25";
+  titleNode.style.color = "#1f2d4a";
+  head.appendChild(titleNode);
+
+  const clone = bodySource.cloneNode(true);
+  copyComputedStylesDeep(bodySource, clone);
+  clone.style.maxHeight = "none";
+  clone.style.height = "auto";
+  clone.style.overflow = "visible";
+  clone.style.padding = clone.style.padding || "18px 20px 22px";
+  clone.querySelectorAll("*").forEach(node=>{
+    if(node instanceof HTMLElement){
+      if(node.classList.contains("comparison-switch-panel") && !node.classList.contains("is-active")){
+        node.style.display = "none";
+      }
+    }
+  });
+
+  shell.appendChild(head);
+  shell.appendChild(clone);
+
+  return `
+    <!doctype html>
+    <html lang="uk">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>${htmlesc(title)}</title>
+        <style>
+          body{
+            margin:0;
+            padding:24px;
+            background:#f4f7fc;
+            color:#1f2d4a;
+            font-family:"Segoe UI", Arial, sans-serif;
+          }
+          @media print{
+            body{
+              padding:0;
+              background:#fff;
+            }
+            .print-shell{
+              max-width:none !important;
+              box-shadow:none !important;
+              border-radius:0 !important;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        ${shell.outerHTML}
+      </body>
+    </html>
+  `;
+
+}
+
+function openCurrentRenderedModalStandalone(){
+
+  const html = buildStandaloneRenderedModalHtml();
+  if(!html){
+    showToast("Немає відкритої аналітики.", "warn");
+    return;
+  }
+
+  try{
+    const blob = new Blob([html], {type:"text/html;charset=utf-8"});
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, "_blank", "noopener,noreferrer");
+    if(!win){
+      showToast("Браузер заблокував нову вкладку.", "warn");
+      URL.revokeObjectURL(url);
+      return;
+    }
+    setTimeout(()=>URL.revokeObjectURL(url), 60000);
+  }catch(err){
+    console.error(err);
+    showToast("Не вдалося відкрити повний звіт.", "warn");
+  }
 
 }
 
@@ -23433,6 +23541,7 @@ const ACTIONS = {
 
   hideSheet,
   exportCurrentRenderedModalPng,
+  openCurrentRenderedModalStandalone,
   printCurrentRenderedModal,
   switchComparisonTopPanel,
   applyDeltaNrkAnalyticsFilters,
