@@ -5540,6 +5540,57 @@ function buildDeltaNrkTopList(title, rows, emptyText){
 
 }
 
+function normalizeDeltaCargoTag(value){
+
+  const normalized = normalizeAnalyticsHeader(value);
+  if(!normalized) return "";
+
+  if(/(^бк$|боєприпас|боеприпас)/.test(normalized)) return "БК";
+  if(/(їжа|вода|харч)/.test(normalized)) return "Їжа / вода";
+  if(/палив/.test(normalized)) return "Паливо";
+  if(/(засоби і обладнання бпла|обладнання бпла|бпла)/.test(normalized)) return "Засоби і обладнання БПЛА";
+  if(/(засоби і обладнання|обладнання)/.test(normalized)) return "Засоби і обладнання";
+  if(/реб/.test(normalized)) return "РЕБ";
+  if(/інше/.test(normalized)) return "Інше";
+
+  return String(value || "").trim();
+
+}
+
+function extractDeltaCargoTags(value){
+
+  const raw = String(value || "")
+    .replace(/\u00A0/g, " ")
+    .replace(/[;|/]+/g, ",")
+    .trim();
+  if(!raw) return [];
+
+  const order = [
+    "БК",
+    "Їжа / вода",
+    "Паливо",
+    "Засоби і обладнання БПЛА",
+    "Засоби і обладнання",
+    "РЕБ",
+    "Інше",
+  ];
+  const orderIndex = new Map(order.map((item, index)=>[item, index]));
+
+  const tags = raw
+    .split(",")
+    .map(item=>normalizeDeltaCargoTag(item))
+    .filter(Boolean);
+
+  const unique = Array.from(new Set(tags));
+  return unique.sort((a,b)=>{
+    const ai = orderIndex.has(a) ? orderIndex.get(a) : 999;
+    const bi = orderIndex.has(b) ? orderIndex.get(b) : 999;
+    if(ai !== bi) return ai - bi;
+    return String(a).localeCompare(String(b), "uk");
+  });
+
+}
+
 function buildDeltaNrkInsightModalHtml(sections){
 
   const blocks = Array.isArray(sections) ? sections.filter(Boolean) : [];
@@ -5889,12 +5940,12 @@ function buildDeltaNrkMonthlyAnalyticsHtml(analytics){
   ];
 
   return `
-    <div class="item analytics-block delta-monthly-block">
+    <div class="item analytics-block delta-monthly-block" data-topswitch-group="${groupId}">
       <div class="comparison-switcher-head">
         <div class="name">Аналітика по місяцях</div>
         <div class="comparison-switcher-buttons">
           ${monthMetrics.map((metric, index)=>`
-            <button class="comparison-switcher-btn ${index === 0 ? "is-active" : ""}" data-action="switchComparisonTopPanel" data-arg1="${groupId}" data-arg2="${metric.key}">${htmlesc(metric.label)}</button>
+            <button type="button" class="comparison-switcher-btn ${index === 0 ? "is-active" : ""}" data-action="switchComparisonTopPanel" data-arg1="${groupId}" data-arg2="${metric.key}">${htmlesc(metric.label)}</button>
           `).join("")}
         </div>
       </div>
@@ -6085,7 +6136,6 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
 
   const taskTypes = countBy(item=>item.taskType);
   const assets = countBy(item=>item.asset);
-  const cargoes = countBy(item=>item.cargo);
   const primaryLinks = countBy(item=>item.primaryLink);
   const reserveLinks = countBy(item=>item.reserveLink);
   const unitsByMissions = countBy(item=>item.unit);
@@ -6096,6 +6146,24 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     unitsByWeightMap.set(key, (unitsByWeightMap.get(key) || 0) + (Number(item.cargoWeight) || 0));
   });
   const unitsByWeight = Array.from(unitsByWeightMap.entries()).map(([label, value])=>({label, value})).sort((a,b)=>b.value-a.value || String(a.label).localeCompare(String(b.label), "uk"));
+
+  const cargoCategoryMap = new Map();
+  const cargoComboMap = new Map();
+  items.forEach(item=>{
+    const tags = extractDeltaCargoTags(item.cargo);
+    item.cargoTags = tags;
+    item.cargoComboLabel = tags.length ? tags.join(" + ") : (String(item.cargo || "").trim() || "Не визначено");
+    if(tags.length){
+      tags.forEach(tag=>{
+        cargoCategoryMap.set(tag, (cargoCategoryMap.get(tag) || 0) + 1);
+      });
+    } else {
+      cargoCategoryMap.set("Не визначено", (cargoCategoryMap.get("Не визначено") || 0) + 1);
+    }
+    cargoComboMap.set(item.cargoComboLabel, (cargoComboMap.get(item.cargoComboLabel) || 0) + 1);
+  });
+  const cargoes = Array.from(cargoCategoryMap.entries()).map(([label, value])=>({label, value})).sort((a,b)=>b.value-a.value || String(a.label).localeCompare(String(b.label), "uk"));
+  const cargoCombos = Array.from(cargoComboMap.entries()).map(([label, value])=>({label, value})).sort((a,b)=>b.value-a.value || String(a.label).localeCompare(String(b.label), "uk"));
 
   const startFilledCount = items.filter(item=>!!item.startAt).length;
   const endFilledCount = items.filter(item=>!!item.endAt).length;
@@ -6200,6 +6268,7 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     taskTypes,
     assets,
     cargoes,
+    cargoCombos,
     primaryLinks,
     reserveLinks,
     unitsByMissions,
@@ -6335,8 +6404,14 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
   const cargoRows = analytics.cargoes.map(item=>({
     label: item.label,
     valueText: fmtNum(item.value),
-    meta: "місій з таким вантажем",
+    meta: "місій з цією категорією",
     tone: "b-ok",
+  }));
+  const cargoComboRows = (analytics.cargoCombos || []).map(item=>({
+    label: item.label,
+    valueText: fmtNum(item.value),
+    meta: "місій з такою комбінацією",
+    tone: "b-blue",
   }));
   const reliabilityRows = [
     {label:"Повернення", valueText: fmtNum(analytics.returnedCount), meta:"успішне завершення місії", tone:"b-ok"},
@@ -6387,6 +6462,12 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
         summary: `Загальна вага: ${fmtNum(analytics.totalWeight)} кг · середня: ${fmtNum(analytics.avgWeight)} кг · максимум: ${fmtNum(analytics.maxWeight)} кг`,
         rows: cargoRows,
         emptyText: "По вантажах даних поки немає.",
+      },
+      {
+        title: "Найчастіші комбінації",
+        summary: `Унікальних комбінацій: ${fmtNum(cargoComboRows.length)}`,
+        rows: cargoComboRows,
+        emptyText: "Комбінацій вантажу поки немає.",
       }
     ])
   );
@@ -6442,7 +6523,7 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
     "По платформах даних поки немає."
   ).replace(
     '<div class="row"><div class="name">Платформи</div></div>',
-    `<div class="row"><div class="name">Платформи</div><button class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${platformsModalKey}">Детальніше</button></div>`
+    `<div class="row"><div class="name">Платформи</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${platformsModalKey}">Детальніше</button></div>`
   );
 
   const cargoBlock = buildDeltaNrkTopList(
@@ -6451,7 +6532,7 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
     "По вантажах даних поки немає."
   ).replace(
     '<div class="row"><div class="name">Вантажі</div></div>',
-    `<div class="row"><div class="name">Вантажі</div><button class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${cargoModalKey}">Детальніше</button></div>`
+    `<div class="row"><div class="name">Вантажі</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${cargoModalKey}">Детальніше</button></div>`
   );
 
   const reliabilityBlock = buildDeltaNrkTopList(
@@ -6460,7 +6541,7 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
     "Даних по статусу засобу поки немає."
   ).replace(
     '<div class="row"><div class="name">Надійність</div></div>',
-    `<div class="row"><div class="name">Надійність</div><button class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${reliabilityModalKey}">Детальніше</button></div>`
+    `<div class="row"><div class="name">Надійність</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${reliabilityModalKey}">Детальніше</button></div>`
   );
 
   const unitsBlock = buildDeltaNrkTopList(
@@ -6469,7 +6550,7 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
     "По підрозділах даних поки немає."
   ).replace(
     '<div class="row"><div class="name">Підрозділи</div></div>',
-    `<div class="row"><div class="name">Підрозділи</div><button class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${unitsModalKey}">Детальніше</button></div>`
+    `<div class="row"><div class="name">Підрозділи</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${unitsModalKey}">Детальніше</button></div>`
   );
 
   const linksBlock = buildDeltaNrkTopList(
@@ -6481,7 +6562,7 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
     "По зв’язку даних поки немає."
   ).replace(
     '<div class="row"><div class="name">Зв’язок</div></div>',
-    `<div class="row"><div class="name">Зв’язок</div><button class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${linksModalKey}">Детальніше</button></div>`
+    `<div class="row"><div class="name">Зв’язок</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${linksModalKey}">Детальніше</button></div>`
   );
 
   return `
