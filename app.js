@@ -5638,6 +5638,7 @@ function buildDeltaNrkInsightModalHtml(sections){
             <div class="name">${htmlesc(section.title || "Аналітика")}</div>
             ${section.summary ? `<div class="hint">${htmlesc(section.summary)}</div>` : ""}
           </div>
+          ${section.clickHint ? `<div class="hint delta-nrk-click-hint">${htmlesc(section.clickHint)}</div>` : ""}
           <div class="comparison-compact-grid">
             ${(section.rows || []).length
               ? section.rows.map((item, index)=>{
@@ -5645,7 +5646,7 @@ function buildDeltaNrkInsightModalHtml(sections){
                     <div class="comparison-compact-rank mono">${index + 1}</div>
                     <div class="comparison-compact-main">
                       <div class="comparison-compact-title">${htmlesc(item.label)}</div>
-                      <div class="comparison-compact-meta">${htmlesc(item.meta || "")}</div>
+                      <div class="comparison-compact-meta">${htmlesc(item.meta || "")}${item.modalKey ? ` · Відкрити місії` : ""}</div>
                     </div>
                     <div class="badge ${item.tone || "b-blue"} mono">${htmlesc(String(item.valueText || ""))}</div>
                   `;
@@ -6509,9 +6510,16 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
   ];
   const reliabilityRows = reliabilityGroups.map(group=>{
     const detailRows = group.items.map(item=>({
-      label: `${item.unit || "Без підрозділу"} · ${item.asset || "Без платформи"}`,
+      label: item.unit || "Без підрозділу",
       valueText: item.resultAt || item.endAt || item.startAt || "Без дати",
-      meta: [item.result || "", item.cargoComboLabel || item.cargo || "", item.missionDurationMinutes ? formatDurationMinutes(item.missionDurationMinutes) : ""].filter(Boolean).join(" · "),
+      meta: [
+        item.asset ? `Платформа: ${item.asset}` : "",
+        item.taskType ? `Тип задачі: ${item.taskType}` : "",
+        item.result ? `Результат: ${item.result}` : "",
+        item.cargoComboLabel || item.cargo ? `Вантаж: ${item.cargoComboLabel || item.cargo}` : "",
+        Number(item.cargoWeight) > 0 ? `Вага: ${fmtNum(item.cargoWeight)} кг` : "",
+        item.missionDurationMinutes ? `Час: ${formatDurationMinutes(item.missionDurationMinutes)}` : "",
+      ].filter(Boolean).join(" · "),
       tone: group.tone,
     }));
     const modalKey = registerRenderedTableModal(
@@ -6586,17 +6594,6 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
       }
     ])
   );
-  const reliabilityModalKey = registerRenderedTableModal(
-    `${analytics.title || "Delta / НРК"} · Надійність`,
-    buildDeltaNrkInsightModalHtml([
-      {
-        title: "Статус засобів",
-        summary: `Повернення: ${fmtNum(analytics.returnRate)}%`,
-        rows: reliabilityRows,
-        emptyText: "Даних по статусу засобу поки немає.",
-      }
-    ])
-  );
   const unitsModalKey = registerRenderedTableModal(
     `${analytics.title || "Delta / НРК"} · Підрозділи`,
     buildDeltaNrkInsightModalHtml([
@@ -6650,14 +6647,29 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
     `<div class="row"><div class="name">Вантажі</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${cargoModalKey}">Детальніше</button></div>`
   );
 
-  const reliabilityBlock = buildDeltaNrkTopList(
-    "Надійність",
-    reliabilityRows,
-    "Даних по статусу засобу поки немає."
-  ).replace(
-    '<div class="row"><div class="name">Надійність</div></div>',
-    `<div class="row"><div class="name">Надійність</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${reliabilityModalKey}">Детальніше</button></div>`
-  );
+  const reliabilityBlock = `
+    <div class="item analytics-block delta-nrk-list">
+      <div class="row"><div class="name">Надійність</div></div>
+      <div class="comparison-compact-grid">
+        ${reliabilityRows.length
+          ? reliabilityRows.map((item, index)=>`
+              <div class="comparison-compact-card delta-nrk-card delta-nrk-reliability-card">
+                <div class="comparison-compact-rank mono">${index + 1}</div>
+                <div class="comparison-compact-main">
+                  <div class="comparison-compact-title">${htmlesc(item.label)}</div>
+                  <div class="comparison-compact-meta">${htmlesc(item.meta || "")}</div>
+                </div>
+                <div class="delta-nrk-reliability-actions">
+                  <div class="badge ${item.tone || "b-blue"} mono">${htmlesc(String(item.valueText || ""))}</div>
+                  <button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${item.modalKey}">Місії</button>
+                </div>
+              </div>
+            `).join("")
+          : `<div class="hint">Даних по статусу засобу поки немає.</div>`
+        }
+      </div>
+    </div>
+  `;
 
   const unitsBlock = buildDeltaNrkTopList(
     "Підрозділи",
@@ -6717,6 +6729,7 @@ function openRenderedTableModal(key){
       ${item.bodyHtml}
     </div>
     <div class="actions" style="margin-top:14px;">
+      <button class="btn ghost" data-action="exportCurrentRenderedModalPng">Скрин PNG</button>
       <button class="btn primary" data-action="hideSheet">Закрити</button>
     </div>
   `, {stack:true});
@@ -6724,6 +6737,135 @@ function openRenderedTableModal(key){
   requestAnimationFrame(()=>{
     animateRenderedDonuts(document.querySelector('.sheet'));
   });
+
+}
+
+function sanitizeExportFilename(name){
+
+  return String(name || "analytics")
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim() || "analytics";
+
+}
+
+function copyComputedStylesDeep(source, target){
+
+  if(!(source instanceof Element) || !(target instanceof Element)) return;
+
+  const computed = getComputedStyle(source);
+  for(let i = 0; i < computed.length; i += 1){
+    const prop = computed[i];
+    try{
+      target.style.setProperty(prop, computed.getPropertyValue(prop), computed.getPropertyPriority(prop));
+    }catch(_){}
+  }
+
+  const sourceChildren = Array.from(source.children || []);
+  const targetChildren = Array.from(target.children || []);
+  for(let i = 0; i < sourceChildren.length; i += 1){
+    if(targetChildren[i]) copyComputedStylesDeep(sourceChildren[i], targetChildren[i]);
+  }
+
+}
+
+async function exportCurrentRenderedModalPng(){
+
+  const bodySource = document.querySelector(".table-modal-body");
+  if(!bodySource){
+    showToast("Немає відкритої аналітики для експорту.", "warn");
+    return;
+  }
+
+  try{
+    const host = document.createElement("div");
+    host.style.position = "fixed";
+    host.style.left = "-100000px";
+    host.style.top = "0";
+    host.style.pointerEvents = "none";
+    host.style.opacity = "0";
+    host.style.zIndex = "-1";
+    host.style.background = "#f4f7fc";
+    host.style.padding = "0";
+
+    const frame = document.createElement("div");
+    frame.style.width = `${Math.ceil((sheetEl?.getBoundingClientRect()?.width || bodySource.getBoundingClientRect().width || 960))}px`;
+    frame.style.maxWidth = "none";
+    frame.style.background = getComputedStyle(sheetEl || document.body).backgroundColor || "#ffffff";
+    frame.style.borderRadius = "24px";
+    frame.style.boxShadow = "0 18px 50px rgba(24,39,75,.14)";
+    frame.style.overflow = "visible";
+    frame.style.padding = "0";
+
+    const titleWrap = document.createElement("div");
+    titleWrap.style.padding = "20px 22px 14px";
+    titleWrap.style.borderBottom = "1px solid rgba(150,170,205,.18)";
+    titleWrap.style.background = getComputedStyle(modal || document.body).backgroundColor || "#ffffff";
+
+    const titleNode = document.createElement("div");
+    titleNode.textContent = String(sheetTitle?.textContent || "Аналітика");
+    titleNode.style.fontSize = "18px";
+    titleNode.style.fontWeight = "900";
+    titleNode.style.lineHeight = "1.25";
+    titleNode.style.color = getComputedStyle(sheetTitle || document.body).color || "#1f2d4a";
+
+    const bodyClone = bodySource.cloneNode(true);
+    copyComputedStylesDeep(bodySource, bodyClone);
+    bodyClone.style.maxHeight = "none";
+    bodyClone.style.height = "auto";
+    bodyClone.style.overflow = "visible";
+    bodyClone.style.padding = bodyClone.style.padding || "18px 20px 22px";
+
+    titleWrap.appendChild(titleNode);
+    frame.appendChild(titleWrap);
+    frame.appendChild(bodyClone);
+    host.appendChild(frame);
+    document.body.appendChild(host);
+
+    await new Promise(resolve=>requestAnimationFrame(resolve));
+
+    const width = Math.ceil(frame.scrollWidth);
+    const height = Math.ceil(frame.scrollHeight);
+    const serialized = new XMLSerializer().serializeToString(frame);
+    const svg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+        <foreignObject width="100%" height="100%">
+          <div xmlns="http://www.w3.org/1999/xhtml">${serialized}</div>
+        </foreignObject>
+      </svg>
+    `;
+    const blob = new Blob([svg], {type:"image/svg+xml;charset=utf-8"});
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+
+    await new Promise((resolve, reject)=>{
+      img.onload = ()=>resolve();
+      img.onerror = reject;
+      img.src = url;
+    });
+
+    const scale = Math.min(window.devicePixelRatio || 1, 2);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.ceil(width * scale);
+    canvas.height = Math.ceil(height * scale);
+    const ctx = canvas.getContext("2d");
+    ctx.scale(scale, scale);
+    ctx.drawImage(img, 0, 0, width, height);
+    URL.revokeObjectURL(url);
+    host.remove();
+
+    const link = document.createElement("a");
+    link.href = canvas.toDataURL("image/png");
+    link.download = `${sanitizeExportFilename(sheetTitle?.textContent || "analytics")}.png`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    showToast("PNG збережено.", "ok");
+  } catch(err){
+    console.error(err);
+    showToast("Не вдалося зберегти PNG.", "warn");
+  }
 
 }
 
@@ -23184,6 +23326,7 @@ const ACTIONS = {
   openSyncLogin,
 
   hideSheet,
+  exportCurrentRenderedModalPng,
   switchComparisonTopPanel,
   applyDeltaNrkAnalyticsFilters,
   resetDeltaNrkAnalyticsFilters,
