@@ -5511,6 +5511,40 @@ function buildDeltaNrkTopList(title, rows, emptyText){
 
 }
 
+function buildDeltaNrkInsightModalHtml(sections){
+
+  const blocks = Array.isArray(sections) ? sections.filter(Boolean) : [];
+
+  return `
+    <div class="delta-nrk-insight-modal">
+      ${blocks.map(section=>`
+        <div class="item analytics-block delta-nrk-list">
+          <div class="row">
+            <div class="name">${htmlesc(section.title || "Аналітика")}</div>
+            ${section.summary ? `<div class="hint">${htmlesc(section.summary)}</div>` : ""}
+          </div>
+          <div class="comparison-compact-grid">
+            ${(section.rows || []).length
+              ? section.rows.map((item, index)=>`
+                  <div class="comparison-compact-card delta-nrk-card">
+                    <div class="comparison-compact-rank mono">${index + 1}</div>
+                    <div class="comparison-compact-main">
+                      <div class="comparison-compact-title">${htmlesc(item.label)}</div>
+                      <div class="comparison-compact-meta">${htmlesc(item.meta || "")}</div>
+                    </div>
+                    <div class="badge ${item.tone || "b-blue"} mono">${htmlesc(String(item.valueText || ""))}</div>
+                  </div>
+                `).join("")
+              : `<div class="hint">${htmlesc(section.emptyText || "Даних поки немає.")}</div>`
+            }
+          </div>
+        </div>
+      `).join("")}
+    </div>
+  `;
+
+}
+
 function buildDeltaNrkAutoSummaryHtml(analytics){
 
   if(!analytics) return "";
@@ -5700,66 +5734,162 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title=""){
     </div>
   `;
 
+  const platformsRows = analytics.assets.map(item=>({
+    label: item.label,
+    valueText: fmtNum(item.value),
+    meta: `${fmtNum(analytics.missionCount ? Math.round((item.value / analytics.missionCount) * 100) : 0)}% місій`,
+    tone: "b-blue",
+  }));
+  const cargoRows = analytics.cargoes.map(item=>({
+    label: item.label,
+    valueText: fmtNum(item.value),
+    meta: "місій з таким вантажем",
+    tone: "b-ok",
+  }));
+  const reliabilityRows = [
+    {label:"Повернення", valueText: fmtNum(analytics.returnedCount), meta:"успішне завершення місії", tone:"b-ok"},
+    {label:"Повернення з пошкодженням", valueText: fmtNum(analytics.damagedCount), meta:"пошкоджені засоби", tone:"b-warn"},
+    {label:"Втрата", valueText: fmtNum(analytics.lossCount), meta:"втрачені засоби", tone:"b-danger"},
+  ];
+  const unitMissionRows = analytics.unitsByMissions.map(item=>({
+    label: item.label,
+    valueText: fmtNum(item.value),
+    meta: "місій",
+    tone: "b-blue",
+  }));
+  const unitWeightRows = analytics.unitsByWeight.map(item=>({
+    label: item.label,
+    valueText: fmtNum(item.value),
+    meta: "кг вантажу",
+    tone: "b-ok",
+  }));
+  const primaryLinkRows = analytics.primaryLinks.map(item=>({
+    label: item.label,
+    valueText: fmtNum(item.value),
+    meta: "основний канал",
+    tone: "b-blue",
+  }));
+  const reserveLinkRows = analytics.reserveLinks.map(item=>({
+    label: item.label,
+    valueText: fmtNum(item.value),
+    meta: "резервний канал",
+    tone: "b-ok",
+  }));
+
+  const platformsModalKey = registerRenderedTableModal(
+    `${analytics.title || "Delta / НРК"} · Платформи`,
+    buildDeltaNrkInsightModalHtml([
+      {
+        title: "Платформи",
+        summary: `Усього платформ: ${fmtNum(platformsRows.length)} · місій: ${fmtNum(analytics.missionCount)}`,
+        rows: platformsRows,
+        emptyText: "По платформах даних поки немає.",
+      }
+    ])
+  );
+  const cargoModalKey = registerRenderedTableModal(
+    `${analytics.title || "Delta / НРК"} · Вантажі`,
+    buildDeltaNrkInsightModalHtml([
+      {
+        title: "Категорії вантажу",
+        summary: `Загальна вага: ${fmtNum(analytics.totalWeight)} кг · середня: ${fmtNum(analytics.avgWeight)} кг · максимум: ${fmtNum(analytics.maxWeight)} кг`,
+        rows: cargoRows,
+        emptyText: "По вантажах даних поки немає.",
+      }
+    ])
+  );
+  const reliabilityModalKey = registerRenderedTableModal(
+    `${analytics.title || "Delta / НРК"} · Надійність`,
+    buildDeltaNrkInsightModalHtml([
+      {
+        title: "Статус засобів",
+        summary: `Повернення: ${fmtNum(analytics.returnRate)}%`,
+        rows: reliabilityRows,
+        emptyText: "Даних по статусу засобу поки немає.",
+      }
+    ])
+  );
+  const unitsModalKey = registerRenderedTableModal(
+    `${analytics.title || "Delta / НРК"} · Підрозділи`,
+    buildDeltaNrkInsightModalHtml([
+      {
+        title: "За кількістю місій",
+        summary: `Усього підрозділів: ${fmtNum(unitMissionRows.length)}`,
+        rows: unitMissionRows,
+        emptyText: "По підрозділах даних поки немає.",
+      },
+      {
+        title: "За масою перевезень",
+        summary: `Загальна вага: ${fmtNum(analytics.totalWeight)} кг`,
+        rows: unitWeightRows,
+        emptyText: "По масі перевезень даних поки немає.",
+      }
+    ])
+  );
+  const linksModalKey = registerRenderedTableModal(
+    `${analytics.title || "Delta / НРК"} · Зв’язок`,
+    buildDeltaNrkInsightModalHtml([
+      {
+        title: "Основний канал",
+        summary: `Унікальних каналів: ${fmtNum(primaryLinkRows.length)}`,
+        rows: primaryLinkRows,
+        emptyText: "По основному зв’язку даних поки немає.",
+      },
+      {
+        title: "Резервний канал",
+        summary: `Унікальних каналів: ${fmtNum(reserveLinkRows.length)}`,
+        rows: reserveLinkRows,
+        emptyText: "По резервному зв’язку даних поки немає.",
+      }
+    ])
+  );
+
   const platformsBlock = buildDeltaNrkTopList(
     "Платформи",
-    analytics.assets.slice(0, 8).map(item=>({
-      label: item.label,
-      valueText: fmtNum(item.value),
-      meta: "місій",
-      tone: "b-blue",
-    })),
+    platformsRows.slice(0, 8),
     "По платформах даних поки немає."
+  ).replace(
+    '<div class="row"><div class="name">Платформи</div></div>',
+    `<div class="row"><div class="name">Платформи</div><button class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${platformsModalKey}">Детальніше</button></div>`
   );
 
   const cargoBlock = buildDeltaNrkTopList(
     "Вантажі",
-    analytics.cargoes.slice(0, 8).map(item=>({
-      label: item.label,
-      valueText: fmtNum(item.value),
-      meta: "місій з таким вантажем",
-      tone: "b-ok",
-    })),
+    cargoRows.slice(0, 8),
     "По вантажах даних поки немає."
+  ).replace(
+    '<div class="row"><div class="name">Вантажі</div></div>',
+    `<div class="row"><div class="name">Вантажі</div><button class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${cargoModalKey}">Детальніше</button></div>`
   );
 
   const reliabilityBlock = buildDeltaNrkTopList(
     "Надійність",
-    [
-      {label:"Повернення", valueText: fmtNum(analytics.returnedCount), meta:"успішне завершення місії", tone:"b-ok"},
-      {label:"Повернення з пошкодженням", valueText: fmtNum(analytics.damagedCount), meta:"пошкоджені засоби", tone:"b-warn"},
-      {label:"Втрата", valueText: fmtNum(analytics.lossCount), meta:"втрачені засоби", tone:"b-danger"},
-    ],
+    reliabilityRows,
     "Даних по статусу засобу поки немає."
+  ).replace(
+    '<div class="row"><div class="name">Надійність</div></div>',
+    `<div class="row"><div class="name">Надійність</div><button class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${reliabilityModalKey}">Детальніше</button></div>`
   );
 
   const unitsBlock = buildDeltaNrkTopList(
     "Підрозділи",
-    analytics.unitsByMissions.slice(0, 8).map(item=>({
-      label: item.label,
-      valueText: fmtNum(item.value),
-      meta: "місій",
-      tone: "b-blue",
-    })),
+    unitMissionRows.slice(0, 8),
     "По підрозділах даних поки немає."
+  ).replace(
+    '<div class="row"><div class="name">Підрозділи</div></div>',
+    `<div class="row"><div class="name">Підрозділи</div><button class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${unitsModalKey}">Детальніше</button></div>`
   );
 
   const linksBlock = buildDeltaNrkTopList(
     "Зв’язок",
     [
-      ...(analytics.primaryLinks.slice(0, 4).map(item=>({
-        label: item.label,
-        valueText: fmtNum(item.value),
-        meta: "основний канал",
-        tone: "b-blue",
-      }))),
-      ...(analytics.reserveLinks.slice(0, 4).map(item=>({
-        label: item.label,
-        valueText: fmtNum(item.value),
-        meta: "резервний канал",
-        tone: "b-ok",
-      }))),
+      ...primaryLinkRows.slice(0, 4),
+      ...reserveLinkRows.slice(0, 4),
     ],
     "По зв’язку даних поки немає."
+  ).replace(
+    '<div class="row"><div class="name">Зв’язок</div></div>',
+    `<div class="row"><div class="name">Зв’язок</div><button class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${linksModalKey}">Детальніше</button></div>`
   );
 
   return `
@@ -5974,7 +6104,7 @@ async function pasteTextTableFromClipboard(textareaId){
 
   if(!(navigator?.clipboard?.readText)){
 
-    showToast("????? ?????? ??????????? ? ????? ????????.", "warn");
+    showToast("Буфер обміну недоступний у цьому браузері.", "warn");
 
     return;
 
@@ -5988,7 +6118,7 @@ async function pasteTextTableFromClipboard(textareaId){
 
     if(!rows.length){
 
-      showToast("? ?????? ????? ????????? ?????.", "warn");
+      showToast("У буфері немає табличних даних.", "warn");
 
       return;
 
@@ -6003,13 +6133,13 @@ async function pasteTextTableFromClipboard(textareaId){
       renderTextTableEditor(textareaId, rows);
     }
 
-    showToast("??????? ????????? ? ??????", "ok");
+    showToast("Таблицю вставлено з буфера", "ok");
 
   } catch(err){
 
     console.warn("clipboard read failed", err);
 
-    showToast("?? ??????? ????????? ?????. ??????? ??????? ?? ??? ? ???????.", "warn");
+    showToast("Не вдалося прочитати буфер. Скопіюй таблицю ще раз і повтори.", "warn");
 
   }
 
@@ -6066,14 +6196,14 @@ function buildTextTableImportSummaryHtml(textareaId, rows, opts={}){
     <div class="text-table-import-summary" data-for="${textareaId}">
       <div class="text-table-import-summary-head">
         <div>
-          <div class="text-table-import-summary-title">??????? ???????????</div>
-          <div class="hint">${htmlesc(typeLabel)} ? ${rowCount} ?????? ? ${colCount} ???????</div>
+          <div class="text-table-import-summary-title">Таблицю імпортовано</div>
+          <div class="hint">${htmlesc(typeLabel)} · ${rowCount} рядків · ${colCount} колонок</div>
         </div>
         <div class="text-table-import-summary-badges">
-          <span class="ref-table-type-pill">?????? .xlsx</span>
+          <span class="ref-table-type-pill">Імпорт .xlsx</span>
         </div>
       </div>
-      <div class="hint">??? ???????? ????? ??????????? ?? ????????? ?????????. ???? ????? ??????? ???? ? ???????? ???? ?? ???.</div>
+      <div class="hint">Для великого звіту редагування по клітинках приховано. Якщо треба оновити дані — імпортуй файл ще раз.</div>
       ${visibleHeaders.length ? `
         <div class="text-table-import-summary-columns">
           ${visibleHeaders.map(item=>`<span class="text-table-import-col">${htmlesc(item)}</span>`).join("")}
@@ -6081,7 +6211,7 @@ function buildTextTableImportSummaryHtml(textareaId, rows, opts={}){
         </div>
       ` : ""}
       <div class="actions" style="margin-top:10px;">
-        <button type="button" class="btn danger btn-mini" data-action="deleteTextTableFromTextarea" data-arg1="${textareaId}">???????? ???????</button>
+        <button type="button" class="btn danger btn-mini" data-action="deleteTextTableFromTextarea" data-arg1="${textareaId}">Видалити таблицю</button>
       </div>
     </div>
   `;
@@ -6162,12 +6292,12 @@ function importReferenceDeltaWorkbook(){
   const tableType = normalizeReferenceTableType(document.getElementById("referenceEntryTableType")?.value || "none");
 
   if(tableType !== "delta_nrk"){
-    showToast("??? ?????? ????????? ??? ???? ??????? Delta / ???.", "warn");
+    showToast("Цей імпорт доступний для типу таблиці Delta / НРК.", "warn");
     return;
   }
 
   if(!canUseWorkbookImport()){
-    showToast("?????? .xlsx ????? ??????????? ? ????? ????????.", "warn");
+    showToast("Імпорт .xlsx зараз недоступний у цьому браузері.", "warn");
     return;
   }
 
@@ -6184,18 +6314,18 @@ function importReferenceDeltaWorkbook(){
     reader.onload = ()=>{
       try{
         const workbook = XLSX.read(reader.result, {type:"array"});
-        const sheetName = pickWorkbookSheetName(workbook, "???");
+        const sheetName = pickWorkbookSheetName(workbook, "НРК");
         const sheet = sheetName ? workbook.Sheets?.[sheetName] : null;
 
         if(!sheet){
-          showToast("?? ??????? ?????? ????? ??? ? ?????.", "warn");
+          showToast("Не вдалося знайти аркуш НРК у файлі.", "warn");
           return;
         }
 
         const importedRows = normalizeImportedWorksheetRows(XLSX.utils.sheet_to_json(sheet, {header:1, defval:"", raw:false, blankrows:false}));
 
         if(importedRows.length < 2){
-          showToast("? ????? ?? ???????? ?????? ??????? ??? ???????.", "warn");
+          showToast("У файлі не знайдено повної таблиці для імпорту.", "warn");
           return;
         }
 
@@ -6203,20 +6333,20 @@ function importReferenceDeltaWorkbook(){
         if(!textarea) return;
 
         if(!String(textarea.value || "").trim()){
-          textarea.value = `?????? ?? Delta / ??? ? ${file.name}`;
+          textarea.value = `Імпорт із Delta / НРК · ${file.name}`;
         }
 
         writeTextTableToTextarea("referenceEntryText", importedRows);
         renderReferenceEntryTableWorkspace("referenceEntryText", "delta_nrk", importedRows);
-        showToast(`??????????? ${Math.max(0, importedRows.length - 1)} ?????? ? ?????? ${sheetName}`, "ok");
+        showToast(`Імпортовано ${Math.max(0, importedRows.length - 1)} рядків з аркуша ${sheetName}`, "ok");
       } catch(err){
         console.warn("delta workbook import failed", err);
-        showToast("?? ??????? ????????? Excel-????. ??????? ?? ??? ??? ??????? ???? ??????.", "warn");
+        showToast("Не вдалося прочитати Excel-файл. Спробуй ще раз або перевір його формат.", "warn");
       }
     };
 
     reader.onerror = ()=>{
-      showToast("?? ??????? ????????? ???????? ????.", "warn");
+      showToast("Не вдалося прочитати вибраний файл.", "warn");
     };
 
     reader.readAsArrayBuffer(file);
