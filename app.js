@@ -7954,12 +7954,206 @@ function pickWorkbookSheetName(workbook, preferredName=""){
 
 }
 
-function importReferenceDeltaWorkbook(){
+function getReferenceWorkbookImportConfig(tableType){
+
+  const type = normalizeReferenceTableType(tableType);
+
+  if(type === "delta_nrk"){
+    return {
+      enabled: true,
+      type,
+      title: "Delta / НРК",
+      preferredSheet: "НРК",
+      hint: "Для Delta / НРК можна завантажити весь Excel-файл напряму — без копіювання шматків таблиці."
+    };
+  }
+
+  if(type === "compare"){
+    return {
+      enabled: true,
+      type,
+      title: "Порівняння",
+      preferredSheet: document.getElementById("referenceEntryTitle")?.value || "",
+      hint: "Для порівняльних таблиць можна обрати потрібну вкладку з Excel-файлу — це надійніше, ніж вставка через буфер."
+    };
+  }
+
+  return {enabled:false, type, title:"", preferredSheet:"", hint:""};
+
+}
+
+function getWorkbookSheetPreviewRows(workbook, sheetName){
+
+  const sheet = sheetName ? workbook?.Sheets?.[sheetName] : null;
+
+  if(!sheet) return [];
+
+  return normalizeImportedWorksheetRows(
+    XLSX.utils.sheet_to_json(sheet, {header:1, defval:"", raw:false, blankrows:false})
+  );
+
+}
+
+function buildReferenceWorkbookSheetPickerHtml(fileName, sheets, preferredSheet=""){
+
+  const normalize = value=>String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+  const preferred = normalize(preferredSheet);
+
+  return `
+    <div class="field">
+      <div class="hint">Файл: <span class="mono">${htmlesc(fileName || "Excel")}</span></div>
+      <div class="hint" style="margin-top:4px;">Оберемо одну вкладку і імпортуємо її в поточний запис.</div>
+    </div>
+    <div class="comparison-compact-grid">
+      ${sheets.map(item=>{
+        const isPreferred = preferred && normalize(item.name) === preferred;
+        return `
+          <button
+            type="button"
+            class="comparison-compact-card comparison-card-btn"
+            data-action="openReferenceWorkbookSheetPreview"
+            data-arg1="${attrEsc(item.name)}"
+          >
+            <div class="comparison-compact-main">
+              <div class="comparison-compact-title">${htmlesc(item.name)}${isPreferred ? ` <span class="pill">Рекомендовано</span>` : ``}</div>
+              <div class="comparison-compact-meta">${item.rowCount} рядків · ${item.colCount} колонок</div>
+            </div>
+          </button>
+        `;
+      }).join("")}
+    </div>
+    <div class="actions" style="margin-top:12px;">
+      <button type="button" class="btn ghost" data-action="hideSheet">Скасувати</button>
+    </div>
+  `;
+
+}
+
+function buildReferenceWorkbookSheetPreviewHtml(fileName, sheetName, rows, typeLabel="Таблиця"){
+
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const header = safeRows[0] || [];
+  const body = safeRows.slice(1, 6);
+  const rowCount = Math.max(0, safeRows.length - 1);
+  const colCount = header.length || Math.max(0, ...safeRows.map(row=>Array.isArray(row) ? row.length : 0));
+  const previewRows = [header, ...body];
+  const currentRows = getCurrentTextareaTableRows("referenceEntryText");
+  const hasExistingTable = currentRows.length > 1;
+  const currentRowCount = hasExistingTable ? Math.max(0, currentRows.length - 1) : 0;
+  const rowDiff = hasExistingTable ? (rowCount - currentRowCount) : 0;
+  const rowDiffLabel = !hasExistingTable
+    ? ""
+    : rowDiff === 0
+      ? "Стільки ж рядків, як і зараз."
+      : rowDiff > 0
+        ? `На ${fmtNum(rowDiff)} рядк. більше, ніж у поточній таблиці.`
+        : `На ${fmtNum(Math.abs(rowDiff))} рядк. менше, ніж у поточній таблиці.`;
+
+  const previewTable = previewRows.length
+    ? renderStoredTableBlock(serializeStoredTable(previewRows))
+    : `<div class="hint">Немає даних для попереднього перегляду.</div>`;
+
+  return `
+    <div class="field">
+      <div class="text-table-import-summary-head">
+        <div>
+          <div class="text-table-import-summary-title">${htmlesc(sheetName)}</div>
+          <div class="hint">${htmlesc(typeLabel)} · ${rowCount} рядків · ${colCount} колонок</div>
+        </div>
+        <div class="text-table-import-summary-badges">
+          <span class="ref-table-type-pill">${htmlesc(fileName || "Excel")}</span>
+        </div>
+      </div>
+      <div class="hint" style="margin-top:8px;">Показуємо перші ${Math.max(0, body.length)} рядків для перевірки перед імпортом.</div>
+      ${hasExistingTable ? `<div class="hint" style="margin-top:4px;color:var(--danger,#c85a5a);">Поточна таблиця в записі буде замінена цією вкладкою.</div>` : ``}
+      ${rowDiffLabel ? `<div class="hint" style="margin-top:4px;">${htmlesc(rowDiffLabel)}</div>` : ``}
+    </div>
+    <div class="task-desc rich-text">${previewTable}</div>
+    <div class="actions" style="margin-top:12px;">
+      <button type="button" class="btn primary" data-action="importReferenceWorkbookSheet" data-arg1="${attrEsc(sheetName)}">${hasExistingTable ? "Замінити поточну таблицю" : "Імпортувати вкладку"}</button>
+      <button type="button" class="btn ghost" data-action="hideSheet">Назад</button>
+    </div>
+  `;
+
+}
+
+function openReferenceWorkbookSheetPreview(sheetName=""){
+
+  const pending = UI.pendingReferenceWorkbook || null;
+
+  if(!pending?.workbook){
+    showToast("Немає підготовленого Excel-імпорту.", "warn");
+    return;
+  }
+
+  const resolvedSheetName = sheetName || pickWorkbookSheetName(pending.workbook, pending.preferredSheet);
+  const rows = getWorkbookSheetPreviewRows(pending.workbook, resolvedSheetName);
+
+  if(rows.length < 2){
+    showToast("У вибраній вкладці не знайдено повної таблиці для імпорту.", "warn");
+    return;
+  }
+
+  const typeLabel = pending.type === "compare" ? "Порівняння" : "Delta / НРК";
+
+  showSheet(
+    "Перевірка вкладки",
+    buildReferenceWorkbookSheetPreviewHtml(pending.fileName, resolvedSheetName, rows, typeLabel),
+    {stack:true}
+  );
+
+}
+
+function applyReferenceWorkbookImport(sheetName="", opts={}){
+
+  const pending = UI.pendingReferenceWorkbook || null;
+
+  if(!pending?.workbook){
+    showToast("Немає підготовленого Excel-імпорту.", "warn");
+    return;
+  }
+
+  const resolvedSheetName = sheetName || pickWorkbookSheetName(pending.workbook, pending.preferredSheet);
+  const importedRows = getWorkbookSheetPreviewRows(pending.workbook, resolvedSheetName);
+
+  if(importedRows.length < 2){
+    showToast("У вибраній вкладці не знайдено повної таблиці для імпорту.", "warn");
+    return;
+  }
+
+  const textarea = document.getElementById("referenceEntryText");
+  if(!textarea) return;
+
+  if(!String(textarea.value || "").trim()){
+    const typeLabel = pending.type === "delta_nrk" ? "Delta / НРК" : "Порівняння";
+    textarea.value = `Імпорт із ${typeLabel} · ${pending.fileName}${resolvedSheetName ? ` · ${resolvedSheetName}` : ""}`;
+  }
+
+  writeTextTableToTextarea("referenceEntryText", importedRows);
+  renderReferenceEntryTableWorkspace("referenceEntryText", pending.type, importedRows);
+
+  if(!opts.keepModal){
+    UI.pendingReferenceWorkbook = null;
+    hideSheet();
+  }
+
+  showToast(`Таблицю оновлено: ${Math.max(0, importedRows.length - 1)} рядків з аркуша ${resolvedSheetName}`, "ok");
+
+}
+
+function importReferenceWorkbookSheet(sheetName=""){
+
+  applyReferenceWorkbookImport(sheetName);
+
+}
+
+function importReferenceWorkbook(){
 
   const tableType = normalizeReferenceTableType(document.getElementById("referenceEntryTableType")?.value || "none");
+  const config = getReferenceWorkbookImportConfig(tableType);
 
-  if(tableType !== "delta_nrk"){
-    showToast("Цей імпорт доступний для типу таблиці Delta / НРК.", "warn");
+  if(!config.enabled){
+    showToast("Імпорт .xlsx зараз доступний для типів Порівняння та Delta / НРК.", "warn");
     return;
   }
 
@@ -7981,33 +8175,51 @@ function importReferenceDeltaWorkbook(){
     reader.onload = ()=>{
       try{
         const workbook = XLSX.read(reader.result, {type:"array"});
-        const sheetName = pickWorkbookSheetName(workbook, "НРК");
-        const sheet = sheetName ? workbook.Sheets?.[sheetName] : null;
-
-        if(!sheet){
-          showToast("Не вдалося знайти аркуш НРК у файлі.", "warn");
+        if(config.type === "delta_nrk"){
+          UI.pendingReferenceWorkbook = {
+            type: config.type,
+            fileName: file.name,
+            workbook,
+            preferredSheet: config.preferredSheet
+          };
+          applyReferenceWorkbookImport(pickWorkbookSheetName(workbook, config.preferredSheet), {keepModal:true});
+          UI.pendingReferenceWorkbook = null;
           return;
         }
 
-        const importedRows = normalizeImportedWorksheetRows(XLSX.utils.sheet_to_json(sheet, {header:1, defval:"", raw:false, blankrows:false}));
+        const sheetOptions = (Array.isArray(workbook?.SheetNames) ? workbook.SheetNames : [])
+          .map(name=>{
+            const rows = getWorkbookSheetPreviewRows(workbook, name);
+            const header = rows[0] || [];
+            return {
+              name,
+              rowCount: Math.max(0, rows.length - 1),
+              colCount: header.length || Math.max(0, ...rows.map(row=>Array.isArray(row) ? row.length : 0))
+            };
+          })
+          .filter(item=>item.rowCount > 0 && item.colCount > 0);
 
-        if(importedRows.length < 2){
-          showToast("У файлі не знайдено повної таблиці для імпорту.", "warn");
+        if(!sheetOptions.length){
+          showToast("У файлі не знайдено повних вкладок для імпорту.", "warn");
           return;
         }
 
-        const textarea = document.getElementById("referenceEntryText");
-        if(!textarea) return;
+        UI.pendingReferenceWorkbook = {
+          type: config.type,
+          fileName: file.name,
+          workbook,
+          preferredSheet: config.preferredSheet
+        };
 
-        if(!String(textarea.value || "").trim()){
-          textarea.value = `Імпорт із Delta / НРК · ${file.name}`;
-        }
+        const resolvedPreferredSheet = pickWorkbookSheetName(workbook, config.preferredSheet);
 
-        writeTextTableToTextarea("referenceEntryText", importedRows);
-        renderReferenceEntryTableWorkspace("referenceEntryText", "delta_nrk", importedRows);
-        showToast(`Імпортовано ${Math.max(0, importedRows.length - 1)} рядків з аркуша ${sheetName}`, "ok");
+        showSheet(
+          "Оберіть вкладку Excel",
+          buildReferenceWorkbookSheetPickerHtml(file.name, sheetOptions, resolvedPreferredSheet),
+          {stack:true}
+        );
       } catch(err){
-        console.warn("delta workbook import failed", err);
+        console.warn("reference workbook import failed", err);
         showToast("Не вдалося прочитати Excel-файл. Спробуй ще раз або перевір його формат.", "warn");
       }
     };
@@ -8023,12 +8235,21 @@ function importReferenceDeltaWorkbook(){
 
 }
 
+function importReferenceDeltaWorkbook(){
+
+  importReferenceWorkbook();
+
+}
+
 function syncReferenceEntryImportUi(){
 
   const row = document.getElementById("referenceDeltaImportRow");
   const type = normalizeReferenceTableType(document.getElementById("referenceEntryTableType")?.value || "none");
+  const config = getReferenceWorkbookImportConfig(type);
+  const hint = document.getElementById("referenceWorkbookImportHint");
 
-  if(row) row.hidden = type !== "delta_nrk";
+  if(row) row.hidden = !config.enabled;
+  if(hint) hint.innerHTML = config.hint || "";
 
   const rows = getCurrentTextareaTableRows("referenceEntryText");
 
@@ -12117,8 +12338,8 @@ function openReferenceEntry(entryId=""){
       <div class="hint">Поки що це підготовка під аналітику для таблиць у записі.</div>
       ${readOnly ? "" : `
         <div class="reference-import-row" id="referenceDeltaImportRow" hidden>
-          <button type="button" class="btn ghost btn-mini" data-action="importReferenceDeltaWorkbook">Імпорт .xlsx</button>
-          <div class="hint">Для <span class="mono">Delta / НРК</span> можна завантажити весь Excel-файл напряму — без копіювання шматків таблиці.</div>
+          <button type="button" class="btn ghost btn-mini" data-action="importReferenceWorkbook">Імпорт .xlsx</button>
+          <div class="hint" id="referenceWorkbookImportHint">Для <span class="mono">Delta / НРК</span> можна завантажити весь Excel-файл напряму — без копіювання шматків таблиці.</div>
         </div>
       `}
     </div>
@@ -24037,7 +24258,13 @@ const ACTIONS = {
 
   pasteTextTableFromClipboard,
 
+  importReferenceWorkbook,
+
   importReferenceDeltaWorkbook,
+
+  openReferenceWorkbookSheetPreview,
+
+  importReferenceWorkbookSheet,
 
   mutateTextTableEditor,
 
