@@ -7023,13 +7023,13 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
   const cargoRows = analytics.cargoes.map(item=>({
     label: item.label,
     valueText: fmtNum(item.value),
-    meta: `${fmtNum(analytics.missionCount ? Math.round((item.value / analytics.missionCount) * 100) : 0)}% місій з цією категорією`,
+    meta: `${fmtNum(analytics.missionCount ? Math.round((item.value / analytics.missionCount) * 100) : 0)}% місій, де була вказана ця категорія`,
     tone: "b-ok",
   }));
   const cargoComboRows = (analytics.cargoCombos || []).map(item=>({
     label: item.label,
     valueText: fmtNum(item.value),
-    meta: `${fmtNum(analytics.missionCount ? Math.round((item.value / analytics.missionCount) * 100) : 0)}% місій з такою комбінацією`,
+    meta: `${fmtNum(analytics.missionCount ? Math.round((item.value / analytics.missionCount) * 100) : 0)}% місій, де була така комбінація`,
     tone: "b-blue",
   }));
   const evacuationRows = [
