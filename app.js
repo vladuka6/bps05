@@ -8025,12 +8025,19 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
     meta: `${fmtNum(lossMissions.length ? Math.round((item.value / lossMissions.length) * 100) : 0)}% втрат`,
     tone: "b-danger",
   }));
-  const lossTaskRows = countBy(lossMissions, item=>String(item.taskType || "").trim() || "Не визначено").map(item=>({
-    label: item.label,
-    valueText: fmtNum(item.value),
-    meta: `${fmtNum(lossMissions.length ? Math.round((item.value / lossMissions.length) * 100) : 0)}% втрат`,
-    tone: "b-violet",
-  }));
+  const lossTaskMap = new Map();
+  lossMissions.forEach(item=>{
+    const label = String(item.taskType || "").trim() || "Не визначено";
+    lossTaskMap.set(label, (lossTaskMap.get(label) || 0) + 1);
+  });
+  const lossTaskRows = Array.from(lossTaskMap.entries())
+    .map(([label, value])=>({
+      label,
+      valueText: fmtNum(value),
+      meta: `${fmtNum(lossMissions.length ? Math.round((value / lossMissions.length) * 100) : 0)}% втрат`,
+      tone: "b-violet",
+    }))
+    .sort((a,b)=>Number(String(b.valueText || "0").replace(/\s+/g, "")) - Number(String(a.valueText || "0").replace(/\s+/g, "")) || String(a.label).localeCompare(String(b.label), "uk"));
   const lossDayNightRows = [
     {label:"День", value: lossMissions.filter(item=>item.dayNightKind === "day").length, tone:"b-blue"},
     {label:"Ніч", value: lossMissions.filter(item=>item.dayNightKind === "night").length, tone:"b-danger"},
