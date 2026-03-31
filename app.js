@@ -5394,6 +5394,7 @@ function detectDeltaNrkColumns(headerRow){
 
   const headers = (headerRow || []).map(normalizeAnalyticsHeader);
   const result = {
+    reportUuid:-1,
     unit:-1,
     taskType:-1,
     result:-1,
@@ -5414,6 +5415,10 @@ function detectDeltaNrkColumns(headerRow){
   };
 
   headers.forEach((header, idx)=>{
+    if(result.reportUuid < 0 && /(uuid|ідентифікатор звіту|uuid звіту|uuid запису)/.test(header)){
+      result.reportUuid = idx;
+      return;
+    }
     if(result.unit < 0 && /(підрозділ|загін|орган)/.test(header)){
       result.unit = idx;
       return;
@@ -5517,6 +5522,7 @@ function detectDeltaNrkColumns(headerRow){
     }
     // Delta NRK export with UUID/reporter columns in front
     if(width >= 30 && /uuid/.test(headers[0] || "")){
+      if(result.reportUuid < 0) result.reportUuid = 0;
       if(result.unit < 0) result.unit = 2;
       if(result.taskType < 0) result.taskType = 6;
       if(result.resultAt < 0) result.resultAt = 8;
@@ -5565,6 +5571,115 @@ function buildDeltaNrkTopList(title, rows, emptyText){
       </div>
     </div>
   `;
+
+}
+
+function getDeltaMissionGroupKey(item){
+
+  const reportUuid = String(item?.reportUuid || "").trim();
+  if(reportUuid) return `uuid:${normalizeAnalyticsHeader(reportUuid) || reportUuid}`;
+
+  const unit = normalizeAnalyticsHeader(item?.unit || "");
+  const taskType = normalizeAnalyticsHeader(item?.taskType || "");
+  const resultAt = normalizeAnalyticsHeader(item?.resultAt || item?.effectiveDateRaw || item?.endAt || item?.startAt || "");
+  const asset = normalizeAnalyticsHeader(item?.asset || "");
+
+  if(unit && taskType && resultAt && asset){
+    return `mission:${unit}|${taskType}|${resultAt}|${asset}`;
+  }
+
+  return `row:${item?.id || Math.random().toString(36).slice(2)}`;
+
+}
+
+function aggregateDeltaMissionItems(items){
+
+  const map = new Map();
+
+  (Array.isArray(items) ? items : []).forEach(item=>{
+    const key = getDeltaMissionGroupKey(item);
+    if(!map.has(key)){
+      map.set(key, {
+        key,
+        rows: [],
+        totalWeight: 0,
+        maxRecordWeight: 0,
+      });
+    }
+    const bucket = map.get(key);
+    bucket.rows.push(item);
+    bucket.totalWeight += Number(item?.cargoWeight) || 0;
+    bucket.maxRecordWeight = Math.max(bucket.maxRecordWeight, Number(item?.cargoWeight) || 0);
+  });
+
+  const chooseByPriority = (rows, getter)=>{
+    const values = rows
+      .map(row=>String(getter(row) || "").trim())
+      .filter(Boolean);
+    if(!values.length) return "";
+    const counts = new Map();
+    values.forEach(value=>counts.set(value, (counts.get(value) || 0) + 1));
+    return Array.from(counts.entries())
+      .sort((a,b)=>b[1]-a[1] || String(a[0]).localeCompare(String(b[0]), "uk"))[0]?.[0] || values[0] || "";
+  };
+
+  return Array.from(map.values()).map((bucket, index)=>{
+    const rows = bucket.rows;
+    const durationCandidates = rows
+      .map(row=>Number(row?.missionDurationMinutes))
+      .filter(value=>Number.isFinite(value) && value >= 0);
+    const missionDurationMinutes = durationCandidates.length ? Math.max(...durationCandidates) : null;
+    const representativeRow = rows
+      .slice()
+      .sort((a,b)=>(Number(b?.missionDurationMinutes) || 0) - (Number(a?.missionDurationMinutes) || 0))[0] || rows[0];
+    const resultKind = rows.some(row=>getDeltaMissionResultKind(row?.result, row?.taskType) === "not_delivered")
+      ? "not_delivered"
+      : rows.some(row=>getDeltaMissionResultKind(row?.result, row?.taskType) === "evacuated")
+        ? "evacuated"
+        : rows.some(row=>getDeltaMissionResultKind(row?.result, row?.taskType) === "delivered")
+          ? "delivered"
+          : (rows.some(row=>getDeltaMissionResultKind(row?.result, row?.taskType) === "evac_task") ? "evac_task" : "");
+    const reliabilityKind = rows.some(row=>getDeltaReliabilityKind(row?.assetStatus) === "loss")
+      ? "loss"
+      : rows.some(row=>getDeltaReliabilityKind(row?.assetStatus) === "damaged")
+        ? "damaged"
+        : (rows.some(row=>getDeltaReliabilityKind(row?.assetStatus) === "returned") ? "returned" : "");
+
+      return {
+        id: `mission_${index + 1}`,
+        key: bucket.key,
+        rows,
+        rowCount: rows.length,
+      reportUuid: String(representativeRow?.reportUuid || "").trim(),
+      unit: chooseByPriority(rows, row=>row?.unit) || String(representativeRow?.unit || "").trim(),
+      taskType: chooseByPriority(rows, row=>row?.taskType) || String(representativeRow?.taskType || "").trim(),
+      result: chooseByPriority(rows, row=>row?.result) || String(representativeRow?.result || "").trim(),
+        asset: chooseByPriority(rows, row=>row?.asset) || String(representativeRow?.asset || "").trim(),
+        assetStatus: chooseByPriority(rows, row=>row?.assetStatus) || String(representativeRow?.assetStatus || "").trim(),
+        primaryLink: chooseByPriority(rows, row=>row?.primaryLink) || String(representativeRow?.primaryLink || "").trim(),
+        reserveLink: chooseByPriority(rows, row=>row?.reserveLink) || String(representativeRow?.reserveLink || "").trim(),
+        circumstances: rows.map(row=>String(row?.circumstances || "").trim()).filter(Boolean).join(" | "),
+        lossCircumstances: rows.map(row=>String(row?.lossCircumstances || "").trim()).filter(Boolean).join(" | "),
+        cargoWeight: bucket.totalWeight,
+      maxRecordWeight: bucket.maxRecordWeight,
+      missionDurationMinutes,
+      invalidTimeline: rows.some(row=>row?.invalidTimeline),
+      resultAt: String(representativeRow?.resultAt || "").trim(),
+      resultAtTs: representativeRow?.resultAtTs ?? null,
+      startAt: String(representativeRow?.startAt || "").trim(),
+      startAtTs: representativeRow?.startAtTs ?? null,
+      endAt: String(representativeRow?.endAt || "").trim(),
+      endAtTs: representativeRow?.endAtTs ?? null,
+      effectiveDateRaw: String(representativeRow?.effectiveDateRaw || "").trim(),
+      dayNightKind: representativeRow?.dayNightKind || "",
+      dayMinutes: Number(representativeRow?.dayMinutes) || 0,
+      nightMinutes: Number(representativeRow?.nightMinutes) || 0,
+      evacuatedCategory: chooseByPriority(rows, row=>row?.evacuatedCategory) || String(representativeRow?.evacuatedCategory || "").trim(),
+      evacuatedQty: rows.reduce((sum, row)=>sum + (Number(row?.evacuatedQty) || 0), 0),
+      resultKind,
+      reliabilityKind,
+    };
+  });
 
 }
 
@@ -5725,54 +5840,54 @@ function buildDeltaNrkAutoSummaryHtml(analytics){
 
   if(!analytics) return "";
 
-  const deliveredPercent = analytics.successRate || 0;
+  const deliveredPercent = analytics.deliverySuccessRate || 0;
   const cards = [
     {
       label:"Місій",
       value: fmtNum(analytics.missionCount),
-      text: "У вибірці",
+      text: `${fmtNum(analytics.recordCount)} записів у зрізі`,
     },
-    {
-      label:"Результат",
-      value: fmtNum(analytics.successCount),
-      text: `${fmtNum(deliveredPercent)}% успішно · Не дост. ${fmtNum(analytics.notDeliveredCount)}`,
-      tone: analytics.notDeliveredCount > 0 ? "warn" : "ok",
-    },
-    {
-      label:"Платформа",
-      value: analytics.topAsset?.label || "—",
-      text: analytics.topAsset ? `${fmtNum(analytics.topAsset.value)} місій` : "Немає даних",
-    },
-    {
-      label:"Тип",
-      value: analytics.topTaskType?.label || "—",
-      text: analytics.topTaskType ? `${fmtNum(analytics.topTaskType.value)} місій` : "Немає даних",
-    },
+      {
+        label:"Результат",
+        value: fmtNum(analytics.successCount),
+        text: `${fmtNum(deliveredPercent)}% успішно по логістиці · Не дост. ${fmtNum(analytics.notDeliveredCount)}`,
+        tone: analytics.notDeliveredCount > 0 ? "warn" : "ok",
+      },
+      {
+        label:"Платформа",
+        value: analytics.topAsset?.label || "—",
+        text: analytics.topAsset ? `${fmtNum(analytics.topAsset.value)} місій` : "Немає даних",
+      },
+      {
+        label:"Тип",
+        value: analytics.topTaskType?.label || "—",
+        text: analytics.topTaskType ? `${fmtNum(analytics.topTaskType.value)} місій` : "Немає даних",
+      },
     ...(analytics.evacuationCount > 0 ? [{
       label:"Тип",
       value: "Евакуація",
       text: `300: ${fmtNum(analytics.evacuation300Count)} · 200: ${fmtNum(analytics.evacuation200Count)}`,
       tone: "ok",
-    }] : []),
-    {
-      label:"Вага",
-      value: analytics.totalWeight > 0 ? `${fmtNum(analytics.totalWeight)} кг` : "—",
-      text: analytics.avgWeight > 0 ? `Сер. ${fmtNum(analytics.avgWeight)} кг` : "Немає даних",
-    },
-    {
-      label:"Макс. вантаж",
-      value: analytics.maxCargoAsset?.maxWeight > 0 ? `${fmtNum(analytics.maxCargoAsset.maxWeight)} кг` : "—",
-      text: analytics.maxCargoAsset
-        ? `${analytics.maxCargoAsset.label} · сер. ${fmtNum(analytics.maxCargoAsset.avgWeight)} кг`
-        : "Немає даних",
-    },
-    {
-      label:"Надійність",
-      value: `${fmtNum(analytics.returnRate)}%`,
-      text: `Втрати ${fmtNum(analytics.lossCount)} · Пошк. ${fmtNum(analytics.damagedCount)}`,
-      tone: (analytics.lossCount > 0 || analytics.damagedCount > 0) ? "danger" : "ok",
-    },
-  ];
+      }] : []),
+      {
+        label:"Вага",
+        value: analytics.totalWeight > 0 ? `${fmtNum(analytics.totalWeight)} кг` : "—",
+        text: analytics.avgWeight > 0 ? `Сер. ${fmtNum(analytics.avgWeight)} кг на місію` : "Немає даних",
+      },
+      {
+        label:"Макс. вантаж",
+        value: analytics.maxCargoAsset?.maxWeight > 0 ? `${fmtNum(analytics.maxCargoAsset.maxWeight)} кг` : "—",
+        text: analytics.maxCargoAsset
+          ? `${analytics.maxCargoAsset.label} · сер. ${fmtNum(analytics.maxCargoAsset.avgWeight)} кг на місію`
+          : "Немає даних",
+      },
+      {
+        label:"Надійність",
+        value: `${fmtNum(analytics.reliabilityRate)}%`,
+        text: `По місіях: повернення ${fmtNum(analytics.returnedCount)} · Пошк. ${fmtNum(analytics.damagedCount)} · Втрати ${fmtNum(analytics.lossCount)}`,
+        tone: (analytics.lossCount > 0 || analytics.damagedCount > 0) ? "danger" : "ok",
+      },
+    ];
 
   return `
     <div class="delta-nrk-summary-row">
@@ -5792,15 +5907,15 @@ function buildDeltaNrkPrimaryKpisHtml(analytics){
 
   if(!analytics) return "";
 
-  const deliveredPercent = analytics.missionCount ? Math.round((analytics.deliveredCount / analytics.missionCount) * 100) : 0;
+  const deliveredPercent = analytics.deliverySuccessRate || 0;
   const cards = [
-    {label:"Місій", value: fmtNum(analytics.missionCount), text:"У вибірці"},
+    {label:"Місій", value: fmtNum(analytics.missionCount), text:`${fmtNum(analytics.recordCount)} записів`},
     {label:"Доставлено", value: fmtNum(analytics.deliveredCount), text:`${fmtNum(deliveredPercent)}% успішно`},
     {label:"Не доставлено", value: fmtNum(analytics.notDeliveredCount), text:"Проблемні місії"},
     {label:"Евакуаційні", value: fmtNum(analytics.evacuationCount), text:"Окремий тип задач"},
     {label:"Загальна вага", value: `${fmtNum(analytics.totalWeight)} кг`, text:"Усі перевезення"},
     {label:"Сер. вага", value: `${fmtNum(analytics.avgWeight)} кг`, text:"На одну місію з вагою"},
-    {label:"Втрати", value: fmtNum(analytics.lossCount), text:`${fmtNum(analytics.returnRate)}% повернення`},
+    {label:"Втрати", value: fmtNum(analytics.lossCount), text:`${fmtNum(analytics.reliabilityRate)}% надійність`},
   ];
 
   return `
@@ -5943,8 +6058,12 @@ function parseDeltaDurationMinutes(value){
     return total > 0 ? Math.round(total) : null;
   }
 
-  const num = parseAnalyticsNumber(raw);
-  return Number.isFinite(num) ? Number(num) : null;
+  if(/^\d+(?:[.,]\d+)?$/.test(raw)){
+    const num = Number(String(raw).replace(",", "."));
+    return Number.isFinite(num) ? Number(num) : null;
+  }
+
+  return null;
 
 }
 
@@ -6076,7 +6195,7 @@ function buildDeltaNrkDayNightHtml(analytics){
 
   return `
     <div class="item analytics-block delta-nrk-daynight">
-      <div class="row"><div class="name">День / ніч</div></div>
+      <div class="row"><div class="name">День / ніч · по місіях</div></div>
       <div class="delta-nrk-daynight-grid">
         <div class="delta-nrk-daynight-donut">${overallDonut}</div>
         <div class="delta-nrk-daynight-sections">
@@ -6118,7 +6237,7 @@ function buildDeltaNrkTimeQualityHtml(analytics){
     [
       {label:"Валідно пораховано", value: q.validDurationCount},
       {label:"Некоректні часові пари", value: q.invalidTimelineCount},
-      {label:"Без тривалості", value: Math.max(0, q.totalCount - q.validDurationCount - q.invalidTimelineCount)},
+      {label:"Без тривалості", value: Math.max(0, (q.missionTotalCount || 0) - q.validDurationCount - q.invalidTimelineCount)},
     ],
     "Тривалість місій поки не визначена.",
     ["#6bc46d", "#ff7b87", "#d5deef"]
@@ -6128,12 +6247,13 @@ function buildDeltaNrkTimeQualityHtml(analytics){
     <div class="item analytics-block delta-nrk-time-quality">
       <div class="row">
         <div class="name">Час і заповнення</div>
+        <div class="hint">Заповнення рахується по записах, тривалість — по місіях.</div>
       </div>
       <div class="report-grid staffing-analytics-kpis delta-nrk-kpis delta-nrk-time-kpis">
         <div class="report-tile"><div class="k">Початок</div><div class="v mono">${fmtNum(q.startFilledPercent)}%</div><div class="s">${fmtNum(q.startFilledCount)} із ${fmtNum(q.totalCount)}</div></div>
         <div class="report-tile"><div class="k">Завершення</div><div class="v mono">${fmtNum(q.endFilledPercent)}%</div><div class="s">${fmtNum(q.endFilledCount)} із ${fmtNum(q.totalCount)}</div></div>
-        <div class="report-tile"><div class="k">Повний ланцюжок</div><div class="v mono">${fmtNum(q.fullTimelinePercent)}%</div><div class="s">${fmtNum(q.fullTimelineCount)} місій</div></div>
-        <div class="report-tile"><div class="k">Сер. час місії</div><div class="v mono">${htmlesc(formatDurationMinutes(q.avgDurationMinutes))}</div><div class="s">${fmtNum(q.validDurationCount)} валідних</div></div>
+        <div class="report-tile"><div class="k">Повний ланцюжок</div><div class="v mono">${fmtNum(q.fullTimelinePercent)}%</div><div class="s">${fmtNum(q.fullTimelineCount)} записів</div></div>
+        <div class="report-tile"><div class="k">Сер. час місії</div><div class="v mono">${htmlesc(formatDurationMinutes(q.avgDurationMinutes))}</div><div class="s">${fmtNum(q.validDurationCount)} місій із тривалістю</div></div>
       </div>
       <div class="eval-donut-grid">
         ${qualityDonut}
@@ -6237,7 +6357,7 @@ function buildDeltaNrkMonthlyAnalyticsHtml(analytics){
   return `
     <div class="item analytics-block delta-monthly-block" data-topswitch-group="${groupId}">
       <div class="comparison-switcher-head">
-        <div class="name">Аналітика по місяцях</div>
+        <div class="name">Аналітика по місяцях · по місіях</div>
         <div class="comparison-switcher-buttons">
           ${monthMetrics.map((metric, index)=>`
             <button type="button" class="comparison-switcher-btn ${index === 0 ? "is-active" : ""}" data-action="switchComparisonTopPanel" data-arg1="${groupId}" data-arg2="${metric.key}">${htmlesc(metric.label)}</button>
@@ -6283,6 +6403,7 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
   const columns = detectDeltaNrkColumns(grid[0]);
   const detectedFormat = columns.resultAt === 6 && columns.result === 12 ? "Delta NRK 28 колонок" : (columns.resultAt === 8 && columns.result === 14 ? "Delta NRK 30 колонок" : "Delta NRK / alias-map");
   const allItems = grid.slice(1).map((row, index)=>{
+    const reportUuid = columns.reportUuid >= 0 ? String(row?.[columns.reportUuid] || "").trim() : "";
     const asset = columns.asset >= 0 ? String(row?.[columns.asset] || "").trim() : "";
     const unit = columns.unit >= 0 ? String(row?.[columns.unit] || "").trim() : "";
     const result = columns.result >= 0 ? String(row?.[columns.result] || "").trim() : "";
@@ -6321,6 +6442,7 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
 
     return {
       id: index + 1,
+      reportUuid,
       asset,
       unit,
       result,
@@ -6373,7 +6495,9 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
       detectedFormat,
       sourceRows: Math.max(0, grid.length - 1),
       parsedRows: 0,
+      recordCount: 0,
       items: [],
+      missions: [],
       missionCount: 0,
       deliveredCount: 0,
       notDeliveredCount: 0,
@@ -6381,10 +6505,11 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
       evacuatedCount: 0,
       successCount: 0,
       successRate: 0,
+      deliverySuccessRate: 0,
       lossCount: 0,
       damagedCount: 0,
       returnedCount: 0,
-      returnRate: 0,
+      reliabilityRate: 0,
       totalWeight: 0,
       avgWeight: 0,
       maxWeight: 0,
@@ -6407,6 +6532,7 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
       months: [],
       timeQuality: {
         totalCount: 0,
+        missionTotalCount: 0,
         startFilledCount: 0,
         endFilledCount: 0,
         resultFilledCount: 0,
@@ -6440,9 +6566,9 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     };
   }
 
-  const countBy = (getter)=> {
+  const countBy = (source, getter)=> {
     const map = new Map();
-    items.forEach(item=>{
+    (Array.isArray(source) ? source : []).forEach(item=>{
       const key = String(getter(item) || "").trim();
       if(!key) return;
       map.set(key, (map.get(key) || 0) + 1);
@@ -6450,26 +6576,30 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     return Array.from(map.entries()).map(([label, value])=>({label, value})).sort((a,b)=>b.value-a.value || String(a.label).localeCompare(String(b.label), "uk"));
   };
 
-  const missionCount = items.length;
-  const deliveredCount = items.filter(item=>getDeltaMissionResultKind(item.result, item.taskType) === "delivered").length;
-  const notDeliveredCount = items.filter(item=>getDeltaMissionResultKind(item.result, item.taskType) === "not_delivered").length;
-  const evacuationCount = items.filter(item=>/евакуац/i.test(String(item.taskType || ""))).length;
-  const evacuatedCount = items.filter(item=>getDeltaMissionResultKind(item.result, item.taskType) === "evacuated").length;
-  const successCount = deliveredCount + evacuatedCount;
-  const lossCount = items.filter(item=>/втрата/i.test(item.assetStatus)).length;
-  const damagedCount = items.filter(item=>/пошкоджен/i.test(item.assetStatus)).length;
-  const returnedCount = items.filter(item=>/повернення/i.test(item.assetStatus)).length;
-  const totalWeight = items.reduce((sum, item)=>sum + (Number(item.cargoWeight) || 0), 0);
-  const weightCount = items.filter(item=>Number.isFinite(item.cargoWeight) && item.cargoWeight > 0).length;
+  const missions = aggregateDeltaMissionItems(items);
+  const recordCount = items.length;
+  const missionCount = missions.length;
+  const hasMissionUuid = items.some(item=>!!String(item.reportUuid || "").trim());
+  const deliveredCount = missions.filter(item=>item.resultKind === "delivered").length;
+  const notDeliveredCount = missions.filter(item=>item.resultKind === "not_delivered").length;
+  const evacuationCount = missions.filter(item=>/евакуац/i.test(String(item.taskType || ""))).length;
+  const evacuatedCount = missions.filter(item=>item.resultKind === "evacuated").length;
+  const successCount = deliveredCount;
+  const lossCount = missions.filter(item=>item.reliabilityKind === "loss").length;
+  const damagedCount = missions.filter(item=>item.reliabilityKind === "damaged").length;
+  const returnedCount = missions.filter(item=>item.reliabilityKind === "returned").length;
+  const totalWeight = missions.reduce((sum, item)=>sum + (Number(item.cargoWeight) || 0), 0);
+  const weightCount = missions.filter(item=>Number.isFinite(item.cargoWeight) && item.cargoWeight > 0).length;
   const avgWeight = weightCount ? (totalWeight / weightCount) : 0;
-  const maxWeight = items.reduce((max, item)=>Math.max(max, Number(item.cargoWeight) || 0), 0);
-  const returnRate = missionCount ? Math.round((returnedCount / missionCount) * 100) : 0;
-  const successRate = missionCount ? Math.round((successCount / missionCount) * 100) : 0;
+  const maxWeight = missions.reduce((max, item)=>Math.max(max, Number(item.cargoWeight) || 0), 0);
+  const logisticsCount = missions.filter(item=>!/евакуац/i.test(String(item.taskType || ""))).length;
+  const reliabilityRate = missionCount ? ((returnedCount / missionCount) * 100) : 0;
+  const successRate = logisticsCount ? ((deliveredCount / logisticsCount) * 100) : 0;
 
-  const taskTypes = countBy(item=>item.taskType);
-  const assets = summarizeNormalizedLabelCounts(items, item=>item.asset);
+  const taskTypes = countBy(missions, item=>item.taskType);
+  const assets = summarizeNormalizedLabelCounts(missions, item=>item.asset);
   const assetStatsMap = new Map();
-  items.forEach(item=>{
+  missions.forEach(item=>{
     const rawLabel = String(item.asset || "").trim();
     if(!rawLabel) return;
     const key = normalizeAnalyticsHeader(rawLabel) || rawLabel;
@@ -6507,11 +6637,11 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
   const maxCargoAsset = assetStats
     .slice()
     .sort((a,b)=>b.maxWeight-a.maxWeight || b.avgWeight-a.avgWeight || b.total-a.total || String(a.label).localeCompare(String(b.label), "uk"))[0] || null;
-  const primaryLinks = countBy(item=>item.primaryLink);
-  const reserveLinks = countBy(item=>item.reserveLink);
-  const unitsByMissions = countBy(item=>item.unit);
+  const primaryLinks = countBy(missions, item=>item.primaryLink);
+  const reserveLinks = countBy(missions, item=>item.reserveLink);
+  const unitsByMissions = countBy(missions, item=>item.unit);
   const unitsByWeightMap = new Map();
-  items.forEach(item=>{
+  missions.forEach(item=>{
     const key = String(item.unit || "").trim();
     if(!key) return;
     unitsByWeightMap.set(key, (unitsByWeightMap.get(key) || 0) + (Number(item.cargoWeight) || 0));
@@ -6522,7 +6652,7 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
   const dayNightByAssetMap = new Map();
   let dayCount = 0;
   let nightCount = 0;
-  items.forEach(item=>{
+  missions.forEach(item=>{
     const kind = item.dayNightKind;
     if(kind !== "day" && kind !== "night") return;
     const unitKey = String(item.unit || "Без підрозділу").trim();
@@ -6582,10 +6712,12 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
 
   const cargoCategoryMap = new Map();
   const cargoComboMap = new Map();
-  items.forEach(item=>{
-    const tags = extractDeltaCargoTags(item.cargo);
+  missions.forEach(item=>{
+    const tags = Array.from(new Set(
+      (item.rows || []).flatMap(row=>extractDeltaCargoTags(row.cargo))
+    ));
     item.cargoTags = tags;
-    item.cargoComboLabel = tags.length ? tags.join(" + ") : (String(item.cargo || "").trim() || "Не визначено");
+    item.cargoComboLabel = tags.length ? tags.join(" + ") : "Не визначено";
     if(tags.length){
       tags.forEach(tag=>{
         cargoCategoryMap.set(tag, (cargoCategoryMap.get(tag) || 0) + 1);
@@ -6597,7 +6729,7 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
   });
   const cargoes = Array.from(cargoCategoryMap.entries()).map(([label, value])=>({label, value})).sort((a,b)=>b.value-a.value || String(a.label).localeCompare(String(b.label), "uk"));
   const cargoCombos = Array.from(cargoComboMap.entries()).map(([label, value])=>({label, value})).sort((a,b)=>b.value-a.value || String(a.label).localeCompare(String(b.label), "uk"));
-  const evacuationItems = items.filter(item=>/евакуац/i.test(String(item.taskType || "")));
+  const evacuationItems = missions.filter(item=>/евакуац/i.test(String(item.taskType || "")));
   const evacuation200Count = evacuationItems.reduce((sum, item)=>sum + (getDeltaEvacCargoKind(item.evacuatedCategory) === "200" ? (Number(item.evacuatedQty) || 1) : 0), 0);
   const evacuation300Count = evacuationItems.reduce((sum, item)=>sum + (getDeltaEvacCargoKind(item.evacuatedCategory) === "300" ? (Number(item.evacuatedQty) || 1) : 0), 0);
   const evacuationOtherCount = evacuationItems.filter(item=>getDeltaEvacCargoKind(item.evacuatedCategory) === "other").length;
@@ -6609,7 +6741,7 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
   const fullTimelineCount = items.filter(item=>item.startAt && item.endAt && item.resultAt).length;
   const anyTimeCount = items.filter(item=>item.startAt || item.endAt || item.resultAt || item.durationRaw).length;
   const invalidTimelineCount = items.filter(item=>item.invalidTimeline).length;
-  const durationValues = items
+  const durationValues = missions
     .map(item=>Number(item.missionDurationMinutes))
     .filter(value=>Number.isFinite(value) && value >= 0);
   const validDurationCount = durationValues.length;
@@ -6619,9 +6751,10 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     ? durationSorted[(validDurationCount - 1) / 2]
     : ((durationSorted[(validDurationCount / 2) - 1] + durationSorted[validDurationCount / 2]) / 2));
   const maxDurationMinutes = validDurationCount ? durationSorted[durationSorted.length - 1] : 0;
-  const percentOf = (value)=> missionCount ? Math.round((value / missionCount) * 100) : 0;
+  const percentOf = (value)=> recordCount ? Math.round((value / recordCount) * 100) : 0;
   const timeQuality = {
-    totalCount: missionCount,
+    totalCount: recordCount,
+    missionTotalCount: missionCount,
     startFilledCount,
     endFilledCount,
     resultFilledCount,
@@ -6641,7 +6774,7 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
   };
 
   const monthMap = new Map();
-  items.forEach(item=>{
+  missions.forEach(item=>{
     const monthKey = parseDeltaMonthKey(item.resultAt || item.endAt || item.startAt || item.effectiveDateRaw) || "no-date";
     const existing = monthMap.get(monthKey) || {
       key: monthKey,
@@ -6659,14 +6792,14 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
       weightCount: 0,
     };
     existing.missionCount += 1;
-    const resultKind = getDeltaMissionResultKind(item.result, item.taskType);
+    const resultKind = item.resultKind || getDeltaMissionResultKind(item.result, item.taskType);
     if(resultKind === "delivered") existing.deliveredCount += 1;
     if(resultKind === "not_delivered") existing.notDeliveredCount += 1;
     if(/евакуац/i.test(String(item.taskType || ""))) existing.evacuationCount += 1;
     if(resultKind === "evacuated") existing.evacuatedCount = (existing.evacuatedCount || 0) + 1;
-    if(/втрата/i.test(item.assetStatus)) existing.lossCount += 1;
-    if(/пошкоджен/i.test(item.assetStatus)) existing.damagedCount += 1;
-    if(/повернення/i.test(item.assetStatus)) existing.returnedCount += 1;
+    if(item.reliabilityKind === "loss") existing.lossCount += 1;
+    if(item.reliabilityKind === "damaged") existing.damagedCount += 1;
+    if(item.reliabilityKind === "returned") existing.returnedCount += 1;
     const weight = Number(item.cargoWeight) || 0;
     existing.totalWeight += weight;
     if(weight > 0){
@@ -6679,8 +6812,8 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     .map(item=>({
       ...item,
       avgWeight: item.weightCount ? (item.totalWeight / item.weightCount) : 0,
-      successCount: item.deliveredCount + (item.evacuatedCount || 0),
-      successRate: item.missionCount ? Math.round(((item.deliveredCount + (item.evacuatedCount || 0)) / item.missionCount) * 100) : 0,
+      successCount: item.deliveredCount,
+      successRate: item.missionCount ? Math.round((item.deliveredCount / Math.max(1, item.missionCount - item.evacuationCount)) * 100) : 0,
       returnRate: item.missionCount ? Math.round((item.returnedCount / item.missionCount) * 100) : 0,
     }))
     .sort((a,b)=>{
@@ -6693,8 +6826,10 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     title,
     detectedFormat,
     sourceRows: Math.max(0, grid.length - 1),
-    parsedRows: items.length,
+    parsedRows: missionCount,
+    recordCount,
     items,
+    missions,
     missionCount,
     deliveredCount,
     notDeliveredCount,
@@ -6702,10 +6837,11 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     evacuatedCount,
     successCount,
     successRate,
+    deliverySuccessRate: successRate,
     lossCount,
     damagedCount,
     returnedCount,
-    returnRate,
+    reliabilityRate,
     totalWeight,
     avgWeight,
     maxWeight,
@@ -6733,6 +6869,9 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     assetOptions,
     filters: {unit: unitFilter, taskType: taskTypeFilter, asset: assetFilter},
     totalParsedRows: allItems.length,
+    missionGroupingLabel: hasMissionUuid
+      ? "UUID Звіту"
+      : "Підрозділ + Тип задачі + Дата результату + Платформа",
   };
 
 }
@@ -6783,8 +6922,9 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
         <span class="delta-nrk-filter-chip">${analytics.filters.unit ? `Підрозділ: ${htmlesc(analytics.filters.unit)}` : "Усі підрозділи"}</span>
         <span class="delta-nrk-filter-chip">${analytics.filters.taskType ? `Тип задачі: ${htmlesc(analytics.filters.taskType)}` : "Усі типи задач"}</span>
         <span class="delta-nrk-filter-chip">${analytics.filters.asset ? `Платформа: ${htmlesc(analytics.filters.asset)}` : "Усі платформи"}</span>
-        <span class="delta-nrk-filter-chip mono">Місій у зрізі: ${fmtNum(analytics.parsedRows)}</span>
-        ${analytics.totalParsedRows !== analytics.parsedRows ? `<span class="delta-nrk-filter-chip mono">Із загалу: ${fmtNum(analytics.totalParsedRows)}</span>` : ""}
+        <span class="delta-nrk-filter-chip mono">Місій у зрізі: ${fmtNum(analytics.missionCount)}</span>
+        <span class="delta-nrk-filter-chip mono">Записів у зрізі: ${fmtNum(analytics.recordCount)}</span>
+        ${analytics.totalParsedRows !== analytics.recordCount ? `<span class="delta-nrk-filter-chip mono">Із загалу записів: ${fmtNum(analytics.totalParsedRows)}</span>` : ""}
       </div>
     </div>
   `;
@@ -6802,9 +6942,27 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
           <div class="delta-nrk-diagnostics-v mono">${fmtNum(analytics.sourceRows)}</div>
         </div>
         <div class="delta-nrk-diagnostics-item">
-          <div class="delta-nrk-diagnostics-k">Розпізнано місій</div>
-          <div class="delta-nrk-diagnostics-v mono">${fmtNum(analytics.parsedRows)}</div>
+          <div class="delta-nrk-diagnostics-k">Розпізнано записів</div>
+          <div class="delta-nrk-diagnostics-v mono">${fmtNum(analytics.recordCount)}</div>
         </div>
+        <div class="delta-nrk-diagnostics-item">
+          <div class="delta-nrk-diagnostics-k">Унікальних місій</div>
+          <div class="delta-nrk-diagnostics-v mono">${fmtNum(analytics.missionCount)}</div>
+        </div>
+        <div class="delta-nrk-diagnostics-item">
+          <div class="delta-nrk-diagnostics-k">Групування місій</div>
+          <div class="delta-nrk-diagnostics-v">${htmlesc(analytics.missionGroupingLabel || "—")}</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const countingLogicBlock = `
+    <div class="item analytics-block delta-nrk-diagnostics">
+      <div class="row"><div class="name">Логіка підрахунку</div></div>
+      <div class="delta-nrk-filter-summary">
+        <span class="delta-nrk-filter-chip">Основна аналітика рахується по унікальних місіях (UUID або fallback-групування).</span>
+        <span class="delta-nrk-filter-chip">По записах лишається тільки перевірка імпорту та заповнення часових полів.</span>
       </div>
     </div>
   `;
@@ -6814,6 +6972,7 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
       <div class="staffing-analytics-modal comparison-analytics-modal delta-nrk-analytics-modal">
         ${filtersBlock}
         ${diagnosticsBlock}
+        ${countingLogicBlock}
         ${buildDeltaNrkAutoSummaryHtml(analytics)}
         <div class="item analytics-block">
           <div class="hint">За поточними фільтрами місій не знайдено. Спробуй інший підрозділ або платформу.</div>
@@ -6833,7 +6992,7 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
     ["#4f88ff", "#ffb547", "#8f67ff"]
   );
   const statusDonut = renderComparisonSliceDonutCard(
-    "Статус засобів",
+    "Статус засобів · по місіях",
     [
       {label:"Повернення", value: analytics.returnedCount},
       {label:"Пошкоджено", value: analytics.damagedCount},
@@ -6925,7 +7084,7 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
       buildDeltaNrkInsightModalHtml([
         {
           title: `${group.label} · місії`,
-          summary: `${fmtNum(group.items.length)} місій у цьому статусі · ${fmtNum(analytics.missionCount ? Math.round((group.items.length / analytics.missionCount) * 100) : 0)}% від усіх`,
+        summary: `${fmtNum(group.items.length)} місій у цьому статусі · ${fmtNum(analytics.missionCount ? Math.round((group.items.length / analytics.missionCount) * 100) : 0)}% від усіх`,
           rows: detailRows,
           emptyText: "Місій у цьому статусі поки немає.",
         }
@@ -6966,9 +7125,9 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
 
   const platformsModalKey = registerRenderedTableModal(
     `${analytics.title || "Delta / НРК"} · Платформи`,
-    buildDeltaNrkInsightModalHtml([
+      buildDeltaNrkInsightModalHtml([
       {
-        title: "Платформи",
+        title: "Платформи · по місіях",
         summary: `Усього платформ: ${fmtNum(platformsRows.length)} · місій: ${fmtNum(analytics.missionCount)}`,
         rows: platformsRows,
         emptyText: "По платформах даних поки немає.",
@@ -6977,15 +7136,15 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
   );
   const cargoModalKey = registerRenderedTableModal(
     `${analytics.title || "Delta / НРК"} · Вантажі`,
-    buildDeltaNrkInsightModalHtml([
+      buildDeltaNrkInsightModalHtml([
       {
-        title: "Категорії вантажу",
+        title: "Категорії вантажу · по місіях",
         summary: `Загальна вага: ${fmtNum(analytics.totalWeight)} кг · середня: ${fmtNum(analytics.avgWeight)} кг · максимум: ${fmtNum(analytics.maxWeight)} кг`,
         rows: cargoRows,
         emptyText: "По вантажах даних поки немає.",
       },
       {
-        title: "Найчастіші комбінації",
+        title: "Найчастіші комбінації · по місіях",
         summary: `Унікальних комбінацій: ${fmtNum(cargoComboRows.length)}`,
         rows: cargoComboRows,
         emptyText: "Комбінацій вантажу поки немає.",
@@ -7012,9 +7171,9 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
   const evacuation200Rows = evacuationItems.filter(item=>getDeltaEvacCargoKind(item.evacuatedCategory) === "200").map(mapEvacDetailRow);
   const evacuationModalKey = registerRenderedTableModal(
     `${analytics.title || "Delta / НРК"} · Евакуація`,
-    buildDeltaNrkInsightModalHtml([
+      buildDeltaNrkInsightModalHtml([
       {
-        title: "Евакуаційні місії",
+        title: "Евакуація · по місіях",
         summary: `Усього евакуаційних: ${fmtNum(analytics.evacuationCount)} · Евакуйовано: ${fmtNum(analytics.evacuatedCount)}`,
         rows: evacuationRows,
         emptyText: "Евакуаційних місій поки немає.",
@@ -7035,10 +7194,10 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
   );
   const unitsModalKey = registerRenderedTableModal(
     `${analytics.title || "Delta / НРК"} · Підрозділи`,
-    buildDeltaNrkInsightModalHtml([
+      buildDeltaNrkInsightModalHtml([
       {
         title: "За кількістю місій",
-        summary: `Усього підрозділів: ${fmtNum(unitMissionRows.length)}`,
+        summary: `Усього підрозділів: ${fmtNum(unitMissionRows.length)} · місій: ${fmtNum(analytics.missionCount)}`,
         rows: unitMissionRows,
         emptyText: "По підрозділах даних поки немає.",
       },
@@ -7069,7 +7228,7 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
   );
 
   const platformsBlock = buildDeltaNrkTopList(
-    "Платформи",
+    "Платформи · по місіях",
     platformsRows.slice(0, 8),
     "По платформах даних поки немає."
   ).replace(
@@ -7078,7 +7237,7 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
   );
 
   const cargoBlock = buildDeltaNrkTopList(
-    "Вантажі",
+    "Вантажі · по місіях",
     cargoRows.slice(0, 8),
     "По вантажах даних поки немає."
   ).replace(
@@ -7087,7 +7246,7 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
   );
 
   const evacuationBlock = analytics.evacuationCount > 0 ? buildDeltaNrkTopList(
-    "Евакуація",
+    "Евакуація · по місіях",
     evacuationRows,
     "Евакуаційних місій поки немає."
   ).replace(
@@ -7097,7 +7256,7 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
 
   const reliabilityBlock = `
     <div class="item analytics-block delta-nrk-list">
-      <div class="row"><div class="name">Надійність</div></div>
+      <div class="row"><div class="name">Надійність · по місіях</div></div>
       <div class="comparison-compact-grid">
         ${reliabilityRows.length
           ? reliabilityRows.map((item, index)=>`
@@ -7120,7 +7279,7 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
   `;
 
   const unitsBlock = buildDeltaNrkTopList(
-    "Підрозділи",
+    "Підрозділи · по місіях",
     unitMissionRows.slice(0, 8),
     "По підрозділах даних поки немає."
   ).replace(
@@ -7129,7 +7288,7 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
   );
 
   const linksBlock = buildDeltaNrkTopList(
-    "Зв’язок",
+    "Зв’язок · по місіях",
     [
       ...primaryLinkRows.slice(0, 4),
       ...reserveLinkRows.slice(0, 4),
@@ -7144,6 +7303,7 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
     <div class="staffing-analytics-modal comparison-analytics-modal delta-nrk-analytics-modal">
       ${filtersBlock}
       ${diagnosticsBlock}
+      ${countingLogicBlock}
       ${buildDeltaNrkAutoSummaryHtml(analytics)}
       ${buildDeltaNrkTimeQualityHtml(analytics)}
       <div class="eval-donut-grid">
