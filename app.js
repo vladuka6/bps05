@@ -5623,15 +5623,15 @@ function aggregateDeltaMissionItems(items){
       .sort((a,b)=>b[1]-a[1] || String(a[0]).localeCompare(String(b[0]), "uk"))[0]?.[0] || values[0] || "";
   };
 
-  return Array.from(map.values()).map((bucket, index)=>{
-    const rows = bucket.rows;
-    const durationCandidates = rows
-      .map(row=>Number(row?.missionDurationMinutes))
-      .filter(value=>Number.isFinite(value) && value >= 0);
-    const missionDurationMinutes = durationCandidates.length ? Math.max(...durationCandidates) : null;
-    const representativeRow = rows
-      .slice()
-      .sort((a,b)=>(Number(b?.missionDurationMinutes) || 0) - (Number(a?.missionDurationMinutes) || 0))[0] || rows[0];
+    return Array.from(map.values()).map((bucket, index)=>{
+      const rows = bucket.rows;
+      const durationCandidates = rows
+        .map(row=>row?.providedDurationMinutes)
+        .filter(value=>Number.isFinite(value) && value >= 0);
+      const missionDurationMinutes = durationCandidates.length ? Math.max(...durationCandidates) : null;
+      const representativeRow = rows
+        .slice()
+        .sort((a,b)=>(Number(b?.providedDurationMinutes) || 0) - (Number(a?.providedDurationMinutes) || 0))[0] || rows[0];
     const resultKind = rows.some(row=>getDeltaMissionResultKind(row?.result, row?.taskType) === "not_delivered")
       ? "not_delivered"
       : rows.some(row=>getDeltaMissionResultKind(row?.result, row?.taskType) === "evacuated")
