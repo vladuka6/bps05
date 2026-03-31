@@ -7059,19 +7059,19 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
     {
       label: "Повернення",
       tone: "b-ok",
-      items: analytics.items.filter(item=>getDeltaReliabilityKind(item.assetStatus) === "returned"),
+      items: analytics.missions.filter(item=>item.reliabilityKind === "returned"),
       meta: "успішне завершення місії",
     },
     {
       label: "Повернення з пошкодженням",
       tone: "b-warn",
-      items: analytics.items.filter(item=>getDeltaReliabilityKind(item.assetStatus) === "damaged"),
+      items: analytics.missions.filter(item=>item.reliabilityKind === "damaged"),
       meta: "пошкоджені засоби",
     },
     {
       label: "Втрата",
       tone: "b-danger",
-      items: analytics.items.filter(item=>getDeltaReliabilityKind(item.assetStatus) === "loss"),
+      items: analytics.missions.filter(item=>item.reliabilityKind === "loss"),
       meta: "втрачені засоби",
     },
   ];
