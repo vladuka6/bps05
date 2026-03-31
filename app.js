@@ -8048,12 +8048,30 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
     meta: `${fmtNum(lossMissions.length ? Math.round((item.value / lossMissions.length) * 100) : 0)}% втрат`,
     tone: item.tone,
   }));
-  const lossTargetRows = countMissionTags(lossMissions, item=>item.targetTypes).map(item=>({
-    label: item.label,
-    valueText: fmtNum(item.value),
-    meta: `${fmtNum(lossMissions.length ? Math.round((item.value / lossMissions.length) * 100) : 0)}% втрат із цією ціллю`,
-    tone: "b-blue",
-  }));
+  const lossTargetMap = new Map();
+  lossMissions.forEach(item=>{
+    const variants = new Map();
+    (item.targetTypes || []).forEach(tag=>{
+      const raw = String(tag || "").trim();
+      if(!raw) return;
+      const key = normalizeAnalyticsHeader(raw) || raw;
+      if(!variants.has(key)) variants.set(key, raw);
+    });
+    variants.forEach((raw, key)=>{
+      if(!lossTargetMap.has(key)) lossTargetMap.set(key, {label: raw, value: 0, variants: new Map()});
+      const bucket = lossTargetMap.get(key);
+      bucket.value += 1;
+      bucket.variants.set(raw, (bucket.variants.get(raw) || 0) + 1);
+    });
+  });
+  const lossTargetRows = Array.from(lossTargetMap.values())
+    .map(bucket=>({
+      label: Array.from(bucket.variants.entries()).sort((a,b)=>b[1]-a[1] || String(a[0]).localeCompare(String(b[0]), "uk"))[0]?.[0] || bucket.label,
+      valueText: fmtNum(bucket.value),
+      meta: `${fmtNum(lossMissions.length ? Math.round((bucket.value / lossMissions.length) * 100) : 0)}% втрат із цією ціллю`,
+      tone: "b-blue",
+    }))
+    .sort((a,b)=>Number(String(b.valueText || "0").replace(/\s+/g, "")) - Number(String(a.valueText || "0").replace(/\s+/g, "")) || String(a.label).localeCompare(String(b.label), "uk"));
   const taskTypeRows = analytics.taskTypes.map(item=>({label:item.label, valueText:fmtNum(item.value), meta:`${fmtNum(analytics.missionCount ? Math.round((item.value / analytics.missionCount) * 100) : 0)}% місій`, tone:"b-violet"}));
   const targetTypeRows = analytics.targetTypes.map(item=>({label:item.label, valueText:fmtNum(item.value), meta:`${fmtNum(analytics.missionCount ? Math.round((item.value / analytics.missionCount) * 100) : 0)}% місій, де була ця ціль`, tone:"b-blue"}));
   const targetStatusRows = analytics.targetStatuses.map(item=>({label:item.label, valueText:fmtNum(item.value), meta:`${fmtNum(analytics.missionCount ? Math.round((item.value / analytics.missionCount) * 100) : 0)}% місій, де був цей статус`, tone:"b-ok"}));
