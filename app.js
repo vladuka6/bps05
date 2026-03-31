@@ -6246,7 +6246,7 @@ function buildDeltaNrkTimeQualityHtml(analytics){
     <div class="item analytics-block delta-nrk-time-quality">
       <div class="row">
         <div class="name">Час і заповнення</div>
-        <div class="hint">Заповнення рахується по записах, тривалість — по місіях.</div>
+        <div class="hint">Заповнення і тривалість рахуються по унікальних місіях.</div>
       </div>
       <div class="report-grid staffing-analytics-kpis delta-nrk-kpis delta-nrk-time-kpis">
         <div class="report-tile"><div class="k">Початок</div><div class="v mono">${fmtNum(q.startFilledPercent)}%</div><div class="s">${fmtNum(q.startFilledCount)} із ${fmtNum(q.totalCount)}</div></div>
@@ -6739,15 +6739,21 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
   const evacuation300Count = evacuationItems.reduce((sum, item)=>sum + (getDeltaEvacCargoKind(item.evacuatedCategory) === "300" ? (Number(item.evacuatedQty) || 1) : 0), 0);
   const evacuationOtherCount = evacuationItems.filter(item=>getDeltaEvacCargoKind(item.evacuatedCategory) === "other").length;
 
-  const startFilledCount = items.filter(item=>!!item.startAt).length;
-  const endFilledCount = items.filter(item=>!!item.endAt).length;
-  const resultFilledCount = items.filter(item=>!!item.resultAt).length;
-  const durationFilledCount = items.filter(item=>!!item.durationRaw).length;
-  const fullTimelineCount = items.filter(item=>item.startAt && item.endAt && item.resultAt).length;
-  const anyTimeCount = items.filter(item=>item.startAt || item.endAt || item.resultAt || item.durationRaw).length;
-  const invalidTimelineCount = items.filter(item=>item.invalidTimeline).length;
+  const startFilledCount = missions.filter(item=>(item.rows || []).some(row=>!!String(row?.startAt || "").trim())).length;
+  const endFilledCount = missions.filter(item=>(item.rows || []).some(row=>!!String(row?.endAt || "").trim())).length;
+  const resultFilledCount = missions.filter(item=>(item.rows || []).some(row=>!!String(row?.resultAt || "").trim())).length;
+  const durationFilledCount = missions.filter(item=>(item.rows || []).some(row=>!!String(row?.durationRaw || "").trim())).length;
+  const fullTimelineCount = missions.filter(item=>{
+    const rows = item.rows || [];
+    const hasStart = rows.some(row=>!!String(row?.startAt || "").trim());
+    const hasEnd = rows.some(row=>!!String(row?.endAt || "").trim());
+    const hasResult = rows.some(row=>!!String(row?.resultAt || "").trim());
+    return hasStart && hasEnd && hasResult;
+  }).length;
+  const anyTimeCount = missions.filter(item=>(item.rows || []).some(row=>row?.startAt || row?.endAt || row?.resultAt || row?.durationRaw)).length;
+  const invalidTimelineCount = missions.filter(item=>item.invalidTimeline).length;
   const durationValues = missions
-    .map(item=>Number(item.missionDurationMinutes))
+    .map(item=>item.missionDurationMinutes)
     .filter(value=>Number.isFinite(value) && value >= 0);
   const validDurationCount = durationValues.length;
   const durationSorted = durationValues.slice().sort((a,b)=>a-b);
@@ -6756,9 +6762,9 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     ? durationSorted[(validDurationCount - 1) / 2]
     : ((durationSorted[(validDurationCount / 2) - 1] + durationSorted[validDurationCount / 2]) / 2));
   const maxDurationMinutes = validDurationCount ? durationSorted[durationSorted.length - 1] : 0;
-  const percentOf = (value)=> recordCount ? Math.round((value / recordCount) * 100) : 0;
+  const percentOf = (value)=> missionCount ? Math.round((value / missionCount) * 100) : 0;
   const timeQuality = {
-    totalCount: recordCount,
+    totalCount: missionCount,
     missionTotalCount: missionCount,
     startFilledCount,
     endFilledCount,
@@ -6967,8 +6973,8 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
     <div class="item analytics-block delta-nrk-diagnostics">
       <div class="row"><div class="name">Логіка підрахунку</div></div>
       <div class="delta-nrk-filter-summary">
-        <span class="delta-nrk-filter-chip">Основна аналітика рахується по унікальних місіях (UUID або fallback-групування).</span>
-        <span class="delta-nrk-filter-chip">По записах лишається тільки перевірка імпорту та заповнення часових полів.</span>
+        <span class="delta-nrk-filter-chip">Основна аналітика і час рахуються по унікальних місіях (UUID або fallback-групування).</span>
+        <span class="delta-nrk-filter-chip">По записах лишається тільки технічна перевірка імпорту.</span>
       </div>
     </div>
   `;
