@@ -7568,12 +7568,14 @@ function buildDeltaBplaAutoSummaryHtml(analytics){
 
   if(!analytics) return "";
 
+  const percentOfMissions = value=>analytics.missionCount ? fmtNum(Math.round((Number(value || 0) / analytics.missionCount) * 100)) : "0";
   const cards = [
     {label:"Місій", value: fmtNum(analytics.missionCount), text: `${fmtNum(analytics.recordCount)} записів у зрізі`},
-    {label:"Тип", value: analytics.topTaskType?.label || "—", text: analytics.topTaskType ? `${fmtNum(analytics.topTaskType.value)} місій` : "Немає даних"},
+    {label:"Розвідка", value: fmtNum(analytics.reconMissionCount), text: `${percentOfMissions(analytics.reconMissionCount)}% місій`},
+    {label:"Ураження", value: fmtNum(analytics.strikeMissionCount), text: `${percentOfMissions(analytics.strikeMissionCount)}% місій · цілі ${fmtNum(analytics.totalTargets)}`},
+    {label:"Доставка", value: fmtNum(analytics.deliveryMissionCount), text: `${percentOfMissions(analytics.deliveryMissionCount)}% місій · доставлено ${fmtNum(analytics.deliveredCargoCount)}`},
+    {label:"Цілі", value: fmtNum(analytics.totalTargets), text: `${fmtNum(analytics.targetMissionCount)} місій з цілями`},
     {label:"Платформа", value: analytics.topAsset?.label || "—", text: analytics.topAsset ? `${fmtNum(analytics.topAsset.value)} місій` : "Немає даних"},
-    {label:"Цілі", value: fmtNum(analytics.totalTargets), text: analytics.topTargetStatus ? `${analytics.topTargetStatus.label} · ${fmtNum(analytics.topTargetStatus.value)} місій` : "Немає даних"},
-    {label:"БК", value: fmtNum(analytics.totalAmmoQty), text: analytics.topAmmoType ? `${analytics.topAmmoType.label} · ${fmtNum(analytics.topAmmoType.value)} місій` : "Немає даних"},
     {label:"Сер. час", value: htmlesc(formatDurationMinutes(analytics.timeQuality?.avgDurationMinutes || 0)), text: `${fmtNum(analytics.timeQuality?.validDurationCount || 0)} місій із тривалістю`},
     {label:"Надійність", value: `${fmtNum(analytics.reliabilityRate)}%`, text: `Повернення ${fmtNum(analytics.returnedCount)} · Втрати ${fmtNum(analytics.lossCount)}`, tone: analytics.lossCount > 0 ? "danger" : "ok"},
   ];
@@ -7798,11 +7800,12 @@ function buildDeltaBplaAnalytics(rows, title="", filters={}){
     const rawLabel = String(item.asset || "").trim();
     if(!rawLabel) return;
     const key = normalizeAnalyticsHeader(rawLabel) || rawLabel;
-    if(!assetStatsMap.has(key)) assetStatsMap.set(key, {label: rawLabel, total:0, targetCount:0, lossCount:0, variants:new Map()});
+    if(!assetStatsMap.has(key)) assetStatsMap.set(key, {label: rawLabel, total:0, targetCount:0, lossCount:0, returnedCount:0, variants:new Map()});
     const bucket = assetStatsMap.get(key);
     bucket.total += 1;
     bucket.targetCount += Number(item.targetCount) || 0;
     if(item.reliabilityKind === "loss") bucket.lossCount += 1;
+    if(item.reliabilityKind === "returned") bucket.returnedCount += 1;
     bucket.variants.set(rawLabel, (bucket.variants.get(rawLabel) || 0) + 1);
   });
   const assetStats = Array.from(assetStatsMap.values()).map(bucket=>({
@@ -7810,7 +7813,39 @@ function buildDeltaBplaAnalytics(rows, title="", filters={}){
     total: bucket.total,
     targetCount: bucket.targetCount,
     lossCount: bucket.lossCount,
+    returnedCount: bucket.returnedCount,
+    reliabilityRate: bucket.total ? ((bucket.returnedCount / bucket.total) * 100) : 0,
   })).sort((a,b)=>b.total-a.total || b.targetCount-a.targetCount || String(a.label).localeCompare(String(b.label), "uk"));
+
+  const unitTaskStatsMap = new Map();
+  missions.forEach(item=>{
+    const rawLabel = String(item.unit || "Без підрозділу").trim() || "Без підрозділу";
+    if(!unitTaskStatsMap.has(rawLabel)){
+      unitTaskStatsMap.set(rawLabel, {
+        label: rawLabel,
+        total: 0,
+        reconCount: 0,
+        strikeCount: 0,
+        deliveryCount: 0,
+        miningCount: 0,
+        targetCount: 0,
+        lossCount: 0,
+      });
+    }
+    const bucket = unitTaskStatsMap.get(rawLabel);
+    bucket.total += 1;
+    if(/розвід|цілевказ/i.test(String(item.taskType || ""))) bucket.reconCount += 1;
+    if(/уражен/i.test(String(item.taskType || ""))) bucket.strikeCount += 1;
+    if(/достав/i.test(String(item.taskType || ""))) bucket.deliveryCount += 1;
+    if(/мінуван|загороджен/i.test(String(item.taskType || ""))) bucket.miningCount += 1;
+    bucket.targetCount += Number(item.targetCount) || 0;
+    if(item.reliabilityKind === "loss") bucket.lossCount += 1;
+  });
+  const unitTaskStats = Array.from(unitTaskStatsMap.values()).map(bucket=>({
+    ...bucket,
+    reconPercent: bucket.total ? Math.round((bucket.reconCount / bucket.total) * 100) : 0,
+    strikePercent: bucket.total ? Math.round((bucket.strikeCount / bucket.total) * 100) : 0,
+  })).sort((a,b)=>((b.reconCount + b.strikeCount) - (a.reconCount + a.strikeCount)) || b.total-a.total || String(a.label).localeCompare(String(b.label), "uk"));
 
   const dayNightByUnitMap = new Map();
   const dayNightByAssetMap = new Map();
@@ -7893,6 +7928,7 @@ function buildDeltaBplaAnalytics(rows, title="", filters={}){
     assets,
     topAsset: assets[0] || null,
     assetStats,
+    unitTaskStats,
     unitsByMissions,
     controlTypes,
     targetTypes,
@@ -7979,6 +8015,8 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
   const targetStatusDonut = renderComparisonSliceDonutCard("Статус цілей", analytics.targetStatuses.slice(0, 5).map(item=>({label:item.label, value:item.value})), "По статусу цілей даних поки немає.", ["#4f88ff","#6bc46d","#ffb547","#8f67ff","#ff7b87"]);
 
   const platformsRows = analytics.assetStats.map(item=>({label:item.label, valueText:fmtNum(item.total), meta:`${fmtNum(analytics.missionCount ? Math.round((item.total / analytics.missionCount) * 100) : 0)}% місій · цілі ${fmtNum(item.targetCount)} · втрати ${fmtNum(item.lossCount)}`, tone:"b-blue"}));
+  const unitTaskRows = analytics.unitTaskStats.map(item=>({label:item.label, valueText:`${fmtNum(item.reconCount)} / ${fmtNum(item.strikeCount)}`, meta:`Розвідка / Ураження · Доставка ${fmtNum(item.deliveryCount)} · ${fmtNum(item.total)} місій`, tone:"b-violet"}));
+  const assetLossRows = analytics.assetStats.filter(item=>item.lossCount > 0).map(item=>({label:item.label, valueText:fmtNum(item.lossCount), meta:`Повернення ${fmtNum(item.returnedCount)} · Надійність ${fmtNum(item.reliabilityRate)}% · ${fmtNum(item.total)} місій`, tone:"b-danger"}));
   const taskTypeRows = analytics.taskTypes.map(item=>({label:item.label, valueText:fmtNum(item.value), meta:`${fmtNum(analytics.missionCount ? Math.round((item.value / analytics.missionCount) * 100) : 0)}% місій`, tone:"b-violet"}));
   const targetTypeRows = analytics.targetTypes.map(item=>({label:item.label, valueText:fmtNum(item.value), meta:`${fmtNum(analytics.missionCount ? Math.round((item.value / analytics.missionCount) * 100) : 0)}% місій, де була ця ціль`, tone:"b-blue"}));
   const targetStatusRows = analytics.targetStatuses.map(item=>({label:item.label, valueText:fmtNum(item.value), meta:`${fmtNum(analytics.missionCount ? Math.round((item.value / analytics.missionCount) * 100) : 0)}% місій, де був цей статус`, tone:"b-ok"}));
@@ -7999,6 +8037,8 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
 
   const detailModal = (modalTitle, sectionTitle, summary, rowsData, emptyText)=>registerRenderedTableModal(modalTitle, buildDeltaNrkInsightModalHtml([{title: sectionTitle, summary, rows: rowsData, emptyText}]));
   const platformsModalKey = detailModal(`${analytics.title || "Delta / БпЛА"} · Платформи`, "Платформи · по місіях", `Усього платформ: ${fmtNum(platformsRows.length)} · місій: ${fmtNum(analytics.missionCount)}`, platformsRows, "По платформах даних поки немає.");
+  const unitTaskModalKey = detailModal(`${analytics.title || "Delta / БпЛА"} · Розвідка / Ураження`, "Розвідка / Ураження · по підрозділах", `Формат значення: Розвідка / Ураження · підрозділів: ${fmtNum(unitTaskRows.length)}`, unitTaskRows, "По підрозділах даних поки немає.");
+  const assetLossModalKey = detailModal(`${analytics.title || "Delta / БпЛА"} · Втрати по платформах`, "Втрати · по платформах", `Платформ у зрізі: ${fmtNum(assetLossRows.length)}`, assetLossRows, "Втрат по платформах поки немає.");
   const taskTypesModalKey = detailModal(`${analytics.title || "Delta / БпЛА"} · Типи задач`, "Типи задач · по місіях", `Унікальних типів: ${fmtNum(taskTypeRows.length)}`, taskTypeRows, "По типах задач даних поки немає.");
   const targetTypesModalKey = detailModal(`${analytics.title || "Delta / БпЛА"} · Типи цілей`, "Типи цілей · по місіях", `Унікальних типів цілей: ${fmtNum(targetTypeRows.length)}`, targetTypeRows, "По типах цілей даних поки немає.");
   const targetStatusModalKey = detailModal(`${analytics.title || "Delta / БпЛА"} · Статус цілей`, "Статус цілей · по місіях", `Унікальних статусів: ${fmtNum(targetStatusRows.length)}`, targetStatusRows, "По статусу цілей даних поки немає.");
@@ -8008,6 +8048,8 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
   const controlModalKey = detailModal(`${analytics.title || "Delta / БпЛА"} · Керування`, "Тип керування · по місіях", `Унікальних типів: ${fmtNum(controlRows.length)}`, controlRows, "По типу керування даних поки немає.");
 
   const platformsBlock = buildDeltaNrkTopList("Платформи · по місіях", platformsRows.slice(0, 8), "По платформах даних поки немає.").replace('<div class="row"><div class="name">Платформи · по місіях</div></div>', `<div class="row"><div class="name">Платформи · по місіях</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${platformsModalKey}">Детальніше</button></div>`);
+  const unitTaskBlock = buildDeltaNrkTopList("Розвідка / Ураження · по підрозділах", unitTaskRows.slice(0, 8), "По підрозділах даних поки немає.").replace('<div class="row"><div class="name">Розвідка / Ураження · по підрозділах</div></div>', `<div class="row"><div class="name">Розвідка / Ураження · по підрозділах</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${unitTaskModalKey}">Детальніше</button></div>`);
+  const assetLossBlock = buildDeltaNrkTopList("Втрати · по платформах", assetLossRows.slice(0, 8), "Втрат по платформах поки немає.").replace('<div class="row"><div class="name">Втрати · по платформах</div></div>', `<div class="row"><div class="name">Втрати · по платформах</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${assetLossModalKey}">Детальніше</button></div>`);
   const taskTypesBlock = buildDeltaNrkTopList("Типи задач · по місіях", taskTypeRows.slice(0, 8), "По типах задач даних поки немає.").replace('<div class="row"><div class="name">Типи задач · по місіях</div></div>', `<div class="row"><div class="name">Типи задач · по місіях</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${taskTypesModalKey}">Детальніше</button></div>`);
   const targetTypesBlock = buildDeltaNrkTopList("Типи цілей · по місіях", targetTypeRows.slice(0, 8), "По типах цілей даних поки немає.").replace('<div class="row"><div class="name">Типи цілей · по місіях</div></div>', `<div class="row"><div class="name">Типи цілей · по місіях</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${targetTypesModalKey}">Детальніше</button></div>`);
   const targetStatusBlock = buildDeltaNrkTopList("Статус цілей · по місіях", targetStatusRows.slice(0, 8), "По статусу цілей даних поки немає.").replace('<div class="row"><div class="name">Статус цілей · по місіях</div></div>', `<div class="row"><div class="name">Статус цілей · по місіях</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${targetStatusModalKey}">Детальніше</button></div>`);
@@ -8027,7 +8069,8 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
       <div class="eval-donut-grid">${taskTypesDonut}${targetStatusDonut}</div>
       ${buildDeltaNrkDayNightHtml(analytics)}
       ${buildDeltaBplaMonthlyAnalyticsHtml(analytics)}
-      <div class="control-grid">${platformsBlock}${taskTypesBlock}</div>
+      <div class="control-grid">${platformsBlock}${unitTaskBlock}</div>
+      <div class="control-grid">${taskTypesBlock}${assetLossBlock}</div>
       <div class="control-grid">${targetTypesBlock}${targetStatusBlock}</div>
       <div class="control-grid">${ammoBlock}${reliabilityBlock}</div>
       ${deliveryBlock ? `<div class="control-grid">${deliveryBlock}${unitsBlock}</div><div class="control-grid">${controlBlock}</div>` : `<div class="control-grid">${unitsBlock}${controlBlock}</div>`}
