@@ -8085,6 +8085,64 @@ function buildReferenceWorkbookSheetPreviewHtml(fileName, sheetName, rows, typeL
 
 }
 
+function captureReferenceEntryFormState(){
+
+  const textarea = document.getElementById("referenceEntryText");
+  const titleInput = document.getElementById("referenceEntryTitle");
+  const deptSelect = document.getElementById("referenceEntryDept");
+  const typeSelect = document.getElementById("referenceEntryTableType");
+
+  return {
+    sheetTitle: sheetTitle?.textContent || "Редагувати запис",
+    sheetHtml: sheetBody?.innerHTML || "",
+    titleValue: titleInput?.value || "",
+    deptValue: deptSelect?.value || "",
+    tableTypeValue: typeSelect?.value || "",
+    textValue: textarea?.value || "",
+    tableRaw: textarea?.dataset?.tableRaw || "",
+    tablePrevRaw: textarea?.dataset?.tablePrevRaw || ""
+  };
+
+}
+
+function restoreReferenceEntryFormState(snapshot){
+
+  if(!snapshot?.sheetHtml) return false;
+
+  sheetTitle.textContent = snapshot.sheetTitle || "Редагувати запис";
+  sheetBody.innerHTML = snapshot.sheetHtml;
+  modal.classList.add("show");
+
+  const titleInput = document.getElementById("referenceEntryTitle");
+  const deptSelect = document.getElementById("referenceEntryDept");
+  const typeSelect = document.getElementById("referenceEntryTableType");
+  const textarea = document.getElementById("referenceEntryText");
+
+  if(titleInput) titleInput.value = snapshot.titleValue || "";
+  if(deptSelect) deptSelect.value = snapshot.deptValue || "";
+  if(typeSelect) typeSelect.value = snapshot.tableTypeValue || "";
+
+  if(textarea){
+    textarea.value = snapshot.textValue || "";
+    if(snapshot.tableRaw){
+      textarea.dataset.tableRaw = snapshot.tableRaw;
+    } else {
+      delete textarea.dataset.tableRaw;
+    }
+    if(snapshot.tablePrevRaw){
+      textarea.dataset.tablePrevRaw = snapshot.tablePrevRaw;
+    } else {
+      delete textarea.dataset.tablePrevRaw;
+    }
+  }
+
+  document.getElementById("referenceEntryTableType")?.addEventListener("change", syncReferenceEntryImportUi);
+  syncReferenceEntryImportUi();
+
+  return !!textarea;
+
+}
+
 function openReferenceWorkbookSheetPreview(sheetName=""){
 
   const pending = UI.pendingReferenceWorkbook || null;
@@ -8129,8 +8187,17 @@ function applyReferenceWorkbookImport(sheetName="", opts={}){
     return;
   }
 
-  const textarea = document.getElementById("referenceEntryText");
-  if(!textarea) return;
+  let textarea = document.getElementById("referenceEntryText");
+
+  if(!textarea && pending.formState){
+    restoreReferenceEntryFormState(pending.formState);
+    textarea = document.getElementById("referenceEntryText");
+  }
+
+  if(!textarea){
+    showToast("Не вдалося повернути форму запису для імпорту.", "warn");
+    return;
+  }
 
   if(!String(textarea.value || "").trim()){
     const typeLabel = pending.type === "delta_nrk" ? "Delta / НРК" : "Порівняння";
@@ -8219,7 +8286,8 @@ function importReferenceWorkbook(){
           type: config.type,
           fileName: file.name,
           workbook,
-          preferredSheet: config.preferredSheet
+          preferredSheet: config.preferredSheet,
+          formState: captureReferenceEntryFormState()
         };
 
         const resolvedPreferredSheet = pickWorkbookSheetName(workbook, config.preferredSheet);
