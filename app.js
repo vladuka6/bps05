@@ -5576,18 +5576,40 @@ function buildDeltaNrkTopList(title, rows, emptyText){
           ? items.map((item, index)=>`
               <div class="comparison-compact-card delta-nrk-card">
                 <div class="comparison-compact-rank mono">${index + 1}</div>
-                <div class="comparison-compact-main">
-                  <div class="comparison-compact-title">${htmlesc(item.label)}</div>
-                  <div class="comparison-compact-meta">${htmlesc(item.meta || "")}</div>
+                  <div class="comparison-compact-main">
+                    <div class="comparison-compact-title">${htmlesc(item.label)}</div>
+                    <div class="comparison-compact-meta">${htmlesc(item.meta || "")}</div>
+                  </div>
+                  ${renderDeltaMetricBadge(item, title)}
                 </div>
-                <div class="badge ${item.tone || "b-blue"} mono">${htmlesc(String(item.valueText || fmtNum(item.value || 0)))}</div>
-              </div>
-            `).join("")
-          : `<div class="hint">${htmlesc(emptyText || "Даних поки немає.")}</div>`
-        }
+              `).join("")
+            : `<div class="hint">${htmlesc(emptyText || "Даних поки немає.")}</div>`
+          }
       </div>
     </div>
   `;
+
+}
+
+function inferDeltaMetricLabel(contextTitle="", rawValueText=""){
+
+  const title = String(contextTitle || "").toLowerCase();
+  const valueText = String(rawValueText || "").trim();
+  if(!/^[\d\s.,]+$/.test(valueText)) return "";
+  if(/втрат/.test(title)) return "втр.";
+  if(/ціл(і|ей)?/.test(title) && !/по цілях/.test(title)) return "міс.";
+  if(/по місіях|типи задач|типи цілей|статус цілей|боєприпаси|підрозділи|платформи|керування|зв’язок|зв'язок|евакуація|надійність/.test(title)) return "міс.";
+  return "";
+
+}
+
+function renderDeltaMetricBadge(item, contextTitle=""){
+
+  const valueText = String(item?.valueText || fmtNum(item?.value || 0));
+  const valueLabel = String(item?.valueLabel || inferDeltaMetricLabel(contextTitle, valueText) || "").trim();
+  const badgeClass = item?.tone || "b-blue";
+  const displayText = valueLabel ? `${valueText} ${valueLabel}` : valueText;
+  return `<div class="badge ${badgeClass} mono">${htmlesc(displayText)}</div>`;
 
 }
 
@@ -6012,14 +6034,14 @@ function buildDeltaNrkInsightModalHtml(sections){
           <div class="comparison-compact-grid">
             ${(section.rows || []).length
               ? section.rows.map((item, index)=>{
-                  const cardInner = `
-                    <div class="comparison-compact-rank mono">${index + 1}</div>
-                    <div class="comparison-compact-main">
-                      <div class="comparison-compact-title">${htmlesc(item.label)}</div>
-                      <div class="comparison-compact-meta">${htmlesc(item.meta || "")}${item.modalKey ? ` · Відкрити місії` : ""}</div>
-                    </div>
-                    <div class="badge ${item.tone || "b-blue"} mono">${htmlesc(String(item.valueText || ""))}</div>
-                  `;
+                    const cardInner = `
+                      <div class="comparison-compact-rank mono">${index + 1}</div>
+                      <div class="comparison-compact-main">
+                        <div class="comparison-compact-title">${htmlesc(item.label)}</div>
+                        <div class="comparison-compact-meta">${htmlesc(item.meta || "")}${item.modalKey ? ` · Відкрити місії` : ""}</div>
+                      </div>
+                      ${renderDeltaMetricBadge(item, section.title || "Аналітика")}
+                    `;
                   return item.modalKey
                     ? `<button type="button" class="comparison-compact-card comparison-card-btn delta-nrk-card" data-action="openRenderedTableModal" data-arg1="${item.modalKey}">${cardInner}</button>`
                     : `<div class="comparison-compact-card delta-nrk-card">${cardInner}</div>`;
