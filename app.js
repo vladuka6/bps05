@@ -8050,7 +8050,15 @@ function buildReferenceWorkbookSheetPreviewHtml(fileName, sheetName, rows, typeL
         : `На ${fmtNum(Math.abs(rowDiff))} рядк. менше, ніж у поточній таблиці.`;
 
   const previewTable = previewRows.length
-    ? renderStoredTableBlock(serializeStoredTable(previewRows))
+    ? renderMarkdownTableBlock(
+        previewRows.map((row, idx)=>{
+          const line = `| ${row.map(cell=>String(cell ?? "").replace(/\|/g, "/")).join(" | ")} |`;
+          if(idx === 0){
+            return [line, `| ${row.map(()=> "---").join(" | ")} |`];
+          }
+          return line;
+        }).flat()
+      )
     : `<div class="hint">Немає даних для попереднього перегляду.</div>`;
 
   return `
@@ -8134,7 +8142,10 @@ function applyReferenceWorkbookImport(sheetName="", opts={}){
 
   if(!opts.keepModal){
     UI.pendingReferenceWorkbook = null;
-    hideSheet();
+    _sheetStackOn = false;
+    _sheetStack = [];
+    modal.classList.remove("show");
+    sheetBody.innerHTML = "";
   }
 
   showToast(`Таблицю оновлено: ${Math.max(0, importedRows.length - 1)} рядків з аркуша ${resolvedSheetName}`, "ok");
