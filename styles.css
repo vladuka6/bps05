@@ -5860,6 +5860,25 @@ body.dark .text-table-import-col{
   list-style:none;
   cursor:pointer;
 }
+.delta-nrk-collapsible-summary{
+  position:relative;
+  padding-right:28px;
+}
+.delta-nrk-collapsible-summary::after{
+  content:"";
+  position:absolute;
+  right:4px;
+  top:50%;
+  width:10px;
+  height:10px;
+  border-right:2px solid rgba(104,126,173,.65);
+  border-bottom:2px solid rgba(104,126,173,.65);
+  transform:translateY(-60%) rotate(45deg);
+  transition:transform .18s ease, border-color .18s ease;
+}
+.delta-nrk-collapsible-section[open] > .delta-nrk-collapsible-summary::after{
+  transform:translateY(-35%) rotate(225deg);
+}
 .delta-nrk-collapsible-section > summary::-webkit-details-marker{
   display:none;
 }
@@ -6050,6 +6069,10 @@ body.dark .delta-monthly-card{
 }
 body.dark .delta-monthly-progress{
   background:rgba(255,255,255,.08);
+}
+body.dark .delta-nrk-collapsible-summary::after{
+  border-right-color:rgba(255,255,255,.45);
+  border-bottom-color:rgba(255,255,255,.45);
 }
 body.dark .delta-monthly-statline{
   border-top:1px solid rgba(255,255,255,.08);

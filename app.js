@@ -7820,12 +7820,12 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
       ${diagnosticsBlock}
       ${countingLogicBlock}
       ${buildDeltaNrkAutoSummaryHtml(analytics)}
-      ${buildDeltaNrkTimeQualityHtml(analytics)}
+      ${wrapDeltaNrkCollapsible("Якість заповнення даних", buildDeltaNrkTimeQualityHtml(analytics))}
       <div class="eval-donut-grid">
         ${missionResultDonut}
         ${statusDonut}
       </div>
-      ${buildDeltaNrkDayNightHtml(analytics)}
+      ${wrapDeltaNrkCollapsible("День / ніч", buildDeltaNrkDayNightHtml(analytics))}
       ${buildDeltaNrkMonthlyAnalyticsHtml(analytics)}
       <div class="control-grid">
         ${wrapDeltaNrkCollapsible("Платформи", platformsBlock)}
