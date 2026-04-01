@@ -6528,111 +6528,56 @@ function buildDeltaNrkMonthlyAnalyticsHtml(analytics){
 
   if(!analytics?.months?.length) return "";
 
-  const groupId = uid("delta_month");
-  const monthMetrics = [
-    {
-      key: "missions",
-      label: "Місії",
-      value: item=>item.missionCount,
-      valueText: item=>fmtNum(item.missionCount),
-      meta: item=>`Доставлено ${fmtNum(item.deliveredCount)} · Не доставлено ${fmtNum(item.notDeliveredCount)}`,
-      tone: "blue",
-    },
-    {
-      key: "delivered",
-      label: "Доставлено",
-      value: item=>item.deliveredCount,
-      valueText: item=>fmtNum(item.deliveredCount),
-      meta: item=>`${fmtNum(item.successRate)}% успішності`,
-      tone: "green",
-    },
-    {
-      key: "not_delivered",
-      label: "Не доставлено",
-      value: item=>item.notDeliveredCount,
-      valueText: item=>fmtNum(item.notDeliveredCount),
-      meta: item=>`${fmtNum(item.missionCount)} місій у місяці`,
-      tone: "orange",
-    },
-    {
-      key: "evac",
-      label: "Евакуація",
-      value: item=>item.evacuationCount,
-      valueText: item=>fmtNum(item.evacuationCount),
-      meta: item=>`${fmtNum(item.missionCount)} місій у місяці`,
-      tone: "violet",
-    },
-    {
-      key: "weight",
-      label: "Вага",
-      value: item=>item.totalWeight,
-      valueText: item=>`${fmtNum(item.totalWeight)} кг`,
-      meta: item=>`Сер. вага ${fmtNum(item.avgWeight)} кг`,
-      tone: "blue",
-    },
-    {
-      key: "avg_weight",
-      label: "Сер. вага",
-      value: item=>item.avgWeight,
-      valueText: item=>`${fmtNum(item.avgWeight)} кг`,
-      meta: item=>`Макс. вага ${fmtNum(item.maxWeight)} кг`,
-      tone: "green",
-    },
-    {
-      key: "losses",
-      label: "Втрати",
-      value: item=>item.lossCount,
-      valueText: item=>fmtNum(item.lossCount),
-      meta: item=>`Пошкоджено ${fmtNum(item.damagedCount)}`,
-      tone: "red",
-    },
-    {
-      key: "success_rate",
-      label: "Успішність %",
-      value: item=>item.successRate,
-      valueText: item=>`${fmtNum(item.successRate)}%`,
-      meta: item=>`Повернення ${fmtNum(item.returnRate)}%`,
-      tone: "green",
-      maxValue: 100,
-    },
-  ];
+  const maxMissionCount = Math.max(1, ...analytics.months.map(item=>Number(item.missionCount) || 0));
+  const formatDelta = (value, suffix="")=>{
+    const num = Number(value) || 0;
+    if(Math.abs(num) < 0.000001) return `без змін${suffix}`;
+    return `${num > 0 ? "+" : ""}${fmtNum(num)}${suffix}`;
+  };
+  const getDeltaTone = value=>{
+    const num = Number(value) || 0;
+    if(num > 0) return "is-up";
+    if(num < 0) return "is-down";
+    return "is-flat";
+  };
 
   return `
-    <div class="item analytics-block delta-monthly-block" data-topswitch-group="${groupId}">
-      <div class="comparison-switcher-head">
+    <div class="item analytics-block delta-monthly-block">
+      <div class="row">
         <div class="name">Аналітика по місяцях · по місіях</div>
-        <div class="comparison-switcher-buttons">
-          ${monthMetrics.map((metric, index)=>`
-            <button type="button" class="comparison-switcher-btn ${index === 0 ? "is-active" : ""}" data-action="switchComparisonTopPanel" data-arg1="${groupId}" data-arg2="${metric.key}">${htmlesc(metric.label)}</button>
-          `).join("")}
-        </div>
+        <div class="hint">Повний зріз місяця та динаміка до попереднього.</div>
       </div>
-      ${monthMetrics.map((metric, index)=>{
-        const values = analytics.months.map(item=>Number(metric.value(item) || 0));
-        const maxValue = metric.maxValue || Math.max(1, ...values);
-        return `
-          <div class="comparison-switch-panel ${index === 0 ? "is-active" : ""}" data-topswitch-panel="${groupId}:${metric.key}">
-            <div class="delta-monthly-grid">
-              ${analytics.months.map(item=>{
-                const currentValue = Number(metric.value(item) || 0);
-                const percent = maxValue > 0 ? Math.max(4, Math.round((currentValue / maxValue) * 100)) : 0;
-                return `
-                  <div class="delta-monthly-card tone-${metric.tone || "blue"}">
-                    <div class="delta-monthly-head">
-                      <div class="delta-monthly-month">${htmlesc(item.label)}</div>
-                      <div class="delta-monthly-value mono">${htmlesc(metric.valueText(item))}</div>
-                    </div>
-                    <div class="delta-monthly-meta">${htmlesc(metric.meta(item))}</div>
-                    <div class="delta-monthly-progress">
-                      <div class="delta-monthly-progress-fill" style="width:${percent}%;"></div>
-                    </div>
-                  </div>
-                `;
-              }).join("")}
+      <div class="delta-monthly-grid delta-monthly-rich-grid">
+        ${analytics.months.map((item, index)=>{
+          const prev = index > 0 ? analytics.months[index - 1] : null;
+          const progress = maxMissionCount > 0 ? Math.max(4, Math.round(((Number(item.missionCount) || 0) / maxMissionCount) * 100)) : 0;
+          const missionDelta = prev ? ((Number(item.missionCount) || 0) - (Number(prev.missionCount) || 0)) : null;
+          const weightDelta = prev ? ((Number(item.totalWeight) || 0) - (Number(prev.totalWeight) || 0)) : null;
+          const successDelta = prev ? ((Number(item.successRate) || 0) - (Number(prev.successRate) || 0)) : null;
+          const lossesDelta = prev ? ((Number(item.lossCount) || 0) - (Number(prev.lossCount) || 0)) : null;
+          return `
+            <div class="delta-monthly-card tone-blue delta-monthly-rich-card">
+              <div class="delta-monthly-head">
+                <div class="delta-monthly-month">${htmlesc(item.label)}</div>
+                <div class="delta-monthly-value mono">${fmtNum(item.missionCount)}</div>
+              </div>
+              <div class="delta-monthly-meta">Доставлено ${fmtNum(item.deliveredCount)} · Не доставлено ${fmtNum(item.notDeliveredCount)} · Евакуація ${fmtNum(item.evacuationCount)}</div>
+              <div class="delta-monthly-meta">Вага ${fmtNum(item.totalWeight)} кг · Сер. вага ${fmtNum(item.avgWeight)} кг</div>
+              <div class="delta-monthly-meta">Втрати ${fmtNum(item.lossCount)} · Пошкоджено ${fmtNum(item.damagedCount)} · Успішність ${fmtNum(item.successRate)}%</div>
+              <div class="delta-monthly-progress">
+                <div class="delta-monthly-progress-fill" style="width:${progress}%;"></div>
+              </div>
+              <div class="delta-monthly-delta-title">${prev ? `Динаміка до ${htmlesc(prev.label)}` : "Базовий місяць для порівняння"}</div>
+              <div class="delta-monthly-delta-grid">
+                <div class="delta-monthly-delta-chip ${prev ? getDeltaTone(missionDelta) : "is-flat"}">Місії: ${prev ? formatDelta(missionDelta) : "—"}</div>
+                <div class="delta-monthly-delta-chip ${prev ? getDeltaTone(weightDelta) : "is-flat"}">Вага: ${prev ? formatDelta(weightDelta, " кг") : "—"}</div>
+                <div class="delta-monthly-delta-chip ${prev ? getDeltaTone(successDelta) : "is-flat"}">Успішність: ${prev ? formatDelta(successDelta, " п.п.") : "—"}</div>
+                <div class="delta-monthly-delta-chip ${prev ? getDeltaTone(-lossesDelta) : "is-flat"}">Втрати: ${prev ? formatDelta(lossesDelta) : "—"}</div>
+              </div>
             </div>
-          </div>
-        `;
-      }).join("")}
+          `;
+        }).join("")}
+      </div>
     </div>
   `;
 
@@ -7267,8 +7212,11 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
   `;
 
   const diagnosticsBlock = `
-    <div class="item analytics-block delta-nrk-diagnostics">
-      <div class="row"><div class="name">Перевірка імпорту</div></div>
+    <details class="item analytics-block delta-nrk-diagnostics delta-nrk-collapsible">
+      <summary class="delta-nrk-collapsible-summary">
+        <span class="name">Перевірка імпорту</span>
+        <span class="hint">Службова діагностика імпорту</span>
+      </summary>
       <div class="delta-nrk-diagnostics-grid">
         <div class="delta-nrk-diagnostics-item">
           <div class="delta-nrk-diagnostics-k">Формат</div>
@@ -7291,17 +7239,20 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
           <div class="delta-nrk-diagnostics-v">${htmlesc(analytics.missionGroupingLabel || "—")}</div>
         </div>
       </div>
-    </div>
+    </details>
   `;
 
   const countingLogicBlock = `
-    <div class="item analytics-block delta-nrk-diagnostics">
-      <div class="row"><div class="name">Логіка підрахунку</div></div>
+    <details class="item analytics-block delta-nrk-diagnostics delta-nrk-collapsible">
+      <summary class="delta-nrk-collapsible-summary">
+        <span class="name">Логіка підрахунку</span>
+        <span class="hint">Пояснення, як формується аналітика</span>
+      </summary>
       <div class="delta-nrk-filter-summary">
         <span class="delta-nrk-filter-chip">Основна аналітика і час рахуються по унікальних місіях (UUID або fallback-групування).</span>
         <span class="delta-nrk-filter-chip">По записах лишається тільки технічна перевірка імпорту.</span>
       </div>
-    </div>
+    </details>
   `;
 
   if(!analytics.items.length){

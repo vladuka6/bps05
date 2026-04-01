@@ -5840,11 +5840,17 @@ body.dark .text-table-import-col{
   gap:12px;
   margin-top:12px;
 }
+.delta-monthly-rich-grid{
+  grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));
+}
 .delta-monthly-card{
   padding:14px 14px 12px;
   border:1px solid var(--line);
   border-radius:18px;
   background:linear-gradient(180deg, rgba(255,255,255,.92), rgba(247,250,255,.92));
+}
+.delta-monthly-rich-card{
+  padding:16px 16px 14px;
 }
 .delta-monthly-head{
   display:flex;
@@ -5868,6 +5874,47 @@ body.dark .text-table-import-col{
   font-size:.88rem;
   color:var(--muted);
   line-height:1.35;
+}
+.delta-monthly-delta-title{
+  margin-top:12px;
+  font-size:.8rem;
+  font-weight:800;
+  color:var(--muted);
+  letter-spacing:.01em;
+}
+.delta-monthly-delta-grid{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:8px;
+}
+.delta-monthly-delta-chip{
+  display:inline-flex;
+  align-items:center;
+  min-height:30px;
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid rgba(104,126,173,.18);
+  background:rgba(104,126,173,.08);
+  color:var(--text);
+  font-size:.82rem;
+  font-weight:700;
+  line-height:1.2;
+}
+.delta-monthly-delta-chip.is-up{
+  background:rgba(70,190,109,.12);
+  border-color:rgba(70,190,109,.25);
+  color:#1f7a42;
+}
+.delta-monthly-delta-chip.is-down{
+  background:rgba(255,109,127,.12);
+  border-color:rgba(255,109,127,.25);
+  color:#b03049;
+}
+.delta-monthly-delta-chip.is-flat{
+  background:rgba(104,126,173,.08);
+  border-color:rgba(104,126,173,.18);
+  color:var(--muted);
 }
 .delta-monthly-progress{
   position:relative;
@@ -5912,6 +5959,13 @@ body.dark .text-table-import-col{
   .delta-monthly-meta{
     font-size:.84rem;
   }
+  .delta-monthly-delta-grid{
+    gap:6px;
+  }
+  .delta-monthly-delta-chip{
+    font-size:.78rem;
+    padding:5px 9px;
+  }
 }
 
 @media (max-width: 720px){
@@ -5953,6 +6007,23 @@ body.dark .delta-monthly-card{
 }
 body.dark .delta-monthly-progress{
   background:rgba(255,255,255,.08);
+}
+body.dark .delta-monthly-delta-chip{
+  background:rgba(255,255,255,.05);
+  border-color:rgba(255,255,255,.08);
+}
+body.dark .delta-monthly-delta-chip.is-up{
+  color:#8be39e;
+  background:rgba(70,190,109,.14);
+  border-color:rgba(70,190,109,.22);
+}
+body.dark .delta-monthly-delta-chip.is-down{
+  color:#ff9aa7;
+  background:rgba(255,109,127,.14);
+  border-color:rgba(255,109,127,.22);
+}
+body.dark .delta-monthly-delta-chip.is-flat{
+  color:var(--muted);
 }
 body.dark .delta-nrk-primary-card{
   background:linear-gradient(180deg, rgba(18,24,38,.92), rgba(12,18,30,.96));
