@@ -7380,6 +7380,22 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
       tone: "b-danger",
     },
   ].filter(item=>item.value > 0 || item.label === "Евакуйовано");
+  const mapMissionDetailRow = (item, tone="b-blue")=>({
+    label: item.unit || "Без підрозділу",
+    valueText: item.resultAt || item.endAt || item.startAt || "Без дати",
+    meta: [
+      item.asset ? `Платформа: ${item.asset}` : "",
+      item.reporter ? `Доповідач: ${item.reporter}` : "",
+      item.taskType ? `Тип задачі: ${item.taskType}` : "",
+      item.result ? `Результат: ${item.result}` : "",
+      item.primaryLink ? `Осн. зв'язок: ${item.primaryLink}` : "",
+      item.reserveLink ? `Рез. зв'язок: ${item.reserveLink}` : "",
+      Number(item.cargoWeight) > 0 ? `Вага: ${fmtNum(item.cargoWeight)} кг` : "",
+      Number(item.totalPoints) > 0 ? `Бали: ${fmtNum(item.totalPoints)}` : "",
+      item.circumstances ? `Обставини: ${item.circumstances}` : "",
+    ].filter(Boolean).join(" · "),
+    tone,
+  });
   const reliabilityGroups = [
     {
       label: "Повернення",
@@ -7479,6 +7495,20 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
     meta: `${fmtNum(item.missionCount)} місій · сер. ${fmtNum(item.avgPoints)} бал./місію`,
     tone: "b-blue",
   }));
+  const pointEfficiencyUnitRows = (analytics.pointsByUnits || []).map(item=>({
+    label: item.label,
+    valueText: fmtNum(item.avgPoints),
+    valueLabel: "бал./міс.",
+    meta: `${fmtNum(item.value)} бал. · ${fmtNum(item.missionCount)} місій`,
+    tone: "b-violet",
+  })).sort((a,b)=>(parseAnalyticsNumber(b.valueText) || 0) - (parseAnalyticsNumber(a.valueText) || 0) || String(a.label).localeCompare(String(b.label), "uk"));
+  const pointEfficiencyAssetRows = (analytics.pointsByAssets || []).map(item=>({
+    label: item.label,
+    valueText: fmtNum(item.avgPoints),
+    valueLabel: "бал./міс.",
+    meta: `${fmtNum(item.value)} бал. · ${fmtNum(item.missionCount)} місій`,
+    tone: "b-blue",
+  })).sort((a,b)=>(parseAnalyticsNumber(b.valueText) || 0) - (parseAnalyticsNumber(a.valueText) || 0) || String(a.label).localeCompare(String(b.label), "uk"));
 
   const platformsModalKey = registerRenderedTableModal(
     `${analytics.title || "Delta / НРК"} · Платформи`,
@@ -7611,6 +7641,81 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
       }
     ])
   );
+  const pointsEfficiencyModalKey = registerRenderedTableModal(
+    `${analytics.title || "Delta / НРК"} · Бали на 1 місію`,
+    buildDeltaNrkInsightModalHtml([
+      {
+        title: "Бали на 1 місію · по підрозділах",
+        summary: `Усього балів: ${fmtNum(analytics.pointsTotal)} · підрозділів: ${fmtNum(pointEfficiencyUnitRows.length)}`,
+        rows: pointEfficiencyUnitRows,
+        emptyText: "По підрозділах балів поки немає.",
+      },
+      {
+        title: "Бали на 1 місію · по платформах",
+        summary: `Усього балів: ${fmtNum(analytics.pointsTotal)} · платформ: ${fmtNum(pointEfficiencyAssetRows.length)}`,
+        rows: pointEfficiencyAssetRows,
+        emptyText: "По платформах балів поки немає.",
+      }
+    ])
+  );
+  const anomalyGroups = [
+    {
+      label: "Без результату",
+      tone: "b-warn",
+      items: analytics.missions.filter(item=>!String(item.result || "").trim()),
+      meta: "не заповнено поле результату",
+    },
+    {
+      label: "Без ваги",
+      tone: "b-blue",
+      items: analytics.missions.filter(item=>(Number(item.cargoWeight) || 0) <= 0),
+      meta: "немає ваги місії",
+    },
+    {
+      label: "Без доповідача",
+      tone: "b-violet",
+      items: analytics.missions.filter(item=>!String(item.reporter || "").trim()),
+      meta: "не вказано доповідача",
+    },
+    {
+      label: "Без основного зв'язку",
+      tone: "b-warn",
+      items: analytics.missions.filter(item=>!String(item.primaryLink || "").trim()),
+      meta: "не вказано основний зв’язок",
+    },
+    {
+      label: "Без резервного зв'язку",
+      tone: "b-blue",
+      items: analytics.missions.filter(item=>!String(item.reserveLink || "").trim()),
+      meta: "не вказано резервний зв’язок",
+    },
+    {
+      label: "Без жодного зв'язку",
+      tone: "b-danger",
+      items: analytics.missions.filter(item=>!String(item.primaryLink || "").trim() && !String(item.reserveLink || "").trim()),
+      meta: "не вказано жоден канал зв’язку",
+    },
+  ];
+  const anomalyRows = anomalyGroups.map(group=>{
+    const modalKey = registerRenderedTableModal(
+      `${analytics.title || "Delta / НРК"} · ${group.label}`,
+      buildDeltaNrkInsightModalHtml([
+        {
+          title: `${group.label} · місії`,
+          summary: `${fmtNum(group.items.length)} місій · ${fmtNum(analytics.missionCount ? Math.round((group.items.length / analytics.missionCount) * 100) : 0)}% від усіх`,
+          rows: group.items.map(item=>mapMissionDetailRow(item, group.tone)),
+          emptyText: "У цьому зрізі аномалій поки немає.",
+        }
+      ])
+    );
+    return {
+      label: group.label,
+      valueText: fmtNum(group.items.length),
+      meta: `${fmtNum(analytics.missionCount ? Math.round((group.items.length / analytics.missionCount) * 100) : 0)}% місій · ${group.meta}`,
+      tone: group.tone,
+      modalKey,
+    };
+  }).filter(item=>(parseAnalyticsNumber(item.valueText) || 0) > 0);
 
   const platformsBlock = buildDeltaNrkTopList(
     "Платформи · по місіях",
@@ -7699,6 +7804,37 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
     '<div class="row"><div class="name">Нараховані бали · по місіях</div></div>',
     `<div class="row"><div class="name">Нараховані бали · по місіях</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${pointsModalKey}">Детальніше</button></div>`
   );
+  const pointsEfficiencyBlock = buildDeltaNrkTopList(
+    "Бали на 1 місію · по місіях",
+    pointEfficiencyUnitRows.slice(0, 8),
+    "По ефективності балів даних поки немає."
+  ).replace(
+    '<div class="row"><div class="name">Бали на 1 місію · по місіях</div></div>',
+    `<div class="row"><div class="name">Бали на 1 місію · по місіях</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${pointsEfficiencyModalKey}">Детальніше</button></div>`
+  );
+  const anomaliesBlock = `
+    <div class="item analytics-block delta-nrk-list">
+      <div class="row"><div class="name">Аномалії · по місіях</div></div>
+      <div class="comparison-compact-grid">
+        ${anomalyRows.length
+          ? anomalyRows.map((item, index)=>`
+              <div class="comparison-compact-card delta-nrk-card delta-nrk-reliability-card">
+                <div class="comparison-compact-rank mono">${index + 1}</div>
+                <div class="comparison-compact-main">
+                  <div class="comparison-compact-title">${htmlesc(item.label)}</div>
+                  <div class="comparison-compact-meta">${htmlesc(item.meta || "")}</div>
+                </div>
+                <div class="delta-nrk-reliability-actions">
+                  ${renderDeltaMetricBadge(item, "Аномалії · по місіях")}
+                  <button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${item.modalKey}">Місії</button>
+                </div>
+              </div>
+            `).join("")
+          : `<div class="hint">Критичних пропусків у поточному зрізі не знайдено.</div>`
+        }
+      </div>
+    </div>
+  `;
 
   return `
     <div class="staffing-analytics-modal comparison-analytics-modal delta-nrk-analytics-modal">
@@ -7718,8 +7854,8 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
         ${cargoBlock}
       </div>
       ${evacuationBlock
-        ? `<div class="control-grid">${evacuationBlock}${reliabilityBlock}</div><div class="control-grid">${unitsBlock}${linksBlock}</div><div class="control-grid">${reportersBlock}${pointsBlock}</div>`
-        : `<div class="control-grid">${reliabilityBlock}${unitsBlock}</div><div class="control-grid">${linksBlock}${reportersBlock}</div><div class="control-grid">${pointsBlock}</div>`
+        ? `<div class="control-grid">${evacuationBlock}${reliabilityBlock}</div><div class="control-grid">${unitsBlock}${linksBlock}</div><div class="control-grid">${reportersBlock}${pointsBlock}</div><div class="control-grid">${pointsEfficiencyBlock}${anomaliesBlock}</div>`
+        : `<div class="control-grid">${reliabilityBlock}${unitsBlock}</div><div class="control-grid">${linksBlock}${reportersBlock}</div><div class="control-grid">${pointsBlock}${pointsEfficiencyBlock}</div>${anomaliesBlock}`
       }
     </div>
   `;
