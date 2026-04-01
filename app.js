@@ -6561,9 +6561,25 @@ function buildDeltaNrkMonthlyAnalyticsHtml(analytics){
                 <div class="delta-monthly-month">${htmlesc(item.label)}</div>
                 <div class="delta-monthly-value mono">${fmtNum(item.missionCount)}</div>
               </div>
-              <div class="delta-monthly-meta">Доставлено ${fmtNum(item.deliveredCount)} · Не доставлено ${fmtNum(item.notDeliveredCount)} · Евакуація ${fmtNum(item.evacuationCount)}</div>
-              <div class="delta-monthly-meta">Вага ${fmtNum(item.totalWeight)} кг · Сер. вага ${fmtNum(item.avgWeight)} кг</div>
-              <div class="delta-monthly-meta">Втрати ${fmtNum(item.lossCount)} · Пошкоджено ${fmtNum(item.damagedCount)} · Успішність ${fmtNum(item.successRate)}%</div>
+              <div class="delta-monthly-statline">
+                <span class="delta-monthly-statlabel">Доставлено</span> <strong>${fmtNum(item.deliveredCount)}</strong>
+                <span class="delta-monthly-sep">·</span>
+                <span class="delta-monthly-statlabel">Не доставлено</span> <strong>${fmtNum(item.notDeliveredCount)}</strong>
+                <span class="delta-monthly-sep">·</span>
+                <span class="delta-monthly-statlabel">Евакуація</span> <strong>${fmtNum(item.evacuationCount)}</strong>
+              </div>
+              <div class="delta-monthly-statline">
+                <span class="delta-monthly-statlabel">Вага</span> <strong>${fmtNum(item.totalWeight)} кг</strong>
+                <span class="delta-monthly-sep">·</span>
+                <span class="delta-monthly-statlabel">Сер. вага</span> <strong>${fmtNum(item.avgWeight)} кг</strong>
+              </div>
+              <div class="delta-monthly-statline">
+                <span class="delta-monthly-statlabel">Втрати</span> <strong>${fmtNum(item.lossCount)}</strong>
+                <span class="delta-monthly-sep">·</span>
+                <span class="delta-monthly-statlabel">Пошкоджено</span> <strong>${fmtNum(item.damagedCount)}</strong>
+                <span class="delta-monthly-sep">·</span>
+                <span class="delta-monthly-statlabel">Успішність</span> <strong>${fmtNum(item.successRate)}%</strong>
+              </div>
               <div class="delta-monthly-progress">
                 <div class="delta-monthly-progress-fill" style="width:${progress}%;"></div>
               </div>

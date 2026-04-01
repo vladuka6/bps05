@@ -5875,6 +5875,26 @@ body.dark .text-table-import-col{
   color:var(--muted);
   line-height:1.35;
 }
+.delta-monthly-statline{
+  margin-top:8px;
+  padding-top:8px;
+  border-top:1px solid rgba(104,126,173,.12);
+  font-size:.93rem;
+  color:var(--muted);
+  line-height:1.4;
+}
+.delta-monthly-statline strong{
+  font-weight:900;
+  color:var(--text);
+}
+.delta-monthly-statlabel{
+  color:var(--muted);
+  font-weight:700;
+}
+.delta-monthly-sep{
+  margin:0 6px;
+  color:rgba(104,126,173,.55);
+}
 .delta-monthly-delta-title{
   margin-top:12px;
   font-size:.8rem;
@@ -5959,6 +5979,9 @@ body.dark .text-table-import-col{
   .delta-monthly-meta{
     font-size:.84rem;
   }
+  .delta-monthly-statline{
+    font-size:.86rem;
+  }
   .delta-monthly-delta-grid{
     gap:6px;
   }
@@ -6007,6 +6030,12 @@ body.dark .delta-monthly-card{
 }
 body.dark .delta-monthly-progress{
   background:rgba(255,255,255,.08);
+}
+body.dark .delta-monthly-statline{
+  border-top:1px solid rgba(255,255,255,.08);
+}
+body.dark .delta-monthly-sep{
+  color:rgba(255,255,255,.28);
 }
 body.dark .delta-monthly-delta-chip{
   background:rgba(255,255,255,.05);
