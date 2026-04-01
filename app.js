@@ -2888,7 +2888,7 @@ function renderTaskDescWithTableToggle(text, label, opts={}){
         );
       } else if(analyticsType === "delta_bpla"){
         analyticsModalKey = registerRenderedTableModal(
-          `Аналітика: ${opts.analyticsTitle || label || "Delta / БпЛА"}`,
+          `${opts.analyticsTitle || label || "Delta / БпЛА"}`,
           ""
         );
         UI.renderedTableModals[analyticsModalKey].deltaRows = currentTable.rows;
@@ -2902,7 +2902,7 @@ function renderTaskDescWithTableToggle(text, label, opts={}){
         );
       } else if(analyticsType === "delta_nrk"){
         analyticsModalKey = registerRenderedTableModal(
-          `Аналітика: ${opts.analyticsTitle || label || "Delta / НРК"}`,
+          `${opts.analyticsTitle || label || "Delta / НРК"}`,
           ""
         );
         UI.renderedTableModals[analyticsModalKey].deltaRows = currentTable.rows;
@@ -6622,6 +6622,45 @@ function buildDeltaNrkExecutiveReportText(analytics){
   const topUnit = analytics.unitsByMissions?.[0]?.label ? `${analytics.unitsByMissions[0].label} (${fmtNum(analytics.unitsByMissions[0].value)} місій)` : "—";
   const topPointsUnit = analytics.pointsByUnits?.[0]?.label ? `${analytics.pointsByUnits[0].label} (${fmtNum(analytics.pointsByUnits[0].value)} бал.)` : "—";
   const topEfficiencyUnit = analytics.pointsByUnits?.[0]?.label ? `${analytics.pointsByUnits.slice().sort((a,b)=>b.avgPoints-a.avgPoints || b.value-a.value)[0]?.label || "—"} (${fmtNum(analytics.pointsByUnits.slice().sort((a,b)=>b.avgPoints-a.avgPoints || b.value-a.value)[0]?.avgPoints || 0)} бал./місію)` : "—";
+  const unitMissionMap = new Map((analytics.unitsByMissions || []).map(item=>[String(item.label || "").trim(), Number(item.value) || 0]));
+  const unitWeightMap = new Map((analytics.unitsByWeight || []).map(item=>[String(item.label || "").trim(), Number(item.value) || 0]));
+  const unitsWithIssues = Array.from(new Set(
+    analytics.missions
+      .filter(item=>item.reliabilityKind === "loss" || item.reliabilityKind === "damaged" || item.resultKind === "not_delivered")
+      .map(item=>String(item.unit || "").trim())
+      .filter(Boolean)
+  ))
+    .map(label=>{
+      const missions = analytics.missions.filter(item=>String(item.unit || "").trim() === label);
+      const losses = missions.filter(item=>item.reliabilityKind === "loss").length;
+      const damaged = missions.filter(item=>item.reliabilityKind === "damaged").length;
+      const notDelivered = missions.filter(item=>item.resultKind === "not_delivered").length;
+      return {label, missions: missions.length, losses, damaged, notDelivered};
+    })
+    .sort((a,b)=>(b.losses + b.damaged + b.notDelivered) - (a.losses + a.damaged + a.notDelivered) || b.missions - a.missions || String(a.label).localeCompare(String(b.label), "uk"));
+  const topProblemUnit = unitsWithIssues[0] || null;
+  const assetMissionMap = new Map();
+  analytics.missions.forEach(item=>{
+    const label = String(item.asset || "").trim();
+    if(!label) return;
+    if(!assetMissionMap.has(label)){
+      assetMissionMap.set(label, {label, missions:0, losses:0, damaged:0, notDelivered:0});
+    }
+    const bucket = assetMissionMap.get(label);
+    bucket.missions += 1;
+    if(item.reliabilityKind === "loss") bucket.losses += 1;
+    if(item.reliabilityKind === "damaged") bucket.damaged += 1;
+    if(item.resultKind === "not_delivered") bucket.notDelivered += 1;
+  });
+  const assetRisks = Array.from(assetMissionMap.values())
+    .sort((a,b)=>(b.losses + b.damaged + b.notDelivered) - (a.losses + a.damaged + a.notDelivered) || b.missions - a.missions || String(a.label).localeCompare(String(b.label), "uk"));
+  const topRiskAsset = assetRisks[0] || null;
+  const topWeightUnitEntry = Array.from(unitWeightMap.entries()).sort((a,b)=>b[1]-a[1] || String(a[0]).localeCompare(String(b[0]), "uk"))[0] || null;
+  const topWeightUnit = topWeightUnitEntry ? `${topWeightUnitEntry[0]} (${fmtNum(topWeightUnitEntry[1])} кг)` : "—";
+  const topPointsAsset = analytics.pointsByAssets?.[0]?.label ? `${analytics.pointsByAssets[0].label} (${fmtNum(analytics.pointsByAssets[0].value)} бал.)` : "—";
+  const topEfficiencyAsset = analytics.pointsByAssets?.length
+    ? `${analytics.pointsByAssets.slice().sort((a,b)=>b.avgPoints-a.avgPoints || b.value-a.value)[0]?.label || "—"} (${fmtNum(analytics.pointsByAssets.slice().sort((a,b)=>b.avgPoints-a.avgPoints || b.value-a.value)[0]?.avgPoints || 0)} бал./місію)`
+    : "—";
 
   lines.push(`Короткий звіт Delta / НРК${scopeParts.length ? ` (${scopeParts.join("; ")})` : ""}`);
   lines.push("");
@@ -6635,6 +6674,7 @@ function buildDeltaNrkExecutiveReportText(analytics){
   if(analytics.pointsTotal > 0){
     lines.push(`- Усього нараховано балів: ${fmtNum(analytics.pointsTotal)}; лідер за балами: ${topPointsUnit}; найвищий середній бал на місію: ${topEfficiencyUnit}.`);
   }
+  lines.push(`- Найбільше перевезень за масою виконав підрозділ: ${topWeightUnit}.`);
 
   lines.push("");
   lines.push("2. Позитивні моменти");
@@ -6654,6 +6694,9 @@ function buildDeltaNrkExecutiveReportText(analytics){
   if(analytics.evacuationCount > 0){
     lines.push(`- Евакуаційний напрямок закрито на ${fmtNum(analytics.evacuationCount)} місій: 300 — ${fmtNum(analytics.evacuation300Count)}, 200 — ${fmtNum(analytics.evacuation200Count)}.`);
   }
+  if(analytics.pointsTotal > 0){
+    lines.push(`- Серед платформ найвищу результативність за балами на місію має ${topEfficiencyAsset}.`);
+  }
 
   lines.push("");
   lines.push("3. Проблематика");
@@ -6672,6 +6715,12 @@ function buildDeltaNrkExecutiveReportText(analytics){
   if(noResultCount > 0){
     lines.push(`- У ${fmtNum(noResultCount)} місій не заповнено результат.`);
   }
+  if(topProblemUnit){
+    lines.push(`- Найбільш проблемний підрозділ у поточному зрізі: ${topProblemUnit.label} (не доставлено ${fmtNum(topProblemUnit.notDelivered)}, пошкодження ${fmtNum(topProblemUnit.damaged)}, втрати ${fmtNum(topProblemUnit.losses)}).`);
+  }
+  if(topRiskAsset){
+    lines.push(`- Платформа з найбільшим ризиковим навантаженням: ${topRiskAsset.label} (не доставлено ${fmtNum(topRiskAsset.notDelivered)}, пошкодження ${fmtNum(topRiskAsset.damaged)}, втрати ${fmtNum(topRiskAsset.losses)} при ${fmtNum(topRiskAsset.missions)} місіях).`);
+  }
 
   lines.push("");
   lines.push("4. На що звернути увагу");
@@ -6680,6 +6729,9 @@ function buildDeltaNrkExecutiveReportText(analytics){
   lines.push(`- Основний зв’язок не вказано у ${fmtNum(noPrimaryLinkCount)} місій, резервний — у ${fmtNum(noReserveLinkCount)} місій.`);
   if(analytics.timeQuality.invalidTimelineCount > 0){
     lines.push(`- Є ${fmtNum(analytics.timeQuality.invalidTimelineCount)} місій з некоректною часовою парою початок/завершення.`);
+  }
+  if(topPointsUnit !== "—"){
+    lines.push(`- Для роботи з ефективністю варто окремо відстежувати лідера за сумою балів (${topPointsUnit}) і лідера за середнім балом на місію (${topEfficiencyUnit}).`);
   }
 
   lines.push("");
@@ -6702,6 +6754,7 @@ function buildDeltaNrkExecutiveReportText(analytics){
   if(analytics.pointsTotal > 0){
     lines.push("- Використовувати зріз «Бали на 1 місію» для виявлення підрозділів і платформ з найкращою результативністю.");
   }
+  lines.push("- Для розсилки підрозділам робити акцент окремо на: найактивнішому підрозділі, підрозділі з проблемами, платформі-лідері та платформі з ризиками.");
 
   return lines.join("\n");
 
@@ -7314,10 +7367,6 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
 
   const filtersBlock = `
     <div class="item analytics-block delta-nrk-filters">
-      <div class="row">
-        <div class="name">Фільтри</div>
-        <div class="hint">Можна звузити зріз по підрозділу або платформі.</div>
-      </div>
       <div class="delta-nrk-filter-grid">
         <label class="delta-nrk-filter-field">
           <span>Підрозділ</span>
@@ -7929,9 +7978,7 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
     <div class="staffing-analytics-modal comparison-analytics-modal delta-nrk-analytics-modal">
       ${filtersBlock}
       ${buildDeltaNrkAutoSummaryHtml(analytics)}
-      ${wrapDeltaNrkCollapsible("День / ніч", buildDeltaNrkDayNightHtml(analytics))}
       ${buildDeltaNrkMonthlyAnalyticsHtml(analytics)}
-      ${wrapDeltaNrkCollapsible("Якість заповнення даних", buildDeltaNrkTimeQualityHtml(analytics))}
       <div class="control-grid">
         ${wrapDeltaNrkCollapsible("Платформи", platformsBlock)}
         ${wrapDeltaNrkCollapsible("Вантажі", cargoBlock)}
@@ -7940,7 +7987,9 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
         ? `<div class="control-grid">${wrapDeltaNrkCollapsible("Евакуація", evacuationBlock)}${wrapDeltaNrkCollapsible("Надійність", reliabilityBlock)}</div><div class="control-grid">${wrapDeltaNrkCollapsible("Підрозділи", unitsBlock)}${wrapDeltaNrkCollapsible("Зв’язок", linksBlock)}</div><div class="control-grid">${wrapDeltaNrkCollapsible("Доповідачі", reportersBlock)}${wrapDeltaNrkCollapsible("Нараховані бали", pointsBlock)}</div><div class="control-grid">${wrapDeltaNrkCollapsible("Бали на 1 місію", pointsEfficiencyBlock)}${wrapDeltaNrkCollapsible("Аномалії", anomaliesBlock)}</div>`
         : `<div class="control-grid">${wrapDeltaNrkCollapsible("Надійність", reliabilityBlock)}${wrapDeltaNrkCollapsible("Підрозділи", unitsBlock)}</div><div class="control-grid">${wrapDeltaNrkCollapsible("Зв’язок", linksBlock)}${wrapDeltaNrkCollapsible("Доповідачі", reportersBlock)}</div><div class="control-grid">${wrapDeltaNrkCollapsible("Нараховані бали", pointsBlock)}${wrapDeltaNrkCollapsible("Бали на 1 місію", pointsEfficiencyBlock)}</div>${wrapDeltaNrkCollapsible("Аномалії", anomaliesBlock)}`
       }
+      ${wrapDeltaNrkCollapsible("День / ніч", buildDeltaNrkDayNightHtml(analytics))}
       ${buildDeltaNrkExecutiveReportHtml(analytics, modalKey)}
+      ${wrapDeltaNrkCollapsible("Якість заповнення даних", buildDeltaNrkTimeQualityHtml(analytics))}
       ${diagnosticsBlock}
       ${countingLogicBlock}
     </div>
@@ -8378,7 +8427,6 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
 
   const filtersBlock = `
     <div class="item analytics-block delta-nrk-filters">
-      <div class="row"><div class="name">Фільтри</div><div class="hint">Можна звузити зріз по підрозділу, типу задачі або платформі.</div></div>
       <div class="delta-nrk-filter-grid">
         <label class="delta-nrk-filter-field"><span>Підрозділ</span><select id="deltaUnitFilter_${modalKey}"><option value="">Усі підрозділи</option>${analytics.unitOptions.map(item=>`<option value="${attrEsc(item)}" ${item === analytics.filters.unit ? "selected" : ""}>${htmlesc(item)}</option>`).join("")}</select></label>
         <label class="delta-nrk-filter-field"><span>Тип задачі</span><select id="deltaTaskTypeFilter_${modalKey}"><option value="">Усі типи задач</option>${analytics.taskTypeOptions.map(item=>`<option value="${attrEsc(item)}" ${item === analytics.filters.taskType ? "selected" : ""}>${htmlesc(item)}</option>`).join("")}</select></label>
@@ -26854,6 +26902,8 @@ render();
 initAutoSync();
 
 initOverdueTicker();
+
+
 
 
 
