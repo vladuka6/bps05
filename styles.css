@@ -5904,6 +5904,23 @@ body.dark .text-table-import-col{
   box-shadow:none;
   background:transparent;
 }
+.delta-report-copybar{
+  display:flex;
+  justify-content:flex-end;
+  margin-bottom:10px;
+}
+.delta-report-textarea{
+  width:100%;
+  min-height:320px;
+  resize:vertical;
+  border:1px solid rgba(150,170,205,.45);
+  border-radius:16px;
+  background:rgba(255,255,255,.82);
+  color:var(--text);
+  padding:14px 15px;
+  font:600 .92rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space:pre-wrap;
+}
 .delta-monthly-head{
   display:flex;
   align-items:flex-start;
@@ -6092,6 +6109,10 @@ body.dark .delta-monthly-card{
 }
 body.dark .delta-monthly-progress{
   background:rgba(255,255,255,.08);
+}
+body.dark .delta-report-textarea{
+  background:rgba(12,18,30,.86);
+  border-color:rgba(255,255,255,.1);
 }
 body.dark .delta-nrk-collapsible-summary::after{
   border-right-color:rgba(255,255,255,.45);

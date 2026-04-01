@@ -6596,6 +6596,138 @@ function buildDeltaNrkMonthlyAnalyticsHtml(analytics){
 
 }
 
+function buildDeltaNrkExecutiveReportText(analytics){
+
+  if(!analytics) return "";
+
+  const lines = [];
+  const scopeParts = [];
+  if(analytics.filters?.unit) scopeParts.push(`підрозділ: ${analytics.filters.unit}`);
+  if(analytics.filters?.taskType) scopeParts.push(`тип задачі: ${analytics.filters.taskType}`);
+  if(analytics.filters?.asset) scopeParts.push(`платформа: ${analytics.filters.asset}`);
+
+  const lastMonth = Array.isArray(analytics.months) && analytics.months.length ? analytics.months[analytics.months.length - 1] : null;
+  const prevMonth = Array.isArray(analytics.months) && analytics.months.length > 1 ? analytics.months[analytics.months.length - 2] : null;
+  const monthMissionDelta = lastMonth && prevMonth ? (Number(lastMonth.missionCount || 0) - Number(prevMonth.missionCount || 0)) : 0;
+  const monthWeightDelta = lastMonth && prevMonth ? (Number(lastMonth.totalWeight || 0) - Number(prevMonth.totalWeight || 0)) : 0;
+  const monthSuccessDelta = lastMonth && prevMonth ? (Number(lastMonth.successRate || 0) - Number(prevMonth.successRate || 0)) : 0;
+
+  const reporterMissingCount = analytics.missions.filter(item=>!String(item.reporter || "").trim()).length;
+  const noPrimaryLinkCount = analytics.missions.filter(item=>!String(item.primaryLink || "").trim()).length;
+  const noReserveLinkCount = analytics.missions.filter(item=>!String(item.reserveLink || "").trim()).length;
+  const noAnyLinkCount = analytics.missions.filter(item=>!String(item.primaryLink || "").trim() && !String(item.reserveLink || "").trim()).length;
+  const noWeightCount = analytics.missions.filter(item=>(Number(item.cargoWeight) || 0) <= 0).length;
+  const noResultCount = analytics.missions.filter(item=>!String(item.result || "").trim()).length;
+  const topAsset = analytics.topAsset?.label ? `${analytics.topAsset.label} (${fmtNum(analytics.topAsset.value)} місій)` : "—";
+  const topUnit = analytics.unitsByMissions?.[0]?.label ? `${analytics.unitsByMissions[0].label} (${fmtNum(analytics.unitsByMissions[0].value)} місій)` : "—";
+  const topPointsUnit = analytics.pointsByUnits?.[0]?.label ? `${analytics.pointsByUnits[0].label} (${fmtNum(analytics.pointsByUnits[0].value)} бал.)` : "—";
+  const topEfficiencyUnit = analytics.pointsByUnits?.[0]?.label ? `${analytics.pointsByUnits.slice().sort((a,b)=>b.avgPoints-a.avgPoints || b.value-a.value)[0]?.label || "—"} (${fmtNum(analytics.pointsByUnits.slice().sort((a,b)=>b.avgPoints-a.avgPoints || b.value-a.value)[0]?.avgPoints || 0)} бал./місію)` : "—";
+
+  lines.push(`Короткий звіт Delta / НРК${scopeParts.length ? ` (${scopeParts.join("; ")})` : ""}`);
+  lines.push("");
+  lines.push("1. Загальна картина");
+  lines.push(`- Унікальних місій: ${fmtNum(analytics.missionCount)}; технічних записів: ${fmtNum(analytics.recordCount)}.`);
+  lines.push(`- Логістичних місій: ${fmtNum(Math.max(0, analytics.missionCount - analytics.evacuationCount))}; евакуаційних: ${fmtNum(analytics.evacuationCount)}.`);
+  lines.push(`- Доставлено: ${fmtNum(analytics.deliveredCount)}; не доставлено: ${fmtNum(analytics.notDeliveredCount)}; успішність логістики: ${fmtNum(analytics.deliverySuccessRate)}%.`);
+  lines.push(`- Загальна вага: ${fmtNum(analytics.totalWeight)} кг; середня вага на місію: ${fmtNum(analytics.avgWeight)} кг.`);
+  lines.push(`- Надійність: ${fmtNum(analytics.reliabilityRate)}% (повернення ${fmtNum(analytics.returnedCount)}, пошкодження ${fmtNum(analytics.damagedCount)}, втрати ${fmtNum(analytics.lossCount)}).`);
+  lines.push(`- Основна платформа: ${topAsset}; найбільш активний підрозділ: ${topUnit}.`);
+  if(analytics.pointsTotal > 0){
+    lines.push(`- Усього нараховано балів: ${fmtNum(analytics.pointsTotal)}; лідер за балами: ${topPointsUnit}; найвищий середній бал на місію: ${topEfficiencyUnit}.`);
+  }
+
+  lines.push("");
+  lines.push("2. Позитивні моменти");
+  if(lastMonth && prevMonth){
+    lines.push(`- Останній місяць у зрізі: ${lastMonth.label}. Динаміка до ${prevMonth.label}: місії ${monthMissionDelta > 0 ? "+" : ""}${fmtNum(monthMissionDelta)}, вага ${monthWeightDelta > 0 ? "+" : ""}${fmtNum(monthWeightDelta)} кг, успішність ${monthSuccessDelta > 0 ? "+" : ""}${fmtNum(monthSuccessDelta)} п.п..`);
+  } else if(lastMonth){
+    lines.push(`- Поточний місяць у зрізі: ${lastMonth.label}; місій ${fmtNum(lastMonth.missionCount)}, вага ${fmtNum(lastMonth.totalWeight)} кг, успішність ${fmtNum(lastMonth.successRate)}%.`);
+  }
+  if(analytics.notDeliveredCount === 0){
+    lines.push("- У поточному зрізі відсутні місії зі статусом «Не доставлено».");
+  } else if(analytics.notDeliveredCount <= 3){
+    lines.push(`- Кількість недоставлених місій низька: ${fmtNum(analytics.notDeliveredCount)} випадки.`);
+  }
+  if(analytics.lossCount === 0 && analytics.damagedCount === 0){
+    lines.push("- Втрат і пошкоджень засобів у поточному зрізі не зафіксовано.");
+  }
+  if(analytics.evacuationCount > 0){
+    lines.push(`- Евакуаційний напрямок закрито на ${fmtNum(analytics.evacuationCount)} місій: 300 — ${fmtNum(analytics.evacuation300Count)}, 200 — ${fmtNum(analytics.evacuation200Count)}.`);
+  }
+
+  lines.push("");
+  lines.push("3. Проблематика");
+  if(analytics.notDeliveredCount > 0){
+    lines.push(`- Не доставлено ${fmtNum(analytics.notDeliveredCount)} місій; ці випадки потребують окремого розбору по причинах та платформах.`);
+  }
+  if(analytics.lossCount > 0 || analytics.damagedCount > 0){
+    lines.push(`- Зафіксовано втрати/пошкодження: втрати ${fmtNum(analytics.lossCount)}, пошкодження ${fmtNum(analytics.damagedCount)}.`);
+  }
+  if(noAnyLinkCount > 0){
+    lines.push(`- У ${fmtNum(noAnyLinkCount)} місій не вказано жодного каналу зв’язку.`);
+  }
+  if(noWeightCount > 0){
+    lines.push(`- У ${fmtNum(noWeightCount)} місій відсутня вага вантажу.`);
+  }
+  if(noResultCount > 0){
+    lines.push(`- У ${fmtNum(noResultCount)} місій не заповнено результат.`);
+  }
+
+  lines.push("");
+  lines.push("4. На що звернути увагу");
+  lines.push(`- Якість даних: початок місії заповнено у ${fmtNum(analytics.timeQuality.startFilledPercent)}% місій, завершення — у ${fmtNum(analytics.timeQuality.endFilledPercent)}%, тривалість — у ${fmtNum(analytics.timeQuality.durationFilledPercent)}%.`);
+  lines.push(`- Доповідач не вказаний у ${fmtNum(reporterMissingCount)} місій.`);
+  lines.push(`- Основний зв’язок не вказано у ${fmtNum(noPrimaryLinkCount)} місій, резервний — у ${fmtNum(noReserveLinkCount)} місій.`);
+  if(analytics.timeQuality.invalidTimelineCount > 0){
+    lines.push(`- Є ${fmtNum(analytics.timeQuality.invalidTimelineCount)} місій з некоректною часовою парою початок/завершення.`);
+  }
+
+  lines.push("");
+  lines.push("5. Рекомендовані дії");
+  if(analytics.notDeliveredCount > 0){
+    lines.push("- Підрозділам розібрати всі місії «Не доставлено» з прив’язкою до платформи, обставин та причин.");
+  }
+  if(analytics.lossCount > 0 || analytics.damagedCount > 0){
+    lines.push("- Окремо розглянути місії зі втратою або пошкодженням засобів та перевірити повторювані причини.");
+  }
+  if(reporterMissingCount > 0){
+    lines.push("- Забезпечити обов’язкове заповнення поля «Доповідач» по всіх місіях.");
+  }
+  if(noPrimaryLinkCount > 0 || noReserveLinkCount > 0){
+    lines.push("- Посилити дисципліну заповнення полів «Зв’язок Основний» і «Зв’язок Резервний», особливо по місіях з тривалістю.");
+  }
+  if(noWeightCount > 0){
+    lines.push("- Для логістичних місій не залишати порожнім поле «Вага вантажу», щоб не втрачалась точність аналітики.");
+  }
+  if(analytics.pointsTotal > 0){
+    lines.push("- Використовувати зріз «Бали на 1 місію» для виявлення підрозділів і платформ з найкращою результативністю.");
+  }
+
+  return lines.join("\n");
+
+}
+
+function buildDeltaNrkExecutiveReportHtml(analytics, modalKey=""){
+
+  const reportText = buildDeltaNrkExecutiveReportText(analytics);
+  const textareaId = `deltaNrkExecutiveReport_${modalKey || uid("delta_nrk_report")}`;
+  return `
+    <details class="item analytics-block delta-nrk-collapsible-section">
+      <summary class="delta-nrk-collapsible-summary">
+        <span class="name">Короткий звіт / висновки</span>
+        <span class="hint">Готовий текст для копіювання</span>
+      </summary>
+      <div class="delta-nrk-collapsible-body">
+        <div class="delta-report-copybar">
+          <button type="button" class="btn ghost btn-mini" data-action="copyTextFromElement" data-arg1="${textareaId}">Копіювати текст</button>
+        </div>
+        <textarea id="${textareaId}" class="delta-report-textarea" readonly>${htmlesc(reportText)}</textarea>
+      </div>
+    </details>
+  `;
+
+}
+
 function buildDeltaNrkAnalytics(rows, title="", filters={}){
 
   const grid = Array.isArray(rows) ? rows : [];
@@ -7808,6 +7940,7 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
         ? `<div class="control-grid">${wrapDeltaNrkCollapsible("Евакуація", evacuationBlock)}${wrapDeltaNrkCollapsible("Надійність", reliabilityBlock)}</div><div class="control-grid">${wrapDeltaNrkCollapsible("Підрозділи", unitsBlock)}${wrapDeltaNrkCollapsible("Зв’язок", linksBlock)}</div><div class="control-grid">${wrapDeltaNrkCollapsible("Доповідачі", reportersBlock)}${wrapDeltaNrkCollapsible("Нараховані бали", pointsBlock)}</div><div class="control-grid">${wrapDeltaNrkCollapsible("Бали на 1 місію", pointsEfficiencyBlock)}${wrapDeltaNrkCollapsible("Аномалії", anomaliesBlock)}</div>`
         : `<div class="control-grid">${wrapDeltaNrkCollapsible("Надійність", reliabilityBlock)}${wrapDeltaNrkCollapsible("Підрозділи", unitsBlock)}</div><div class="control-grid">${wrapDeltaNrkCollapsible("Зв’язок", linksBlock)}${wrapDeltaNrkCollapsible("Доповідачі", reportersBlock)}</div><div class="control-grid">${wrapDeltaNrkCollapsible("Нараховані бали", pointsBlock)}${wrapDeltaNrkCollapsible("Бали на 1 місію", pointsEfficiencyBlock)}</div>${wrapDeltaNrkCollapsible("Аномалії", anomaliesBlock)}`
       }
+      ${buildDeltaNrkExecutiveReportHtml(analytics, modalKey)}
       ${diagnosticsBlock}
       ${countingLogicBlock}
     </div>
@@ -9085,6 +9218,48 @@ function resetDeltaNrkAnalyticsFilters(key){
 
   if(!key) return;
   rerenderDeltaNrkAnalyticsModal(key, {unit:"", taskType:"", asset:""});
+
+}
+
+async function copyTextFromElement(id){
+
+  const el = document.getElementById(String(id || ""));
+  if(!el){
+    showToast("Не знайдено текст для копіювання.", "warn");
+    return;
+  }
+  const text = "value" in el ? String(el.value || "") : String(el.textContent || "");
+  if(!text.trim()){
+    showToast("Немає тексту для копіювання.", "warn");
+    return;
+  }
+
+  try{
+    if(navigator?.clipboard?.writeText){
+      await navigator.clipboard.writeText(text);
+    } else {
+      if(typeof el.select === "function"){
+        el.focus();
+        el.select();
+      }
+      document.execCommand("copy");
+    }
+    showToast("Текст скопійовано.", "ok");
+  } catch(err){
+    console.warn("copy text failed", err);
+    try{
+      if(typeof el.select === "function"){
+        el.focus();
+        el.select();
+        document.execCommand("copy");
+        showToast("Текст скопійовано.", "ok");
+        return;
+      }
+    } catch(_err){
+      console.warn("copy text fallback failed", _err);
+    }
+    showToast("Не вдалося скопіювати текст.", "warn");
+  }
 
 }
 
@@ -25834,6 +26009,7 @@ const ACTIONS = {
   switchComparisonTopPanel,
   applyDeltaNrkAnalyticsFilters,
   resetDeltaNrkAnalyticsFilters,
+  copyTextFromElement,
   filterStaffingUnitsBlock,
   setStaffingUnitsScope,
   setStaffingUnitsViewMode,
