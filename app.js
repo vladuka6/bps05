@@ -7296,27 +7296,6 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
     `;
   }
 
-  const missionResultDonut = renderComparisonSliceDonutCard(
-    "Структура місій",
-    [
-      {label:"Доставлено", value: analytics.deliveredCount},
-      {label:"Не доставлено", value: analytics.notDeliveredCount},
-      {label:"Евакуаційні", value: analytics.evacuationCount},
-    ],
-    "Даних по результатах місій поки немає.",
-    ["#4f88ff", "#ffb547", "#8f67ff"]
-  );
-  const statusDonut = renderComparisonSliceDonutCard(
-    "Статус засобів · по місіях",
-    [
-      {label:"Повернення", value: analytics.returnedCount},
-      {label:"Пошкоджено", value: analytics.damagedCount},
-      {label:"Втрачено", value: analytics.lossCount},
-    ],
-    "Даних по статусу засобів поки немає.",
-    ["#4f88ff", "#6bc46d", "#ff7b87"]
-  );
-
   const platformsRows = (analytics.assetStats || []).map(item=>({
     label: item.label,
     valueText: fmtNum(item.total),
@@ -7818,13 +7797,9 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
     <div class="staffing-analytics-modal comparison-analytics-modal delta-nrk-analytics-modal">
       ${filtersBlock}
       ${buildDeltaNrkAutoSummaryHtml(analytics)}
-      ${wrapDeltaNrkCollapsible("Якість заповнення даних", buildDeltaNrkTimeQualityHtml(analytics))}
-      <div class="eval-donut-grid">
-        ${missionResultDonut}
-        ${statusDonut}
-      </div>
       ${wrapDeltaNrkCollapsible("День / ніч", buildDeltaNrkDayNightHtml(analytics))}
       ${buildDeltaNrkMonthlyAnalyticsHtml(analytics)}
+      ${wrapDeltaNrkCollapsible("Якість заповнення даних", buildDeltaNrkTimeQualityHtml(analytics))}
       <div class="control-grid">
         ${wrapDeltaNrkCollapsible("Платформи", platformsBlock)}
         ${wrapDeltaNrkCollapsible("Вантажі", cargoBlock)}
