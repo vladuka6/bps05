@@ -6559,7 +6559,7 @@ function buildDeltaNrkMonthlyAnalyticsHtml(analytics){
             <div class="delta-monthly-card tone-blue delta-monthly-rich-card">
               <div class="delta-monthly-head">
                 <div class="delta-monthly-month">${htmlesc(item.label)}</div>
-                <div class="delta-monthly-value mono">${fmtNum(item.missionCount)}</div>
+                <div class="delta-monthly-value mono">Всього місій ${fmtNum(item.missionCount)}</div>
               </div>
               <div class="delta-monthly-statline">
                 <span class="delta-monthly-statlabel">Доставлено</span> <strong>${fmtNum(item.deliveredCount)}</strong>
@@ -6579,9 +6579,6 @@ function buildDeltaNrkMonthlyAnalyticsHtml(analytics){
                 <span class="delta-monthly-statlabel">Пошкоджено</span> <strong>${fmtNum(item.damagedCount)}</strong>
                 <span class="delta-monthly-sep">·</span>
                 <span class="delta-monthly-statlabel">Успішність</span> <strong>${fmtNum(item.successRate)}%</strong>
-              </div>
-              <div class="delta-monthly-progress">
-                <div class="delta-monthly-progress-fill" style="width:${progress}%;"></div>
               </div>
               <div class="delta-monthly-delta-title">${prev ? `Динаміка до ${htmlesc(prev.label)}` : "Базовий місяць для порівняння"}</div>
               <div class="delta-monthly-delta-grid">
@@ -7226,6 +7223,20 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
       </div>
     </div>
   `;
+  const wrapDeltaNrkCollapsible = (titleText, bodyHtml, startOpen=false)=>{
+    if(!bodyHtml) return "";
+    return `
+      <details class="item analytics-block delta-nrk-collapsible-section" ${startOpen ? "open" : ""}>
+        <summary class="delta-nrk-collapsible-summary">
+          <span class="name">${htmlesc(titleText)}</span>
+          <span class="hint">Натисни, щоб ${startOpen ? "згорнути" : "розгорнути"} блок</span>
+        </summary>
+        <div class="delta-nrk-collapsible-body">
+          ${bodyHtml}
+        </div>
+      </details>
+    `;
+  };
 
   const diagnosticsBlock = `
     <details class="item analytics-block delta-nrk-diagnostics delta-nrk-collapsible">
@@ -7817,12 +7828,12 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
       ${buildDeltaNrkDayNightHtml(analytics)}
       ${buildDeltaNrkMonthlyAnalyticsHtml(analytics)}
       <div class="control-grid">
-        ${platformsBlock}
-        ${cargoBlock}
+        ${wrapDeltaNrkCollapsible("Платформи", platformsBlock)}
+        ${wrapDeltaNrkCollapsible("Вантажі", cargoBlock)}
       </div>
       ${evacuationBlock
-        ? `<div class="control-grid">${evacuationBlock}${reliabilityBlock}</div><div class="control-grid">${unitsBlock}${linksBlock}</div><div class="control-grid">${reportersBlock}${pointsBlock}</div><div class="control-grid">${pointsEfficiencyBlock}${anomaliesBlock}</div>`
-        : `<div class="control-grid">${reliabilityBlock}${unitsBlock}</div><div class="control-grid">${linksBlock}${reportersBlock}</div><div class="control-grid">${pointsBlock}${pointsEfficiencyBlock}</div>${anomaliesBlock}`
+        ? `<div class="control-grid">${wrapDeltaNrkCollapsible("Евакуація", evacuationBlock)}${wrapDeltaNrkCollapsible("Надійність", reliabilityBlock)}</div><div class="control-grid">${wrapDeltaNrkCollapsible("Підрозділи", unitsBlock)}${wrapDeltaNrkCollapsible("Зв’язок", linksBlock)}</div><div class="control-grid">${wrapDeltaNrkCollapsible("Доповідачі", reportersBlock)}${wrapDeltaNrkCollapsible("Нараховані бали", pointsBlock)}</div><div class="control-grid">${wrapDeltaNrkCollapsible("Бали на 1 місію", pointsEfficiencyBlock)}${wrapDeltaNrkCollapsible("Аномалії", anomaliesBlock)}</div>`
+        : `<div class="control-grid">${wrapDeltaNrkCollapsible("Надійність", reliabilityBlock)}${wrapDeltaNrkCollapsible("Підрозділи", unitsBlock)}</div><div class="control-grid">${wrapDeltaNrkCollapsible("Зв’язок", linksBlock)}${wrapDeltaNrkCollapsible("Доповідачі", reportersBlock)}</div><div class="control-grid">${wrapDeltaNrkCollapsible("Нараховані бали", pointsBlock)}${wrapDeltaNrkCollapsible("Бали на 1 місію", pointsEfficiencyBlock)}</div>${wrapDeltaNrkCollapsible("Аномалії", anomaliesBlock)}`
       }
     </div>
   `;

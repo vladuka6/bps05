@@ -5852,6 +5852,26 @@ body.dark .text-table-import-col{
 .delta-monthly-rich-card{
   padding:16px 16px 14px;
 }
+.delta-nrk-collapsible-section{
+  padding:0;
+  overflow:hidden;
+}
+.delta-nrk-collapsible-section > summary{
+  list-style:none;
+  cursor:pointer;
+}
+.delta-nrk-collapsible-section > summary::-webkit-details-marker{
+  display:none;
+}
+.delta-nrk-collapsible-body{
+  padding:0 0 2px;
+}
+.delta-nrk-collapsible-section .item.analytics-block{
+  margin:0;
+  border:none;
+  box-shadow:none;
+  background:transparent;
+}
 .delta-monthly-head{
   display:flex;
   align-items:flex-start;
