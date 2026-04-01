@@ -5413,6 +5413,7 @@ function detectDeltaNrkColumns(headerRow){
   const result = {
     reportUuid:-1,
     unit:-1,
+    reporter:-1,
     taskType:-1,
     result:-1,
     evacuatedCategory:-1,
@@ -5427,6 +5428,7 @@ function detectDeltaNrkColumns(headerRow){
     assetStatus:-1,
     lossCircumstances:-1,
     asset:-1,
+    totalPoints:-1,
     primaryLink:-1,
     reserveLink:-1,
   };
@@ -5438,6 +5440,10 @@ function detectDeltaNrkColumns(headerRow){
     }
     if(result.unit < 0 && /(підрозділ|загін|орган)/.test(header)){
       result.unit = idx;
+      return;
+    }
+    if(result.reporter < 0 && /(доповідач|докладач|reporter)/.test(header)){
+      result.reporter = idx;
       return;
     }
     if(result.taskType < 0 && /(тип задачі|тип завдання)/.test(header)){
@@ -5496,6 +5502,10 @@ function detectDeltaNrkColumns(headerRow){
       result.asset = idx;
       return;
     }
+    if(result.totalPoints < 0 && /(всього нараховано балів|нараховано балів|балів)/.test(header)){
+      result.totalPoints = idx;
+      return;
+    }
     if(result.primaryLink < 0 && /(зв язок основний|зв’язок основний|основний звязок|основний зв язок)/.test(header)){
       result.primaryLink = idx;
       return;
@@ -5541,6 +5551,7 @@ function detectDeltaNrkColumns(headerRow){
     if(width >= 30 && /uuid/.test(headers[0] || "")){
       if(result.reportUuid < 0) result.reportUuid = 0;
       if(result.unit < 0) result.unit = 2;
+      if(result.reporter < 0) result.reporter = 4;
       if(result.taskType < 0) result.taskType = 6;
       if(result.resultAt < 0) result.resultAt = 8;
       if(result.startAt < 0) result.startAt = 10;
@@ -5552,6 +5563,7 @@ function detectDeltaNrkColumns(headerRow){
       if(result.cargoWeight < 0) result.cargoWeight = 17;
       if(result.evacuatedCategory < 0) result.evacuatedCategory = 18;
       if(result.evacuatedQty < 0) result.evacuatedQty = 19;
+      if(result.totalPoints < 0) result.totalPoints = 22;
       if(result.assetStatus < 0) result.assetStatus = 23;
       if(result.lossCircumstances < 0) result.lossCircumstances = 24;
       if(result.asset < 0) result.asset = 25;
@@ -5649,6 +5661,7 @@ function aggregateDeltaMissionItems(items){
     bucket.rows.push(item);
     bucket.totalWeight += Number(item?.cargoWeight) || 0;
     bucket.maxRecordWeight = Math.max(bucket.maxRecordWeight, Number(item?.cargoWeight) || 0);
+    bucket.totalPoints = (bucket.totalPoints || 0) + (Number(item?.totalPoints) || 0);
   });
 
   const chooseByPriority = (rows, getter)=>{
@@ -5691,6 +5704,7 @@ function aggregateDeltaMissionItems(items){
         rowCount: rows.length,
       reportUuid: String(representativeRow?.reportUuid || "").trim(),
       unit: chooseByPriority(rows, row=>row?.unit) || String(representativeRow?.unit || "").trim(),
+      reporter: chooseByPriority(rows, row=>row?.reporter) || String(representativeRow?.reporter || "").trim(),
       taskType: chooseByPriority(rows, row=>row?.taskType) || String(representativeRow?.taskType || "").trim(),
       result: chooseByPriority(rows, row=>row?.result) || String(representativeRow?.result || "").trim(),
         asset: chooseByPriority(rows, row=>row?.asset) || String(representativeRow?.asset || "").trim(),
@@ -5699,7 +5713,8 @@ function aggregateDeltaMissionItems(items){
         reserveLink: chooseByPriority(rows, row=>row?.reserveLink) || String(representativeRow?.reserveLink || "").trim(),
         circumstances: rows.map(row=>String(row?.circumstances || "").trim()).filter(Boolean).join(" | "),
         lossCircumstances: rows.map(row=>String(row?.lossCircumstances || "").trim()).filter(Boolean).join(" | "),
-        cargoWeight: bucket.totalWeight,
+      cargoWeight: bucket.totalWeight,
+      totalPoints: Number(bucket.totalPoints) || 0,
       maxRecordWeight: bucket.maxRecordWeight,
       missionDurationMinutes,
       invalidTimeline: rows.some(row=>row?.invalidTimeline),
@@ -6438,12 +6453,15 @@ function buildDeltaNrkTimeQualityHtml(analytics){
   const q = analytics?.timeQuality;
   if(!q) return "";
 
+  const durationBaseCount = Number(q.durationBaseCount || q.durationFilledCount || 0);
   const fillItems = [
-    {label:"Початок місії", value:q.startFilledCount, percent:q.startFilledPercent},
-    {label:"Завершення місії", value:q.endFilledCount, percent:q.endFilledPercent},
-    {label:"Час результату", value:q.resultFilledCount, percent:q.resultFilledPercent},
-    {label:"Тривалість місії", value:q.durationFilledCount, percent:q.durationFilledPercent},
-    {label:"Повний часовий ланцюжок", value:q.fullTimelineCount, percent:q.fullTimelinePercent},
+    {label:"Початок місії", value:q.startFilledCount, percent:q.startFilledPercent, baseCount:q.totalCount},
+    {label:"Завершення місії", value:q.endFilledCount, percent:q.endFilledPercent, baseCount:q.totalCount},
+    {label:"Час результату", value:q.resultFilledCount, percent:q.resultFilledPercent, baseCount:q.totalCount},
+    {label:"Тривалість місії", value:q.durationFilledCount, percent:q.durationFilledPercent, baseCount:q.totalCount},
+    {label:"Зв'язок Основний", value:q.primaryLinkWithDurationCount, percent:q.primaryLinkWithDurationPercent, baseCount:durationBaseCount, baseLabel:"місій із тривалістю"},
+    {label:"Зв'язок Резервний", value:q.reserveLinkWithDurationCount, percent:q.reserveLinkWithDurationPercent, baseCount:durationBaseCount, baseLabel:"місій із тривалістю"},
+    {label:"Повний часовий ланцюжок", value:q.fullTimelineCount, percent:q.fullTimelinePercent, baseCount:q.totalCount},
   ];
 
   const qualityDonut = renderComparisonSliceDonutCard(
@@ -6471,13 +6489,13 @@ function buildDeltaNrkTimeQualityHtml(analytics){
   return `
     <div class="item analytics-block delta-nrk-time-quality">
       <div class="row">
-        <div class="name">Час і заповнення</div>
+        <div class="name">Якість заповнення даних</div>
         <div class="hint">Заповнення і тривалість рахуються по унікальних місіях.</div>
       </div>
       <div class="report-grid staffing-analytics-kpis delta-nrk-kpis delta-nrk-time-kpis">
         <div class="report-tile"><div class="k">Початок</div><div class="v mono">${fmtNum(q.startFilledPercent)}%</div><div class="s">${fmtNum(q.startFilledCount)} із ${fmtNum(q.totalCount)}</div></div>
         <div class="report-tile"><div class="k">Завершення</div><div class="v mono">${fmtNum(q.endFilledPercent)}%</div><div class="s">${fmtNum(q.endFilledCount)} із ${fmtNum(q.totalCount)}</div></div>
-        <div class="report-tile"><div class="k">Повний ланцюжок</div><div class="v mono">${fmtNum(q.fullTimelinePercent)}%</div><div class="s">${fmtNum(q.fullTimelineCount)} записів</div></div>
+        <div class="report-tile"><div class="k">Повний ланцюжок</div><div class="v mono">${fmtNum(q.fullTimelinePercent)}%</div><div class="s">${fmtNum(q.fullTimelineCount)} місій</div></div>
         <div class="report-tile"><div class="k">Сер. час місії</div><div class="v mono">${htmlesc(formatDurationMinutes(q.avgDurationMinutes))}</div><div class="s">${fmtNum(q.validDurationCount)} місій із тривалістю</div></div>
       </div>
       <div class="eval-donut-grid">
@@ -6492,7 +6510,7 @@ function buildDeltaNrkTimeQualityHtml(analytics){
               <div class="delta-nrk-fill-value mono">${fmtNum(item.percent)}%</div>
             </div>
             <div class="delta-nrk-fill-bar"><div class="delta-nrk-fill-bar-in" style="width:${Math.max(0, Math.min(100, item.percent))}%;"></div></div>
-            <div class="delta-nrk-fill-meta">${fmtNum(item.value)} із ${fmtNum(q.totalCount)} записів</div>
+            <div class="delta-nrk-fill-meta">${fmtNum(item.value)} із ${fmtNum(item.baseCount || q.totalCount)} ${htmlesc(item.baseLabel || "місій")}</div>
           </div>
         `).join("")}
       </div>
@@ -6631,6 +6649,7 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     const reportUuid = columns.reportUuid >= 0 ? String(row?.[columns.reportUuid] || "").trim() : "";
     const asset = columns.asset >= 0 ? String(row?.[columns.asset] || "").trim() : "";
     const unit = columns.unit >= 0 ? String(row?.[columns.unit] || "").trim() : "";
+    const reporter = columns.reporter >= 0 ? String(row?.[columns.reporter] || "").trim() : "";
     const result = columns.result >= 0 ? String(row?.[columns.result] || "").trim() : "";
     const circumstances = columns.circumstances >= 0 ? String(row?.[columns.circumstances] || "").trim() : "";
     const taskType = columns.taskType >= 0 ? String(row?.[columns.taskType] || "").trim() : "";
@@ -6646,9 +6665,10 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     const reserveLink = columns.reserveLink >= 0 ? String(row?.[columns.reserveLink] || "").trim() : "";
     const resultAt = columns.resultAt >= 0 ? String(row?.[columns.resultAt] || "").trim() : "";
     const cargoWeight = columns.cargoWeight >= 0 ? parseAnalyticsNumber(row?.[columns.cargoWeight]) : null;
+    const totalPoints = columns.totalPoints >= 0 ? parseAnalyticsNumber(row?.[columns.totalPoints]) : null;
 
-    const hasData = [asset, unit, result, circumstances, taskType, cargo, assetStatus, lossCircumstances, evacuatedCategory, primaryLink, reserveLink, resultAt, String(startAt || "").trim(), String(endAt || "").trim(), String(durationRaw || "").trim()]
-      .some(Boolean) || Number.isFinite(cargoWeight);
+    const hasData = [asset, unit, reporter, result, circumstances, taskType, cargo, assetStatus, lossCircumstances, evacuatedCategory, primaryLink, reserveLink, resultAt, String(startAt || "").trim(), String(endAt || "").trim(), String(durationRaw || "").trim()]
+      .some(Boolean) || Number.isFinite(cargoWeight) || Number.isFinite(totalPoints);
     if(!hasData) return null;
 
     const resultAtTs = parseDeltaDateTimeValue(resultAt);
@@ -6670,6 +6690,7 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
       reportUuid,
       asset,
       unit,
+      reporter,
       result,
       circumstances,
       taskType,
@@ -6696,6 +6717,7 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
       nightMinutes: dayNight.nightMinutes,
       effectiveDateRaw,
       cargoWeight: Number.isFinite(cargoWeight) ? Number(cargoWeight) : 0,
+      totalPoints: Number.isFinite(totalPoints) ? Number(totalPoints) : 0,
     };
   }).filter(Boolean);
 
@@ -6741,12 +6763,16 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
       maxRecordWeight: 0,
       taskTypes: [],
       assets: [],
-      cargoes: [],
-      primaryLinks: [],
-      reserveLinks: [],
-      unitsByMissions: [],
-      unitsByWeight: [],
-      dayNight: {
+        cargoes: [],
+        primaryLinks: [],
+        reserveLinks: [],
+        reporters: [],
+        unitsByMissions: [],
+        unitsByWeight: [],
+        pointsTotal: 0,
+        pointsByUnits: [],
+        pointsByAssets: [],
+        dayNight: {
         dayCount: 0,
         nightCount: 0,
         total: 0,
@@ -6763,6 +6789,9 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
         endFilledCount: 0,
         resultFilledCount: 0,
         durationFilledCount: 0,
+        durationBaseCount: 0,
+        primaryLinkWithDurationCount: 0,
+        reserveLinkWithDurationCount: 0,
         fullTimelineCount: 0,
         anyTimeCount: 0,
         validDurationCount: 0,
@@ -6771,6 +6800,8 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
         endFilledPercent: 0,
         resultFilledPercent: 0,
         durationFilledPercent: 0,
+        primaryLinkWithDurationPercent: 0,
+        reserveLinkWithDurationPercent: 0,
         fullTimelinePercent: 0,
         avgDurationMinutes: 0,
         medianDurationMinutes: 0,
@@ -6793,7 +6824,7 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     };
   }
 
-  const countBy = (source, getter)=> {
+      const countBy = (source, getter)=> {
     const map = new Map();
     (Array.isArray(source) ? source : []).forEach(item=>{
       const key = String(getter(item) || "").trim();
@@ -6870,6 +6901,7 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     .sort((a,b)=>b.maxRecordWeight-a.maxRecordWeight || b.maxWeight-a.maxWeight || b.avgWeight-a.avgWeight || b.total-a.total || String(a.label).localeCompare(String(b.label), "uk"))[0] || null;
   const primaryLinks = countBy(missions, item=>item.primaryLink);
   const reserveLinks = countBy(missions, item=>item.reserveLink);
+  const reporters = summarizeNormalizedLabelCounts(missions, item=>item.reporter);
   const unitsByMissions = countBy(missions, item=>item.unit);
   const unitsByWeightMap = new Map();
   missions.forEach(item=>{
@@ -6878,6 +6910,54 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     unitsByWeightMap.set(key, (unitsByWeightMap.get(key) || 0) + (Number(item.cargoWeight) || 0));
   });
   const unitsByWeight = Array.from(unitsByWeightMap.entries()).map(([label, value])=>({label, value})).sort((a,b)=>b.value-a.value || String(a.label).localeCompare(String(b.label), "uk"));
+
+  const pointsTotal = missions.reduce((sum, item)=>sum + (Number(item.totalPoints) || 0), 0);
+  const pointsByUnitMap = new Map();
+  const pointsByAssetMap = new Map();
+  missions.forEach(item=>{
+    const missionPoints = Number(item.totalPoints) || 0;
+    if(missionPoints <= 0) return;
+
+    const unitLabel = String(item.unit || "").trim();
+    if(unitLabel){
+      if(!pointsByUnitMap.has(unitLabel)){
+        pointsByUnitMap.set(unitLabel, {label: unitLabel, value: 0, missionCount: 0});
+      }
+      const unitBucket = pointsByUnitMap.get(unitLabel);
+      unitBucket.value += missionPoints;
+      unitBucket.missionCount += 1;
+    }
+
+    const assetRaw = String(item.asset || "").trim();
+    if(assetRaw){
+      const assetKey = normalizeAnalyticsHeader(assetRaw) || assetRaw;
+      if(!pointsByAssetMap.has(assetKey)){
+        pointsByAssetMap.set(assetKey, {label: assetRaw, value: 0, missionCount: 0, variants: new Map()});
+      }
+      const assetBucket = pointsByAssetMap.get(assetKey);
+      assetBucket.value += missionPoints;
+      assetBucket.missionCount += 1;
+      assetBucket.variants.set(assetRaw, (assetBucket.variants.get(assetRaw) || 0) + 1);
+    }
+  });
+  const pointsByUnits = Array.from(pointsByUnitMap.values())
+    .map(item=>({
+      ...item,
+      avgPoints: item.missionCount ? item.value / item.missionCount : 0,
+    }))
+    .sort((a,b)=>b.value-a.value || b.missionCount-a.missionCount || String(a.label).localeCompare(String(b.label), "uk"));
+  const pointsByAssets = Array.from(pointsByAssetMap.values())
+    .map(item=>{
+      const displayLabel = Array.from(item.variants.entries())
+        .sort((a,b)=>b[1]-a[1] || String(a[0]).localeCompare(String(b[0]), "uk"))[0]?.[0] || item.label;
+      return {
+        label: displayLabel,
+        value: item.value,
+        missionCount: item.missionCount,
+        avgPoints: item.missionCount ? item.value / item.missionCount : 0,
+      };
+    })
+    .sort((a,b)=>b.value-a.value || b.missionCount-a.missionCount || String(a.label).localeCompare(String(b.label), "uk"));
 
   const dayNightByUnitMap = new Map();
   const dayNightByAssetMap = new Map();
@@ -6969,6 +7049,16 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
   const endFilledCount = missions.filter(item=>(item.rows || []).some(row=>!!String(row?.endAt || "").trim())).length;
   const resultFilledCount = missions.filter(item=>(item.rows || []).some(row=>!!String(row?.resultAt || "").trim())).length;
   const durationFilledCount = missions.filter(item=>(item.rows || []).some(row=>!!String(row?.durationRaw || "").trim())).length;
+  const primaryLinkWithDurationCount = missions.filter(item=>{
+    const rows = item.rows || [];
+    const hasDuration = rows.some(row=>!!String(row?.durationRaw || "").trim());
+    return hasDuration && rows.some(row=>!!String(row?.primaryLink || "").trim());
+  }).length;
+  const reserveLinkWithDurationCount = missions.filter(item=>{
+    const rows = item.rows || [];
+    const hasDuration = rows.some(row=>!!String(row?.durationRaw || "").trim());
+    return hasDuration && rows.some(row=>!!String(row?.reserveLink || "").trim());
+  }).length;
   const fullTimelineCount = missions.filter(item=>{
     const rows = item.rows || [];
     const hasStart = rows.some(row=>!!String(row?.startAt || "").trim());
@@ -6996,6 +7086,9 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     endFilledCount,
     resultFilledCount,
     durationFilledCount,
+    durationBaseCount: durationFilledCount,
+    primaryLinkWithDurationCount,
+    reserveLinkWithDurationCount,
     fullTimelineCount,
     anyTimeCount,
     validDurationCount,
@@ -7004,6 +7097,8 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     endFilledPercent: percentOf(endFilledCount),
     resultFilledPercent: percentOf(resultFilledCount),
     durationFilledPercent: percentOf(durationFilledCount),
+    primaryLinkWithDurationPercent: durationFilledCount ? Math.round((primaryLinkWithDurationCount / durationFilledCount) * 100) : 0,
+    reserveLinkWithDurationPercent: durationFilledCount ? Math.round((reserveLinkWithDurationCount / durationFilledCount) * 100) : 0,
     fullTimelinePercent: percentOf(fullTimelineCount),
     avgDurationMinutes,
     medianDurationMinutes,
@@ -7089,8 +7184,12 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     cargoCombos,
     primaryLinks,
     reserveLinks,
+    reporters,
     unitsByMissions,
     unitsByWeight,
+    pointsTotal,
+    pointsByUnits,
+    pointsByAssets,
     dayNight,
     months,
     timeQuality,
@@ -7360,6 +7459,26 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
     meta: "резервний канал",
     tone: "b-ok",
   }));
+  const reporterRows = (analytics.reporters || []).map(item=>({
+    label: item.label,
+    valueText: fmtNum(item.value),
+    meta: `${fmtNum(analytics.missionCount ? Math.round((item.value / analytics.missionCount) * 100) : 0)}% місій`,
+    tone: "b-blue",
+  }));
+  const pointsUnitRows = (analytics.pointsByUnits || []).map(item=>({
+    label: item.label,
+    valueText: fmtNum(item.value),
+    valueLabel: "бал.",
+    meta: `${fmtNum(item.missionCount)} місій · сер. ${fmtNum(item.avgPoints)} бал./місію`,
+    tone: "b-violet",
+  }));
+  const pointsAssetRows = (analytics.pointsByAssets || []).map(item=>({
+    label: item.label,
+    valueText: fmtNum(item.value),
+    valueLabel: "бал.",
+    meta: `${fmtNum(item.missionCount)} місій · сер. ${fmtNum(item.avgPoints)} бал./місію`,
+    tone: "b-blue",
+  }));
 
   const platformsModalKey = registerRenderedTableModal(
     `${analytics.title || "Delta / НРК"} · Платформи`,
@@ -7464,6 +7583,34 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
       }
     ])
   );
+  const reportersModalKey = registerRenderedTableModal(
+    `${analytics.title || "Delta / НРК"} · Доповідачі`,
+    buildDeltaNrkInsightModalHtml([
+      {
+        title: "Доповідачі · по місіях",
+        summary: `Унікальних доповідачів: ${fmtNum(reporterRows.length)} · місій: ${fmtNum(analytics.missionCount)}`,
+        rows: reporterRows,
+        emptyText: "По доповідачах даних поки немає.",
+      }
+    ])
+  );
+  const pointsModalKey = registerRenderedTableModal(
+    `${analytics.title || "Delta / НРК"} · Нараховані бали`,
+    buildDeltaNrkInsightModalHtml([
+      {
+        title: "Бали · по підрозділах",
+        summary: `Усього балів: ${fmtNum(analytics.pointsTotal)} · підрозділів: ${fmtNum(pointsUnitRows.length)}`,
+        rows: pointsUnitRows,
+        emptyText: "По підрозділах балів поки немає.",
+      },
+      {
+        title: "Бали · по платформах",
+        summary: `Усього балів: ${fmtNum(analytics.pointsTotal)} · платформ: ${fmtNum(pointsAssetRows.length)}`,
+        rows: pointsAssetRows,
+        emptyText: "По платформах балів поки немає.",
+      }
+    ])
+  );
 
   const platformsBlock = buildDeltaNrkTopList(
     "Платформи · по місіях",
@@ -7536,6 +7683,22 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
     '<div class="row"><div class="name">Зв’язок</div></div>',
     `<div class="row"><div class="name">Зв’язок</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${linksModalKey}">Детальніше</button></div>`
   );
+  const reportersBlock = buildDeltaNrkTopList(
+    "Доповідачі · по місіях",
+    reporterRows.slice(0, 8),
+    "По доповідачах даних поки немає."
+  ).replace(
+    '<div class="row"><div class="name">Доповідачі · по місіях</div></div>',
+    `<div class="row"><div class="name">Доповідачі · по місіях</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${reportersModalKey}">Детальніше</button></div>`
+  );
+  const pointsBlock = buildDeltaNrkTopList(
+    "Нараховані бали · по місіях",
+    pointsUnitRows.slice(0, 8),
+    "По балах даних поки немає."
+  ).replace(
+    '<div class="row"><div class="name">Нараховані бали · по місіях</div></div>',
+    `<div class="row"><div class="name">Нараховані бали · по місіях</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${pointsModalKey}">Детальніше</button></div>`
+  );
 
   return `
     <div class="staffing-analytics-modal comparison-analytics-modal delta-nrk-analytics-modal">
@@ -7555,8 +7718,8 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
         ${cargoBlock}
       </div>
       ${evacuationBlock
-        ? `<div class="control-grid">${evacuationBlock}${reliabilityBlock}</div><div class="control-grid">${unitsBlock}${linksBlock}</div>`
-        : `<div class="control-grid">${reliabilityBlock}${unitsBlock}</div>${linksBlock}`
+        ? `<div class="control-grid">${evacuationBlock}${reliabilityBlock}</div><div class="control-grid">${unitsBlock}${linksBlock}</div><div class="control-grid">${reportersBlock}${pointsBlock}</div>`
+        : `<div class="control-grid">${reliabilityBlock}${unitsBlock}</div><div class="control-grid">${linksBlock}${reportersBlock}</div><div class="control-grid">${pointsBlock}</div>`
       }
     </div>
   `;
@@ -8136,18 +8299,24 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
       addAssocCount(bucket.taskTypes, item.taskType);
     });
   });
-  const targetOverviewRows = Array.from(targetSummaryMap.values()).map(bucket=>({
-    label: bucket.label,
-    valueText: fmtNum(bucket.missionCount),
-    meta: [
-      `${fmtNum(analytics.missionCount ? Math.round((bucket.missionCount / analytics.missionCount) * 100) : 0)}% місій`,
-      bucket.totalTargets > 0 ? `цілей ${fmtNum(bucket.totalTargets)}` : "",
-      topAssocLabel(bucket.statuses) ? `статус ${topAssocLabel(bucket.statuses)}` : "",
-      topAssocLabel(bucket.assets) ? `платф. ${topAssocLabel(bucket.assets)}` : "",
-      topAssocLabel(bucket.ammoTypes) ? `БК ${topAssocLabel(bucket.ammoTypes)}` : (topAssocLabel(bucket.ammoNames) ? `боєприпас ${topAssocLabel(bucket.ammoNames)}` : ""),
-    ].filter(Boolean).join(" · "),
-    tone: "b-blue",
-  })).sort((a,b)=>Number(String(b.valueText || "0").replace(/\s+/g, "")) - Number(String(a.valueText || "0").replace(/\s+/g, "")) || String(a.label).localeCompare(String(b.label), "uk"));
+  const targetOverviewRows = Array.from(targetSummaryMap.values()).map(bucket=>{
+    const statusParts = Array.from(bucket.statuses.entries())
+      .sort((a,b)=>b[1]-a[1] || String(a[0]).localeCompare(String(b[0]), "uk"))
+      .slice(0, 3)
+      .map(([label, value])=>`${label} ${fmtNum(value)}`);
+    return {
+      label: bucket.label,
+      valueText: fmtNum(bucket.missionCount),
+      meta: [
+        `${fmtNum(analytics.missionCount ? Math.round((bucket.missionCount / analytics.missionCount) * 100) : 0)}% місій`,
+        bucket.totalTargets > 0 ? `цілей ${fmtNum(bucket.totalTargets)}` : "",
+        statusParts.length ? `статуси ${statusParts.join(" · ")}` : "",
+        topAssocLabel(bucket.assets) ? `платф. ${topAssocLabel(bucket.assets)}` : "",
+        topAssocLabel(bucket.ammoTypes) ? `БК ${topAssocLabel(bucket.ammoTypes)}` : (topAssocLabel(bucket.ammoNames) ? `боєприпас ${topAssocLabel(bucket.ammoNames)}` : ""),
+      ].filter(Boolean).join(" · "),
+      tone: "b-blue",
+    };
+  }).sort((a,b)=>Number(String(b.valueText || "0").replace(/\s+/g, "")) - Number(String(a.valueText || "0").replace(/\s+/g, "")) || String(a.label).localeCompare(String(b.label), "uk"));
   const targetPlatformRows = Array.from(targetSummaryMap.values()).map(bucket=>({
     label: bucket.label,
     valueText: topAssocLabel(bucket.assets) || "—",
