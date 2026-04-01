@@ -6543,14 +6543,12 @@ function buildDeltaNrkMonthlyAnalyticsHtml(analytics){
 
   return `
     <div class="item analytics-block delta-monthly-block">
-      <div class="row">
-        <div class="name">Аналітика по місяцях · по місіях</div>
-        <div class="hint">Повний зріз місяця та динаміка до попереднього.</div>
+      <div class="row delta-monthly-block-head">
+        <div class="name">Аналітика по місяцях</div>
       </div>
       <div class="delta-monthly-grid delta-monthly-rich-grid">
         ${analytics.months.map((item, index)=>{
           const prev = index > 0 ? analytics.months[index - 1] : null;
-          const progress = maxMissionCount > 0 ? Math.max(4, Math.round(((Number(item.missionCount) || 0) / maxMissionCount) * 100)) : 0;
           const missionDelta = prev ? ((Number(item.missionCount) || 0) - (Number(prev.missionCount) || 0)) : null;
           const weightDelta = prev ? ((Number(item.totalWeight) || 0) - (Number(prev.totalWeight) || 0)) : null;
           const successDelta = prev ? ((Number(item.successRate) || 0) - (Number(prev.successRate) || 0)) : null;
@@ -6580,7 +6578,6 @@ function buildDeltaNrkMonthlyAnalyticsHtml(analytics){
                 <span class="delta-monthly-sep">·</span>
                 <span class="delta-monthly-statlabel">Успішність</span> <strong>${fmtNum(item.successRate)}%</strong>
               </div>
-              <div class="delta-monthly-delta-title">${prev ? `Динаміка до ${htmlesc(prev.label)}` : "Базовий місяць для порівняння"}</div>
               <div class="delta-monthly-delta-grid">
                 <div class="delta-monthly-delta-chip ${prev ? getDeltaTone(missionDelta) : "is-flat"}">Місії: ${prev ? formatDelta(missionDelta) : "—"}</div>
                 <div class="delta-monthly-delta-chip ${prev ? getDeltaTone(weightDelta) : "is-flat"}">Вага: ${prev ? formatDelta(weightDelta, " кг") : "—"}</div>

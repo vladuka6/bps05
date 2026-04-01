@@ -5871,6 +5871,13 @@ body.dark .text-table-import-col{
 .delta-monthly-block{
   overflow:hidden;
 }
+.delta-monthly-block-head{
+  justify-content:center;
+}
+.delta-monthly-block-head .name{
+  width:100%;
+  text-align:center;
+}
 .delta-monthly-grid{
   display:grid;
   grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));
@@ -5882,9 +5889,10 @@ body.dark .text-table-import-col{
 }
 .delta-monthly-card{
   padding:14px 14px 12px;
-  border:1px solid var(--line);
+  border:1px solid rgba(150,170,205,.24);
   border-radius:18px;
   background:linear-gradient(180deg, rgba(255,255,255,.92), rgba(247,250,255,.92));
+  box-shadow:0 8px 24px rgba(55,84,150,.05);
 }
 .delta-monthly-rich-card{
   padding:16px 16px 14px;
@@ -6062,6 +6070,9 @@ body.dark .text-table-import-col{
   .delta-monthly-grid{
     grid-template-columns:1fr;
   }
+  .delta-monthly-block-head .name{
+    font-size:.95rem;
+  }
   .delta-monthly-card{
     padding:12px;
     border-radius:16px;
@@ -6092,6 +6103,11 @@ body.dark .text-table-import-col{
     font-size:.74rem;
     padding:4px 8px;
   }
+}
+body.dark .delta-monthly-card{
+  background:linear-gradient(180deg, rgba(18,24,38,.92), rgba(13,18,30,.96));
+  border-color:rgba(255,255,255,.08);
+  box-shadow:none;
 }
 
 @media (max-width: 720px){
