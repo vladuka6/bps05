@@ -7817,8 +7817,6 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
   return `
     <div class="staffing-analytics-modal comparison-analytics-modal delta-nrk-analytics-modal">
       ${filtersBlock}
-      ${diagnosticsBlock}
-      ${countingLogicBlock}
       ${buildDeltaNrkAutoSummaryHtml(analytics)}
       ${wrapDeltaNrkCollapsible("Якість заповнення даних", buildDeltaNrkTimeQualityHtml(analytics))}
       <div class="eval-donut-grid">
@@ -7835,6 +7833,8 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
         ? `<div class="control-grid">${wrapDeltaNrkCollapsible("Евакуація", evacuationBlock)}${wrapDeltaNrkCollapsible("Надійність", reliabilityBlock)}</div><div class="control-grid">${wrapDeltaNrkCollapsible("Підрозділи", unitsBlock)}${wrapDeltaNrkCollapsible("Зв’язок", linksBlock)}</div><div class="control-grid">${wrapDeltaNrkCollapsible("Доповідачі", reportersBlock)}${wrapDeltaNrkCollapsible("Нараховані бали", pointsBlock)}</div><div class="control-grid">${wrapDeltaNrkCollapsible("Бали на 1 місію", pointsEfficiencyBlock)}${wrapDeltaNrkCollapsible("Аномалії", anomaliesBlock)}</div>`
         : `<div class="control-grid">${wrapDeltaNrkCollapsible("Надійність", reliabilityBlock)}${wrapDeltaNrkCollapsible("Підрозділи", unitsBlock)}</div><div class="control-grid">${wrapDeltaNrkCollapsible("Зв’язок", linksBlock)}${wrapDeltaNrkCollapsible("Доповідачі", reportersBlock)}</div><div class="control-grid">${wrapDeltaNrkCollapsible("Нараховані бали", pointsBlock)}${wrapDeltaNrkCollapsible("Бали на 1 місію", pointsEfficiencyBlock)}</div>${wrapDeltaNrkCollapsible("Аномалії", anomaliesBlock)}`
       }
+      ${diagnosticsBlock}
+      ${countingLogicBlock}
     </div>
   `;
 
@@ -7851,11 +7851,9 @@ function openRenderedTableModal(key){
       ${item.bodyHtml}
     </div>
     <div class="actions" style="margin-top:14px;">
-      <button class="btn ghost" data-action="exportCurrentRenderedModalPng">Скрин PNG</button>
-      <button class="btn ghost" data-action="openCurrentRenderedModalStandalone">Повний звіт</button>
       <button class="btn primary" data-action="hideSheet">Закрити</button>
     </div>
-  `, {stack:true});
+  `, {stack:true, sheetClass:"rendered-analytics-sheet"});
 
   requestAnimationFrame(()=>{
     animateRenderedDonuts(document.querySelector('.sheet'));
@@ -12753,6 +12751,7 @@ modal.addEventListener("click", (e)=>{ if(e.target === modal) hideSheet(); });
 function showSheet(title, html, opts={}){
 
   const useStack = !!opts.stack || _sheetStackOn;
+  const nextSheetClass = String(opts.sheetClass || "").trim();
 
   if(useStack && modal.classList.contains("show")){
 
@@ -12761,6 +12760,8 @@ function showSheet(title, html, opts={}){
       title: sheetTitle.textContent,
 
       html: sheetBody.innerHTML,
+
+      sheetClass: sheetEl ? sheetEl.className : "sheet",
 
       scrollTop: (sheetEl ? sheetEl.scrollTop : sheetBody.scrollTop) || 0
 
@@ -12773,6 +12774,10 @@ function showSheet(title, html, opts={}){
   sheetTitle.textContent = title;
 
   sheetBody.innerHTML = html;
+
+  if(sheetEl){
+    sheetEl.className = `sheet${nextSheetClass ? ` ${nextSheetClass}` : ""}`;
+  }
 
   modal.classList.add("show");
 
@@ -12787,6 +12792,10 @@ function hideSheet(){
     sheetTitle.textContent = prev.title;
 
     sheetBody.innerHTML = prev.html;
+
+    if(sheetEl){
+      sheetEl.className = prev.sheetClass || "sheet";
+    }
 
     if(sheetEl){
 
@@ -12811,6 +12820,10 @@ function hideSheet(){
   _sheetStack = [];
 
   modal.classList.remove("show");
+
+  if(sheetEl){
+    sheetEl.className = "sheet";
+  }
 
   sheetBody.innerHTML = "";
 
