@@ -892,7 +892,7 @@
 }
 .delta-nrk-filter-grid{
   display:grid;
-  grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) auto;
+  grid-template-columns:minmax(0,1.2fr) minmax(0,1.1fr) minmax(0,1.1fr) minmax(0,.85fr) minmax(0,.85fr) auto;
   gap:10px;
   align-items:end;
 }
@@ -906,7 +906,8 @@
   font-weight:800;
   color:var(--muted);
 }
-.delta-nrk-filter-field select{
+.delta-nrk-filter-field select,
+.delta-nrk-filter-field input{
   min-width:0;
   width:100%;
   min-height:38px;
@@ -921,8 +922,9 @@
 .delta-nrk-filter-actions{
   display:flex;
   gap:8px;
-  flex-wrap:wrap;
+  flex-wrap:nowrap;
   justify-content:flex-end;
+  align-items:center;
 }
 .delta-nrk-filter-summary{
   display:flex;

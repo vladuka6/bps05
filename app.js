@@ -5676,13 +5676,23 @@ function normalizeDeltaNrkUnitName(value){
   const aliases = {
     [normalizeAnalyticsHeader('3 прикз ДПСУ (9938) / 4 ПКШР 3 ПрикЗ')]: '4 ПКШР',
     [normalizeAnalyticsHeader('2 ПКШР ГБ БАС "Фенікс" / 3 ВПС 2 ПКШР ГБ БАС "Фенікс"')]: '3 ВПС 2 ПКШР ГБ БАС "Фенікс"',
+    [normalizeAnalyticsHeader('2 ПКШР ГВ БАС "Фенікс" / 3 ВПС 2 ПКШР ГВ БАС "Фенікс"')]: '3 ВПС 2 ПКШР ГБ БАС "Фенікс"',
+    [normalizeAnalyticsHeader('2 ПКШР ГБ БАС "Фенікс" / 3 ВПС 2 ПКШР ГВ БАС "Фенікс"')]: '3 ВПС 2 ПКШР ГБ БАС "Фенікс"',
+    [normalizeAnalyticsHeader('3 ВПС 2 ПКШР ГВ БАС "Фенікс"')]: '3 ВПС 2 ПКШР ГБ БАС "Фенікс"',
     [normalizeAnalyticsHeader('3 прикз ДПСУ (9938) / 2 ПКШР 3 ПрикЗ')]: '2 ПКШР',
     [normalizeAnalyticsHeader('ГВ БпАС "Фенікс" 3 прикз / 1 ВПС 2 ПКШР ГВ БАС "Фенікс"')]: '1 ВПС 2 ПКШР ГВ БАС "Фенікс"',
     [normalizeAnalyticsHeader('2 ПКШР ГВ БАС "Фенікс" / 2 ВПС 2 ПКШР ГВ БАС "Фенікс"')]: '2 ВПС 2 ПКШР ГВ БАС "Фенікс"',
     [normalizeAnalyticsHeader('ГВ БАС "Фенікс" 3 прикз / 1 ВПС 2 ПКШР ГВ БАС "Фенікс"')]: '1 ВПС 2 ПКШР ГВ БАС "Фенікс"',
+    [normalizeAnalyticsHeader('ГВ БпАС "Фенікс" 3 прикз / 1 ВПС 2 ПКШР ГБ БАС "Фенікс"')]: '1 ВПС 2 ПКШР ГВ БАС "Фенікс"',
+    [normalizeAnalyticsHeader('ГВ БАС "Фенікс" 3 прикз / 1 ВПС 2 ПКШР ГБ БАС "Фенікс"')]: '1 ВПС 2 ПКШР ГВ БАС "Фенікс"',
+    [normalizeAnalyticsHeader('1 ВПС 2 ПКШР ГБ БАС "Фенікс"')]: '1 ВПС 2 ПКШР ГВ БАС "Фенікс"',
     [normalizeAnalyticsHeader('1 ВПС 2 ПКШР ГВ БАС "Фенікс"')]: '1 ВПС 2 ПКШР ГВ БАС "Фенікс"',
+    [normalizeAnalyticsHeader('3 прикз ДПСУ (9938) / 3 ПКШР 3 ПрикЗ')]: '3 ПКШР',
+    [normalizeAnalyticsHeader('3 ПКШР 3 ПрикЗ')]: '3 ПКШР',
     [normalizeAnalyticsHeader('2 ПКШР 3 ПрикЗ')]: '2 ПКШР',
     [normalizeAnalyticsHeader('2 ПКШР')]: '2 ПКШР',
+    [normalizeAnalyticsHeader('3 ПКШР')]: '3 ПКШР',
+    [normalizeAnalyticsHeader('4 ПКШР')]: '4 ПКШР',
   };
 
   return aliases[key] || raw;
