@@ -2893,7 +2893,7 @@ function renderTaskDescWithTableToggle(text, label, opts={}){
         );
         UI.renderedTableModals[analyticsModalKey].deltaRows = currentTable.rows;
         UI.renderedTableModals[analyticsModalKey].deltaTitle = opts.analyticsTitle || label || "Delta / БпЛА";
-        UI.renderedTableModals[analyticsModalKey].deltaFilters = {unit:"", taskType:"", asset:""};
+        UI.renderedTableModals[analyticsModalKey].deltaFilters = {unit:"", taskType:"", asset:"", dateFrom:"", dateTo:""};
         UI.renderedTableModals[analyticsModalKey].deltaAnalyticsKind = "delta_bpla";
         UI.renderedTableModals[analyticsModalKey].bodyHtml = buildDeltaBplaAnalyticsModalHtml(
           currentTable.rows,
@@ -2907,7 +2907,7 @@ function renderTaskDescWithTableToggle(text, label, opts={}){
         );
         UI.renderedTableModals[analyticsModalKey].deltaRows = currentTable.rows;
         UI.renderedTableModals[analyticsModalKey].deltaTitle = opts.analyticsTitle || label || "Delta / НРК";
-        UI.renderedTableModals[analyticsModalKey].deltaFilters = {unit:"", taskType:"", asset:""};
+        UI.renderedTableModals[analyticsModalKey].deltaFilters = {unit:"", taskType:"", asset:"", dateFrom:"", dateTo:""};
         UI.renderedTableModals[analyticsModalKey].deltaAnalyticsKind = "delta_nrk";
         UI.renderedTableModals[analyticsModalKey].bodyHtml = buildDeltaNrkAnalyticsModalHtml(
           currentTable.rows,
@@ -5629,6 +5629,44 @@ function normalizeDeltaPlatformKey(value){
 
 }
 
+function parseDeltaFilterDateStart(value){
+
+  const raw = String(value || "").trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const ts = Date.parse(`${raw}T00:00:00`);
+  return Number.isFinite(ts) ? ts : null;
+
+}
+
+function parseDeltaFilterDateEnd(value){
+
+  const raw = String(value || "").trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const ts = Date.parse(`${raw}T23:59:59.999`);
+  return Number.isFinite(ts) ? ts : null;
+
+}
+
+function formatDeltaFilterDateLabel(value){
+
+  const raw = String(value || "").trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const [yyyy, mm, dd] = raw.split("-");
+  return `${dd}.${mm}.${yyyy}`;
+
+}
+
+function formatDeltaDateInputValue(date){
+
+  const d = date instanceof Date ? date : new Date(date);
+  if(Number.isNaN(d.getTime())) return "";
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+
+}
+
 function normalizeDeltaNrkUnitName(value){
 
   const raw = String(value || "").trim();
@@ -6650,6 +6688,11 @@ function buildDeltaNrkExecutiveReportText(analytics){
   if(analytics.filters?.unit) scopeParts.push(`підрозділ: ${analytics.filters.unit}`);
   if(analytics.filters?.taskType) scopeParts.push(`тип задачі: ${analytics.filters.taskType}`);
   if(analytics.filters?.asset) scopeParts.push(`платформа: ${analytics.filters.asset}`);
+  if(analytics.filters?.dateFrom || analytics.filters?.dateTo){
+    const fromLabel = formatDeltaFilterDateLabel(analytics.filters?.dateFrom || analytics.filters?.dateTo);
+    const toLabel = formatDeltaFilterDateLabel(analytics.filters?.dateTo || analytics.filters?.dateFrom);
+    scopeParts.push(analytics.filters?.dateFrom && analytics.filters?.dateTo && analytics.filters?.dateFrom !== analytics.filters?.dateTo ? `дати: ${fromLabel} - ${toLabel}` : `дата: ${fromLabel}`);
+  }
 
   const lastMonth = Array.isArray(analytics.months) && analytics.months.length ? analytics.months[analytics.months.length - 1] : null;
   const prevMonth = Array.isArray(analytics.months) && analytics.months.length > 1 ? analytics.months[analytics.months.length - 2] : null;
@@ -6833,6 +6876,13 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
 
   const columns = detectDeltaNrkColumns(grid[0]);
   const detectedFormat = columns.resultAt === 6 && columns.result === 12 ? "Delta NRK 28 колонок" : (columns.resultAt === 8 && columns.result === 14 ? "Delta NRK 30 колонок" : "Delta NRK / alias-map");
+  const unitFilter = String(filters.unit || "").trim();
+  const taskTypeFilter = String(filters.taskType || "").trim();
+  const assetFilter = String(filters.asset || "").trim();
+  const dateFromFilter = String(filters.dateFrom || "").trim();
+  const dateToFilter = String(filters.dateTo || "").trim();
+  const dateFromTs = parseDeltaFilterDateStart(dateFromFilter);
+  const dateToTs = parseDeltaFilterDateEnd(dateToFilter);
   const allItems = grid.slice(1).map((row, index)=>{
     const reportUuid = columns.reportUuid >= 0 ? String(row?.[columns.reportUuid] || "").trim() : "";
     const asset = columns.asset >= 0 ? String(row?.[columns.asset] || "").trim() : "";
@@ -6904,16 +6954,13 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
       dayMinutes: dayNight.dayMinutes,
       nightMinutes: dayNight.nightMinutes,
       effectiveDateRaw,
+      effectiveTs: [resultAtTs, endAtTs, startAtTs].find(value=>Number.isFinite(value)) ?? null,
       cargoWeight: Number.isFinite(cargoWeight) ? Number(cargoWeight) : 0,
       totalPoints: Number.isFinite(totalPoints) ? Number(totalPoints) : 0,
     };
   }).filter(Boolean);
 
   if(!allItems.length) return null;
-
-  const unitFilter = String(filters.unit || "").trim();
-  const taskTypeFilter = String(filters.taskType || "").trim();
-  const assetFilter = String(filters.asset || "").trim();
   const unitOptions = Array.from(new Set(allItems.map(item=>String(item.unit || "").trim()).filter(Boolean))).sort((a,b)=>a.localeCompare(b, "uk"));
   const taskTypeOptions = Array.from(new Set(allItems.map(item=>String(item.taskType || "").trim()).filter(Boolean))).sort((a,b)=>a.localeCompare(b, "uk"));
   const assetOptions = summarizeNormalizedLabelCounts(allItems, item=>String(item.asset || "").trim(), normalizeDeltaPlatformKey).map(item=>item.label);
@@ -6921,6 +6968,12 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     if(unitFilter && item.unit !== unitFilter) return false;
     if(taskTypeFilter && item.taskType !== taskTypeFilter) return false;
     if(assetFilter && normalizeDeltaPlatformKey(item.asset) !== normalizeDeltaPlatformKey(assetFilter)) return false;
+    if((dateFromTs !== null || dateToTs !== null)){
+      const itemTs = Number.isFinite(item.effectiveTs) ? item.effectiveTs : null;
+      if(itemTs === null) return false;
+      if(dateFromTs !== null && itemTs < dateFromTs) return false;
+      if(dateToTs !== null && itemTs > dateToTs) return false;
+    }
     return true;
   });
 
@@ -7007,7 +7060,7 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
       unitOptions,
       taskTypeOptions,
       assetOptions,
-      filters: {unit: unitFilter, taskType: taskTypeFilter, asset: assetFilter},
+      filters: {unit: unitFilter, taskType: taskTypeFilter, asset: assetFilter, dateFrom: dateFromFilter, dateTo: dateToFilter},
       totalParsedRows: allItems.length,
     };
   }
@@ -7443,7 +7496,7 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
     unitOptions,
     taskTypeOptions,
     assetOptions,
-    filters: {unit: unitFilter, taskType: taskTypeFilter, asset: assetFilter},
+    filters: {unit: unitFilter, taskType: taskTypeFilter, asset: assetFilter, dateFrom: dateFromFilter, dateTo: dateToFilter},
     totalParsedRows: allItems.length,
     missionGroupingLabel: hasMissionUuid
       ? "UUID Звіту"
@@ -7485,15 +7538,33 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
             ${analytics.assetOptions.map(item=>`<option value="${attrEsc(item)}" ${item === analytics.filters.asset ? "selected" : ""}>${htmlesc(item)}</option>`).join("")}
           </select>
         </label>
+        <label class="delta-nrk-filter-field">
+          <span>Дата від</span>
+          <input id="deltaDateFromFilter_${modalKey}" type="date" value="${attrEsc(analytics.filters.dateFrom || "")}">
+        </label>
+        <label class="delta-nrk-filter-field">
+          <span>Дата до</span>
+          <input id="deltaDateToFilter_${modalKey}" type="date" value="${attrEsc(analytics.filters.dateTo || "")}">
+        </label>
         <div class="delta-nrk-filter-actions">
           <button class="btn primary btn-mini" data-action="applyDeltaNrkAnalyticsFilters" data-arg1="${modalKey}">Застосувати</button>
           <button class="btn ghost btn-mini" data-action="resetDeltaNrkAnalyticsFilters" data-arg1="${modalKey}">Скинути</button>
         </div>
       </div>
+      <div class="delta-nrk-filter-actions delta-nrk-filter-quick">
+        <button class="btn ghost btn-mini" data-action="applyDeltaQuickDateFilter" data-arg1="${modalKey}" data-arg2="today">Сьогодні</button>
+        <button class="btn ghost btn-mini" data-action="applyDeltaQuickDateFilter" data-arg1="${modalKey}" data-arg2="yesterday">Вчора</button>
+        <button class="btn ghost btn-mini" data-action="applyDeltaQuickDateFilter" data-arg1="${modalKey}" data-arg2="7days">7 днів</button>
+      </div>
       <div class="delta-nrk-filter-summary">
         <span class="delta-nrk-filter-chip">${analytics.filters.unit ? `Підрозділ: ${htmlesc(analytics.filters.unit)}` : "Усі підрозділи"}</span>
         <span class="delta-nrk-filter-chip">${analytics.filters.taskType ? `Тип задачі: ${htmlesc(analytics.filters.taskType)}` : "Усі типи задач"}</span>
         <span class="delta-nrk-filter-chip">${analytics.filters.asset ? `Платформа: ${htmlesc(analytics.filters.asset)}` : "Усі платформи"}</span>
+        <span class="delta-nrk-filter-chip">${
+          analytics.filters.dateFrom || analytics.filters.dateTo
+            ? `Дата: ${htmlesc(formatDeltaFilterDateLabel(analytics.filters.dateFrom || analytics.filters.dateTo))}${analytics.filters.dateFrom && analytics.filters.dateTo && analytics.filters.dateFrom !== analytics.filters.dateTo ? ` - ${htmlesc(formatDeltaFilterDateLabel(analytics.filters.dateTo))}` : ""}`
+            : "Усі дати"
+        }</span>
         <span class="delta-nrk-filter-chip mono">Місій у зрізі: ${fmtNum(analytics.missionCount)}</span>
         <span class="delta-nrk-filter-chip mono">Записів у зрізі: ${fmtNum(analytics.recordCount)}</span>
         ${analytics.totalParsedRows !== analytics.recordCount ? `<span class="delta-nrk-filter-chip mono">Із загалу записів: ${fmtNum(analytics.totalParsedRows)}</span>` : ""}
@@ -8292,6 +8363,11 @@ function buildDeltaBplaExecutiveReportText(analytics){
   if(analytics.filters?.unit) scopeParts.push(`підрозділ: ${analytics.filters.unit}`);
   if(analytics.filters?.taskType) scopeParts.push(`тип задачі: ${analytics.filters.taskType}`);
   if(analytics.filters?.asset) scopeParts.push(`платформа: ${analytics.filters.asset}`);
+  if(analytics.filters?.dateFrom || analytics.filters?.dateTo){
+    const fromLabel = formatDeltaFilterDateLabel(analytics.filters?.dateFrom || analytics.filters?.dateTo);
+    const toLabel = formatDeltaFilterDateLabel(analytics.filters?.dateTo || analytics.filters?.dateFrom);
+    scopeParts.push(analytics.filters?.dateFrom && analytics.filters?.dateTo && analytics.filters?.dateFrom !== analytics.filters?.dateTo ? `дати: ${fromLabel} - ${toLabel}` : `дата: ${fromLabel}`);
+  }
 
   const lastMonth = Array.isArray(analytics.months) && analytics.months.length ? analytics.months[analytics.months.length - 1] : null;
   const prevMonth = Array.isArray(analytics.months) && analytics.months.length > 1 ? analytics.months[analytics.months.length - 2] : null;
@@ -8408,6 +8484,13 @@ function buildDeltaBplaAnalytics(rows, title="", filters={}){
 
   const columns = detectDeltaBplaColumns(grid[0]);
   const detectedFormat = columns.reportUuid === 0 && columns.asset === 34 ? "Delta БпЛА 42 колонки" : "Delta БпЛА / alias-map";
+  const unitFilter = String(filters.unit || "").trim();
+  const taskTypeFilter = String(filters.taskType || "").trim();
+  const assetFilter = String(filters.asset || "").trim();
+  const dateFromFilter = String(filters.dateFrom || "").trim();
+  const dateToFilter = String(filters.dateTo || "").trim();
+  const dateFromTs = parseDeltaFilterDateStart(dateFromFilter);
+  const dateToTs = parseDeltaFilterDateEnd(dateToFilter);
   const allItems = grid.slice(1).map((row, index)=>{
     const reportUuid = columns.reportUuid >= 0 ? String(row?.[columns.reportUuid] || "").trim() : "";
     const unit = columns.unit >= 0 ? String(row?.[columns.unit] || "").trim() : "";
@@ -8459,6 +8542,7 @@ function buildDeltaBplaAnalytics(rows, title="", filters={}){
       dayMinutes: dayNight.dayMinutes,
       nightMinutes: dayNight.nightMinutes,
       effectiveDateRaw: resultAt || endAt || startAt || "",
+      effectiveTs: [resultAtTs, endAtTs, startAtTs].find(value=>Number.isFinite(value)) ?? null,
       targetType,
       targetDescription,
       targetQty: Number.isFinite(targetQty) ? Number(targetQty) : 0,
@@ -8478,10 +8562,6 @@ function buildDeltaBplaAnalytics(rows, title="", filters={}){
   }).filter(Boolean);
 
   if(!allItems.length) return null;
-
-  const unitFilter = String(filters.unit || "").trim();
-  const taskTypeFilter = String(filters.taskType || "").trim();
-  const assetFilter = String(filters.asset || "").trim();
   const unitOptions = Array.from(new Set(allItems.map(item=>item.unit).filter(Boolean))).sort((a,b)=>a.localeCompare(b, "uk"));
   const taskTypeOptions = Array.from(new Set(allItems.map(item=>item.taskType).filter(Boolean))).sort((a,b)=>a.localeCompare(b, "uk"));
   const assetOptions = summarizeNormalizedLabelCounts(allItems, item=>item.asset, normalizeDeltaPlatformKey).map(item=>item.label);
@@ -8489,6 +8569,12 @@ function buildDeltaBplaAnalytics(rows, title="", filters={}){
     if(unitFilter && item.unit !== unitFilter) return false;
     if(taskTypeFilter && item.taskType !== taskTypeFilter) return false;
     if(assetFilter && normalizeDeltaPlatformKey(item.asset) !== normalizeDeltaPlatformKey(assetFilter)) return false;
+    if((dateFromTs !== null || dateToTs !== null)){
+      const itemTs = Number.isFinite(item.effectiveTs) ? item.effectiveTs : null;
+      if(itemTs === null) return false;
+      if(dateFromTs !== null && itemTs < dateFromTs) return false;
+      if(dateToTs !== null && itemTs > dateToTs) return false;
+    }
     return true;
   });
 
@@ -8708,7 +8794,7 @@ function buildDeltaBplaAnalytics(rows, title="", filters={}){
     unitOptions,
     taskTypeOptions,
     assetOptions,
-    filters: {unit: unitFilter, taskType: taskTypeFilter, asset: assetFilter},
+    filters: {unit: unitFilter, taskType: taskTypeFilter, asset: assetFilter, dateFrom: dateFromFilter, dateTo: dateToFilter},
     totalParsedRows: allItems.length,
     missionGroupingLabel: hasMissionUuid ? "UUID Звіту" : "Підрозділ + Тип задачі + Дата результату + Платформа",
   };
@@ -8736,12 +8822,20 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
         <label class="delta-nrk-filter-field"><span>Підрозділ</span><select id="deltaUnitFilter_${modalKey}"><option value="">Усі підрозділи</option>${analytics.unitOptions.map(item=>`<option value="${attrEsc(item)}" ${item === analytics.filters.unit ? "selected" : ""}>${htmlesc(item)}</option>`).join("")}</select></label>
         <label class="delta-nrk-filter-field"><span>Тип задачі</span><select id="deltaTaskTypeFilter_${modalKey}"><option value="">Усі типи задач</option>${analytics.taskTypeOptions.map(item=>`<option value="${attrEsc(item)}" ${item === analytics.filters.taskType ? "selected" : ""}>${htmlesc(item)}</option>`).join("")}</select></label>
         <label class="delta-nrk-filter-field"><span>Платформа</span><select id="deltaAssetFilter_${modalKey}"><option value="">Усі платформи</option>${analytics.assetOptions.map(item=>`<option value="${attrEsc(item)}" ${item === analytics.filters.asset ? "selected" : ""}>${htmlesc(item)}</option>`).join("")}</select></label>
+        <label class="delta-nrk-filter-field"><span>Дата від</span><input id="deltaDateFromFilter_${modalKey}" type="date" value="${attrEsc(analytics.filters.dateFrom || "")}"></label>
+        <label class="delta-nrk-filter-field"><span>Дата до</span><input id="deltaDateToFilter_${modalKey}" type="date" value="${attrEsc(analytics.filters.dateTo || "")}"></label>
         <div class="delta-nrk-filter-actions"><button class="btn primary btn-mini" data-action="applyDeltaNrkAnalyticsFilters" data-arg1="${modalKey}">Застосувати</button><button class="btn ghost btn-mini" data-action="resetDeltaNrkAnalyticsFilters" data-arg1="${modalKey}">Скинути</button></div>
       </div>
+      <div class="delta-nrk-filter-actions delta-nrk-filter-quick"><button class="btn ghost btn-mini" data-action="applyDeltaQuickDateFilter" data-arg1="${modalKey}" data-arg2="today">Сьогодні</button><button class="btn ghost btn-mini" data-action="applyDeltaQuickDateFilter" data-arg1="${modalKey}" data-arg2="yesterday">Вчора</button><button class="btn ghost btn-mini" data-action="applyDeltaQuickDateFilter" data-arg1="${modalKey}" data-arg2="7days">7 днів</button></div>
       <div class="delta-nrk-filter-summary">
         <span class="delta-nrk-filter-chip">${analytics.filters.unit ? `Підрозділ: ${htmlesc(analytics.filters.unit)}` : "Усі підрозділи"}</span>
         <span class="delta-nrk-filter-chip">${analytics.filters.taskType ? `Тип задачі: ${htmlesc(analytics.filters.taskType)}` : "Усі типи задач"}</span>
         <span class="delta-nrk-filter-chip">${analytics.filters.asset ? `Платформа: ${htmlesc(analytics.filters.asset)}` : "Усі платформи"}</span>
+        <span class="delta-nrk-filter-chip">${
+          analytics.filters.dateFrom || analytics.filters.dateTo
+            ? `Дата: ${htmlesc(formatDeltaFilterDateLabel(analytics.filters.dateFrom || analytics.filters.dateTo))}${analytics.filters.dateFrom && analytics.filters.dateTo && analytics.filters.dateFrom !== analytics.filters.dateTo ? ` - ${htmlesc(formatDeltaFilterDateLabel(analytics.filters.dateTo))}` : ""}`
+            : "Усі дати"
+        }</span>
         <span class="delta-nrk-filter-chip mono">Місій у зрізі: ${fmtNum(analytics.missionCount)}</span>
         <span class="delta-nrk-filter-chip mono">Записів у зрізі: ${fmtNum(analytics.recordCount)}</span>
       </div>
@@ -9519,7 +9613,14 @@ function rerenderDeltaNrkAnalyticsModal(key, filters={}){
     unit: String(filters.unit || "").trim(),
     taskType: String(filters.taskType || "").trim(),
     asset: String(filters.asset || "").trim(),
+    dateFrom: String(filters.dateFrom || "").trim(),
+    dateTo: String(filters.dateTo || "").trim(),
   };
+  if(nextFilters.dateFrom && nextFilters.dateTo && nextFilters.dateFrom > nextFilters.dateTo){
+    const tmp = nextFilters.dateFrom;
+    nextFilters.dateFrom = nextFilters.dateTo;
+    nextFilters.dateTo = tmp;
+  }
 
   item.deltaFilters = nextFilters;
   const analyticsKind = String(item.deltaAnalyticsKind || "delta_nrk");
@@ -9552,14 +9653,54 @@ function applyDeltaNrkAnalyticsFilters(key){
   const unit = String(document.getElementById(`deltaUnitFilter_${key}`)?.value || "").trim();
   const taskType = String(document.getElementById(`deltaTaskTypeFilter_${key}`)?.value || "").trim();
   const asset = String(document.getElementById(`deltaAssetFilter_${key}`)?.value || "").trim();
-  rerenderDeltaNrkAnalyticsModal(key, {unit, taskType, asset});
+  const dateFrom = String(document.getElementById(`deltaDateFromFilter_${key}`)?.value || "").trim();
+  const dateTo = String(document.getElementById(`deltaDateToFilter_${key}`)?.value || "").trim();
+  rerenderDeltaNrkAnalyticsModal(key, {unit, taskType, asset, dateFrom, dateTo});
 
 }
 
 function resetDeltaNrkAnalyticsFilters(key){
 
   if(!key) return;
-  rerenderDeltaNrkAnalyticsModal(key, {unit:"", taskType:"", asset:""});
+  rerenderDeltaNrkAnalyticsModal(key, {unit:"", taskType:"", asset:"", dateFrom:"", dateTo:""});
+
+}
+
+function applyDeltaQuickDateFilter(key, preset=""){
+
+  if(!key) return;
+
+  const now = new Date();
+  const today = formatDeltaDateInputValue(now);
+  const yesterdayDate = new Date(now);
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterday = formatDeltaDateInputValue(yesterdayDate);
+  const last7StartDate = new Date(now);
+  last7StartDate.setDate(last7StartDate.getDate() - 6);
+  const last7Start = formatDeltaDateInputValue(last7StartDate);
+
+  let dateFrom = "";
+  let dateTo = "";
+  if(preset === "today"){
+    dateFrom = today;
+    dateTo = today;
+  } else if(preset === "yesterday"){
+    dateFrom = yesterday;
+    dateTo = yesterday;
+  } else if(preset === "7days"){
+    dateFrom = last7Start;
+    dateTo = today;
+  }
+
+  const fromEl = document.getElementById(`deltaDateFromFilter_${key}`);
+  const toEl = document.getElementById(`deltaDateToFilter_${key}`);
+  if(fromEl) fromEl.value = dateFrom;
+  if(toEl) toEl.value = dateTo;
+
+  const unit = String(document.getElementById(`deltaUnitFilter_${key}`)?.value || "").trim();
+  const taskType = String(document.getElementById(`deltaTaskTypeFilter_${key}`)?.value || "").trim();
+  const asset = String(document.getElementById(`deltaAssetFilter_${key}`)?.value || "").trim();
+  rerenderDeltaNrkAnalyticsModal(key, {unit, taskType, asset, dateFrom, dateTo});
 
 }
 
@@ -26350,6 +26491,7 @@ const ACTIONS = {
   printCurrentRenderedModal,
   switchComparisonTopPanel,
   applyDeltaNrkAnalyticsFilters,
+  applyDeltaQuickDateFilter,
   resetDeltaNrkAnalyticsFilters,
   copyTextFromElement,
   filterStaffingUnitsBlock,
