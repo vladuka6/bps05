@@ -2948,13 +2948,18 @@
       padding: 16px;max-height: 86vh;overflow:auto;
     }
     .sheet.rendered-analytics-sheet{
-      width:min(1520px, calc(100% - 14px));
-      max-height:92vh;
-      padding:18px;
+      width:min(1620px, calc(100% - 12px));
+      max-height:94vh;
+      padding:18px 20px 16px;
     }
     .sheet.rendered-analytics-sheet .sheet-h{
       justify-content:center;
       position:sticky;
+      top:0;
+      z-index:8;
+      background:var(--card);
+      padding:2px 0 12px;
+      margin-bottom:10px;
     }
     .sheet.rendered-analytics-sheet .sheet-h .t{
       flex:1;
@@ -2965,9 +2970,16 @@
     }
     .sheet.rendered-analytics-sheet #sheetClose{
       position:absolute;
-      right:16px;
+      right:0;
       top:50%;
       transform:translateY(-50%);
+      z-index:10;
+      min-width:42px;
+      min-height:42px;
+      border-radius:999px;
+      background:rgba(104,126,173,.08);
+      border:1px solid rgba(104,126,173,.18);
+      box-shadow:0 8px 20px rgba(55,84,150,.12);
     }
     @media (max-width: 768px){
       .modal{align-items:flex-end;}
@@ -2977,15 +2989,17 @@
       }
       .sheet.rendered-analytics-sheet{
         width:100%;
-        max-height:94vh;
-        padding:14px;
+        max-height:96vh;
+        padding:12px 12px 14px;
       }
       .sheet.rendered-analytics-sheet .sheet-h .t{
         font-size:clamp(15px, 4.8vw, 18px);
-        padding:0 48px;
+        padding:0 52px;
       }
       .sheet.rendered-analytics-sheet #sheetClose{
-        right:12px;
+        right:0;
+        min-width:40px;
+        min-height:40px;
       }
     }
     .sheet-h{
@@ -6107,6 +6121,14 @@ body.dark .text-table-import-col{
 body.dark .delta-monthly-card{
   background:linear-gradient(180deg, rgba(18,24,38,.92), rgba(13,18,30,.96));
   border-color:rgba(255,255,255,.08);
+  box-shadow:none;
+}
+body.dark .sheet.rendered-analytics-sheet .sheet-h{
+  background:var(--card);
+}
+body.dark .sheet.rendered-analytics-sheet #sheetClose{
+  background:rgba(255,255,255,.06);
+  border-color:rgba(255,255,255,.12);
   box-shadow:none;
 }
 
