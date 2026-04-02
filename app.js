@@ -7831,6 +7831,40 @@ function buildDeltaNrkAnalyticsModalHtml(rows, title="", opts={}){
           tone: "b-violet",
         })),
         emptyText: "По зв’язку підрозділ-платформа даних поки немає.",
+      },
+      {
+        title: "Усього за підрозділами",
+        summary: (() => {
+          const totalLinks = (analytics.unitPlatformStats || []).reduce((sum, item)=>sum + (Number(item.platformCount) || 0), 0);
+          return `Всього за підрозділами: ${fmtNum(totalLinks)}`;
+        })(),
+        rows: (() => {
+          const map = new Map();
+          (analytics.unitPlatformStats || []).forEach(unitItem=>{
+            (unitItem.platforms || []).forEach(platform=>{
+              const key = normalizeDeltaPlatformKey(platform.label) || platform.label;
+              if(!map.has(key)){
+                map.set(key, {
+                  label: platform.label,
+                  unitCount: 0,
+                  variants: new Map(),
+                });
+              }
+              const bucket = map.get(key);
+              bucket.unitCount += 1;
+              bucket.variants.set(platform.label, (bucket.variants.get(platform.label) || 0) + 1);
+            });
+          });
+          return Array.from(map.values())
+            .map(bucket=>({
+              label: Array.from(bucket.variants.entries()).sort((a,b)=>b[1]-a[1] || String(a[0]).localeCompare(String(b[0]), "uk"))[0]?.[0] || bucket.label,
+              valueText: fmtNum(bucket.unitCount),
+              meta: "",
+              tone: "b-blue",
+            }))
+            .sort((a,b)=>(parseAnalyticsNumber(b.valueText) || 0) - (parseAnalyticsNumber(a.valueText) || 0) || String(a.label).localeCompare(String(b.label), "uk"));
+        })(),
+        emptyText: "По видах платформ даних поки немає.",
       }
     ])
   );
