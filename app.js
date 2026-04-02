@@ -5629,6 +5629,28 @@ function normalizeDeltaPlatformKey(value){
 
 }
 
+function normalizeDeltaNrkUnitName(value){
+
+  const raw = String(value || "").trim();
+  if(!raw) return "";
+
+  const key = normalizeAnalyticsHeader(raw);
+  const aliases = {
+    [normalizeAnalyticsHeader('3 прикз ДПСУ (9938) / 4 ПКШР 3 ПрикЗ')]: '4 ПКШР',
+    [normalizeAnalyticsHeader('2 ПКШР ГБ БАС "Фенікс" / 3 ВПС 2 ПКШР ГБ БАС "Фенікс"')]: '3 ВПС 2 ПКШР ГБ БАС "Фенікс"',
+    [normalizeAnalyticsHeader('3 прикз ДПСУ (9938) / 2 ПКШР 3 ПрикЗ')]: '2 ПКШР',
+    [normalizeAnalyticsHeader('ГВ БпАС "Фенікс" 3 прикз / 1 ВПС 2 ПКШР ГВ БАС "Фенікс"')]: '1 ВПС 2 ПКШР ГВ БАС "Фенікс"',
+    [normalizeAnalyticsHeader('2 ПКШР ГВ БАС "Фенікс" / 2 ВПС 2 ПКШР ГВ БАС "Фенікс"')]: '2 ВПС 2 ПКШР ГВ БАС "Фенікс"',
+    [normalizeAnalyticsHeader('ГВ БАС "Фенікс" 3 прикз / 1 ВПС 2 ПКШР ГВ БАС "Фенікс"')]: '1 ВПС 2 ПКШР ГВ БАС "Фенікс"',
+    [normalizeAnalyticsHeader('1 ВПС 2 ПКШР ГВ БАС "Фенікс"')]: '1 ВПС 2 ПКШР ГВ БАС "Фенікс"',
+    [normalizeAnalyticsHeader('2 ПКШР 3 ПрикЗ')]: '2 ПКШР',
+    [normalizeAnalyticsHeader('2 ПКШР')]: '2 ПКШР',
+  };
+
+  return aliases[key] || raw;
+
+}
+
 function inferDeltaMetricLabel(contextTitle="", rawValueText=""){
 
   const title = String(contextTitle || "").toLowerCase();
@@ -6814,7 +6836,7 @@ function buildDeltaNrkAnalytics(rows, title="", filters={}){
   const allItems = grid.slice(1).map((row, index)=>{
     const reportUuid = columns.reportUuid >= 0 ? String(row?.[columns.reportUuid] || "").trim() : "";
     const asset = columns.asset >= 0 ? String(row?.[columns.asset] || "").trim() : "";
-    const unit = columns.unit >= 0 ? String(row?.[columns.unit] || "").trim() : "";
+    const unit = columns.unit >= 0 ? normalizeDeltaNrkUnitName(row?.[columns.unit]) : "";
     const reporter = columns.reporter >= 0 ? String(row?.[columns.reporter] || "").trim() : "";
     const result = columns.result >= 0 ? String(row?.[columns.result] || "").trim() : "";
     const circumstances = columns.circumstances >= 0 ? String(row?.[columns.circumstances] || "").trim() : "";
