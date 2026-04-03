@@ -9190,6 +9190,14 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
   const deliveryDeliveredCount = Number(deliveryStatusDeliveredRow?.value || 0);
   const deliveryOtherStatusCount = Math.max(0, deliveryMissions.length - deliveryDeliveredCount);
   const deliveryLossCount = deliveryMissions.filter(item=>item.reliabilityKind === "loss").length;
+  const deliveryDeliveredAndLostCount = deliveryMissions.filter(item=>
+    item.reliabilityKind === "loss"
+    && (item.cargoStatuses || []).some(tag=>/доставлено/i.test(String(tag || "")))
+  ).length;
+  const deliveryNotDeliveredAndLostCount = deliveryMissions.filter(item=>
+    item.reliabilityKind === "loss"
+    && !(item.cargoStatuses || []).some(tag=>/доставлено/i.test(String(tag || "")))
+  ).length;
   const deliveryReliabilityRate = deliveryMissions.length
     ? ((deliveryMissions.filter(item=>item.reliabilityKind === "returned").length / deliveryMissions.length) * 100)
     : 0;
@@ -9719,6 +9727,8 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
       {label:"Статус вантажу", value: deliveryStatusTopRow?.label || "—"},
       {label:"Кількість вантажу", value: fmtNum(deliveryCargoQtyTotal)},
       {label:"Місій зі втратою засобу", value: fmtNum(deliveryLossCount)},
+      {label:"Доставлено і втрачено засіб", value: fmtNum(deliveryDeliveredAndLostCount)},
+      {label:"Не доставлено і втрачено засіб", value: fmtNum(deliveryNotDeliveredAndLostCount)},
     ])}
     <div class="control-grid">
       ${deliveryBlock || `<div class="item analytics-block"><div class="hint">По статусу вантажу даних поки немає.</div></div>`}
@@ -9728,10 +9738,32 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
       ${buildDeltaNrkTopList("Підрозділи доставки · по місіях", deliveryUnitRows.slice(0, 8), "По підрозділах доставки даних поки немає.")}
     </div>
   `;
+  const deliveryLossBreakdownRows = [
+    {
+      label: "Доставлено і втрачено засіб",
+      valueText: fmtNum(deliveryDeliveredAndLostCount),
+      meta: `${fmtNum(deliveryLossCount ? Math.round((deliveryDeliveredAndLostCount / deliveryLossCount) * 100) : 0)}% втрат у доставці`,
+      tone: "b-warn",
+    },
+    {
+      label: "Не доставлено і втрачено засіб",
+      valueText: fmtNum(deliveryNotDeliveredAndLostCount),
+      meta: `${fmtNum(deliveryLossCount ? Math.round((deliveryNotDeliveredAndLostCount / deliveryLossCount) * 100) : 0)}% втрат у доставці`,
+      tone: "b-danger",
+    },
+  ].filter(item=>(parseAnalyticsNumber(item.valueText) || 0) > 0);
+  const deliveryLossBreakdownBlock = buildDeltaNrkTopList(
+    "Втрати в доставці",
+    deliveryLossBreakdownRows,
+    "У доставці втрат засобу поки немає."
+  );
   const risksPanel = `
     <div class="control-grid">
       ${assetLossBlock}
       ${reliabilityBlock}
+    </div>
+    <div class="control-grid">
+      ${deliveryLossBreakdownBlock}
     </div>
     ${wrapDeltaBplaCollapsible("День / ніч", buildDeltaNrkDayNightHtml(analytics), true)}
     ${wrapDeltaBplaCollapsible("Якість заповнення даних", buildDeltaNrkTimeQualityHtml(analytics))}
