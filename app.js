@@ -9185,6 +9185,13 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
   const reconMissions = analytics.missions.filter(item=>/розвід|цілевказ/i.test(String(item.taskType || "")));
   const deliveryMissions = analytics.missions.filter(item=>/достав/i.test(String(item.taskType || "")));
   const strikePanelMissions = analytics.missions.filter(item=>/уражен/i.test(String(item.taskType || "")));
+  const deliveryStatusDeliveredRow = (analytics.cargoStatuses || []).find(item=>/доставлено/i.test(String(item.label || ""))) || null;
+  const deliveryStatusTopRow = (analytics.cargoStatuses || [])[0] || null;
+  const deliveryLossCount = deliveryMissions.filter(item=>item.reliabilityKind === "loss").length;
+  const deliveryReliabilityRate = deliveryMissions.length
+    ? ((deliveryMissions.filter(item=>item.reliabilityKind === "returned").length / deliveryMissions.length) * 100)
+    : 0;
+  const deliveryCargoQtyTotal = deliveryMissions.reduce((sum, item)=>sum + (Number(item.cargoQty) || 0), 0);
 
   const reconTargetRows = makeSimpleRows(countTagsLocal(reconMissions, item=>item.targetTypes), reconMissions.length, "у розвідці");
   const reconPlatformRows = makeSimpleRows(summarizePlatformsLocal(reconMissions), reconMissions.length, "у розвідці");
@@ -9701,11 +9708,14 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
     </div>
   `;
   const deliveryPanel = `
-    ${renderTaskFocusCard("Доставка · ключові метрики", deliveryStat, [
-      {label:"Доставлено", value: fmtNum(deliveryStat?.deliveredCargoCount || 0)},
-      {label:"Статус вантажу", value: deliveryStat?.topCargoStatus || "—"},
-      {label:"Обсяг вантажу", value: fmtNum(deliveryStat?.cargoQty || 0)},
-      {label:"Втрати", value: fmtNum(deliveryStat?.lossCount || 0)},
+    ${renderTaskFocusCard("Доставка · ключові метрики", {
+      total: deliveryMissions.length,
+      reliabilityRate: deliveryReliabilityRate,
+    }, [
+      {label:"Місій з доставленим вантажем", value: fmtNum(deliveryStatusDeliveredRow?.value || 0)},
+      {label:"Статус вантажу", value: deliveryStatusTopRow?.label || "—"},
+      {label:"Кількість вантажу", value: fmtNum(deliveryCargoQtyTotal)},
+      {label:"Місій зі втратою засобу", value: fmtNum(deliveryLossCount)},
     ])}
     <div class="control-grid">
       ${deliveryBlock || `<div class="item analytics-block"><div class="hint">По статусу вантажу даних поки немає.</div></div>`}
