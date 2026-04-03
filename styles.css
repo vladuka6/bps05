@@ -2378,6 +2378,63 @@
         flex-wrap:wrap;
         gap:6px;
       }
+    .delta-task-focus{
+        padding:10px 12px;
+      }
+    .delta-task-focus-grid{
+        display:grid;
+        grid-template-columns:minmax(0,.95fr) minmax(0,1.25fr);
+        gap:12px;
+        align-items:stretch;
+      }
+    .delta-task-focus-main{
+        border:1px solid rgba(150,170,205,.22);
+        border-radius:16px;
+        padding:12px 14px;
+        background:linear-gradient(180deg, rgba(255,255,255,.97), rgba(246,249,255,.92));
+      }
+    .delta-task-focus-k{
+        font-size:11px;
+        font-weight:900;
+        color:#6c7fa4;
+        margin-bottom:4px;
+      }
+    .delta-task-focus-v{
+        font-size:clamp(26px, 3vw, 34px);
+        font-weight:900;
+        line-height:1;
+        color:#1f2d4a;
+      }
+    .delta-task-focus-s{
+        margin-top:8px;
+        font-size:13px;
+        line-height:1.4;
+        color:#5b6f96;
+      }
+    .delta-task-focus-lines{
+        border:1px solid rgba(150,170,205,.18);
+        border-radius:16px;
+        background:rgba(247,250,255,.9);
+        overflow:hidden;
+      }
+    .delta-task-focus-line{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:10px;
+        padding:11px 14px;
+        font-size:13px;
+        line-height:1.35;
+        color:#5f7398;
+      }
+    .delta-task-focus-line + .delta-task-focus-line{
+        border-top:1px solid rgba(150,170,205,.14);
+      }
+    .delta-task-focus-line strong{
+        color:#243453;
+        font-weight:900;
+        text-align:right;
+      }
     .comparison-switcher-btn{
         border:1px solid rgba(150,170,205,.34);
         background:linear-gradient(180deg, rgba(255,255,255,.96), rgba(246,249,255,.88));
@@ -2612,6 +2669,19 @@
             padding:4px 8px;
             font-size:10px;
             min-height:26px;
+        }
+        .delta-task-focus-grid{
+            grid-template-columns:1fr;
+        }
+        .delta-task-focus-main{
+            padding:11px 12px;
+        }
+        .delta-task-focus-v{
+            font-size:24px;
+        }
+        .delta-task-focus-line{
+            padding:10px 12px;
+            font-size:12px;
         }
         .comparison-switcher-help{
             align-self:flex-start;

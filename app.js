@@ -9119,6 +9119,81 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
     </div>
   `;
 
+  const countByLocal = (source, getter)=>{
+    const map = new Map();
+    (Array.isArray(source) ? source : []).forEach(item=>{
+      const raw = String(getter(item) || "").trim();
+      if(!raw) return;
+      map.set(raw, (map.get(raw) || 0) + 1);
+    });
+    return Array.from(map.entries())
+      .map(([label, value])=>({label, value}))
+      .sort((a,b)=>b.value-a.value || String(a.label).localeCompare(String(b.label), "uk"));
+  };
+  const countTagsLocal = (source, getter)=>{
+    const map = new Map();
+    (Array.isArray(source) ? source : []).forEach(item=>{
+      const variants = new Map();
+      (getter(item) || []).forEach(tag=>{
+        const raw = String(tag || "").trim();
+        if(!raw) return;
+        const key = normalizeAnalyticsHeader(raw) || raw;
+        if(!variants.has(key)) variants.set(key, raw);
+      });
+      variants.forEach((raw, key)=>{
+        if(!map.has(key)) map.set(key, {label: raw, value: 0, variants: new Map()});
+        const bucket = map.get(key);
+        bucket.value += 1;
+        bucket.variants.set(raw, (bucket.variants.get(raw) || 0) + 1);
+      });
+    });
+    return Array.from(map.values()).map(bucket=>({
+      label: Array.from(bucket.variants.entries()).sort((a,b)=>b[1]-a[1] || String(a[0]).localeCompare(String(b[0]), "uk"))[0]?.[0] || bucket.label,
+      value: bucket.value,
+    })).sort((a,b)=>b.value-a.value || String(a.label).localeCompare(String(b.label), "uk"));
+  };
+  const summarizePlatformsLocal = source=>summarizeNormalizedLabelCounts(source, item=>item.asset, normalizeDeltaPlatformKey);
+  const makeSimpleRows = (rows, total, metaLabel, tone="b-blue")=>(rows || []).map(item=>({
+    label: item.label,
+    valueText: fmtNum(item.value),
+    meta: `${fmtNum(total ? Math.round((item.value / total) * 100) : 0)}% місій${metaLabel ? ` · ${metaLabel}` : ""}`,
+    tone,
+  }));
+  const renderTaskFocusCard = (titleText, stat, extraRows=[])=>{
+    if(!stat) return `<div class="item analytics-block"><div class="hint">Для цього типу задач даних поки немає.</div></div>`;
+    return `
+      <div class="item analytics-block delta-task-focus">
+        <div class="row"><div class="name">${htmlesc(titleText)}</div></div>
+        <div class="delta-task-focus-grid">
+          <div class="delta-task-focus-main">
+            <div class="delta-task-focus-k">Місій</div>
+            <div class="delta-task-focus-v mono">${fmtNum(stat.total)}</div>
+            <div class="delta-task-focus-s">${fmtNum(analytics.missionCount ? Math.round((stat.total / analytics.missionCount) * 100) : 0)}% від зрізу · надійність ${fmtNum(Math.round(stat.reliabilityRate || 0))}%</div>
+          </div>
+          <div class="delta-task-focus-lines">
+            ${extraRows.map(item=>`<div class="delta-task-focus-line"><span>${htmlesc(item.label)}</span><strong>${htmlesc(item.value)}</strong></div>`).join("")}
+          </div>
+        </div>
+      </div>
+    `;
+  };
+
+  const reconStat = (analytics.taskTypeStats || []).find(item=>/розвід|цілевказ/i.test(String(item.label || ""))) || null;
+  const strikeStat = (analytics.taskTypeStats || []).find(item=>/уражен/i.test(String(item.label || ""))) || null;
+  const deliveryStat = (analytics.taskTypeStats || []).find(item=>/достав/i.test(String(item.label || ""))) || null;
+
+  const reconMissions = analytics.missions.filter(item=>/розвід|цілевказ/i.test(String(item.taskType || "")));
+  const deliveryMissions = analytics.missions.filter(item=>/достав/i.test(String(item.taskType || "")));
+  const strikePanelMissions = analytics.missions.filter(item=>/уражен/i.test(String(item.taskType || "")));
+
+  const reconTargetRows = makeSimpleRows(countTagsLocal(reconMissions, item=>item.targetTypes), reconMissions.length, "у розвідці");
+  const reconPlatformRows = makeSimpleRows(summarizePlatformsLocal(reconMissions), reconMissions.length, "у розвідці");
+  const reconUnitRows = makeSimpleRows(countByLocal(reconMissions, item=>item.unit), reconMissions.length, "у розвідці", "b-green");
+  const deliveryPlatformRows = makeSimpleRows(summarizePlatformsLocal(deliveryMissions), deliveryMissions.length, "у доставці");
+  const deliveryUnitRows = makeSimpleRows(countByLocal(deliveryMissions, item=>item.unit), deliveryMissions.length, "у доставці", "b-green");
+
+  const overviewSwitchGroupId = `deltaBplaScope_${modalKey || uid("delta_bpla_scope")}`;
+
   const platformsRows = analytics.assetStats.map(item=>({label:item.label, valueText:fmtNum(item.total), meta:`${fmtNum(analytics.missionCount ? Math.round((item.total / analytics.missionCount) * 100) : 0)}% місій · цілі ${fmtNum(item.targetCount)} · втрати ${fmtNum(item.lossCount)}`, tone:"b-blue"}));
   const unitTaskRows = analytics.unitTaskStats.map(item=>({label:item.label, valueText:`${fmtNum(item.reconCount)} / ${fmtNum(item.strikeCount)}`, meta:`Розвідка / Ураження · Доставка ${fmtNum(item.deliveryCount)} · ${fmtNum(item.total)} місій`, tone:"b-violet"}));
   const assetLossRows = analytics.assetStats.filter(item=>item.lossCount > 0).map(item=>({label:item.label, valueText:fmtNum(item.lossCount), meta:`Повернення ${fmtNum(item.returnedCount)} · Надійність ${fmtNum(item.reliabilityRate)}% · ${fmtNum(item.total)} місій`, tone:"b-danger"}));
@@ -9576,39 +9651,117 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
   const controlBlock = buildDeltaNrkTopList("Керування · по місіях", controlRows.slice(0, 8), "По типу керування даних поки немає.").replace('<div class="row"><div class="name">Керування · по місіях</div></div>', `<div class="row"><div class="name">Керування · по місіях</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${controlModalKey}">Детальніше</button></div>`);
   const reliabilityBlock = `<div class="item analytics-block delta-nrk-list"><div class="row"><div class="name">Надійність · по місіях</div></div><div class="comparison-compact-grid">${reliabilityRows.length ? reliabilityRows.map((item, index)=>`<div class="comparison-compact-card delta-nrk-card delta-nrk-reliability-card"><div class="comparison-compact-rank mono">${index + 1}</div><div class="comparison-compact-main"><div class="comparison-compact-title">${htmlesc(item.label)}</div><div class="comparison-compact-meta">${htmlesc(item.meta || "")}</div></div><div class="delta-nrk-reliability-actions"><div class="badge ${item.tone || "b-blue"} mono">${htmlesc(String(item.valueText || ""))}</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${item.modalKey}">Місії</button></div></div>`).join("") : `<div class="hint">Даних по статусу засобу поки немає.</div>`}</div></div>`;
 
+  const overviewPanel = `
+    ${buildDeltaBplaMonthlyAnalyticsHtml(analytics)}
+    <div class="control-grid">
+      ${platformsBlock}
+      ${unitsBlock}
+    </div>
+    <div class="control-grid">
+      ${taskTypesBlock}
+      ${controlBlock}
+    </div>
+    <div class="control-grid">
+      ${unitTaskBlock}
+    </div>
+  `;
+  const reconPanel = `
+    ${renderTaskFocusCard("Розвідка · ключові метрики", reconStat, [
+      {label:"Місій з цілями", value: fmtNum(reconStat?.targetMissionCount || 0)},
+      {label:"Цілей", value: fmtNum(reconStat?.targetCount || 0)},
+      {label:"Основна ціль", value: reconStat?.topTargetType || "—"},
+      {label:"Втрати", value: fmtNum(reconStat?.lossCount || 0)},
+    ])}
+    <div class="control-grid">
+      ${buildDeltaNrkTopList("Цілі розвідки · по місіях", reconTargetRows.slice(0, 8), "По цілях розвідки даних поки немає.")}
+      ${buildDeltaNrkTopList("Платформи розвідки · по місіях", reconPlatformRows.slice(0, 8), "По платформах розвідки даних поки немає.")}
+    </div>
+    <div class="control-grid">
+      ${buildDeltaNrkTopList("Підрозділи розвідки · по місіях", reconUnitRows.slice(0, 8), "По підрозділах розвідки даних поки немає.")}
+      ${controlBlock}
+    </div>
+  `;
+  const strikePanel = `
+    ${renderTaskFocusCard("Ураження · ключові метрики", strikeStat, [
+      {label:"Місій з цілями", value: fmtNum(strikeStat?.targetMissionCount || 0)},
+      {label:"Цілей", value: fmtNum(strikeStat?.targetCount || 0)},
+      {label:"Основний статус", value: strikeStat?.topTargetStatus || "—"},
+      {label:"Боєприпас", value: strikeStat?.topAmmoName || strikeStat?.topAmmoType || "—"},
+    ])}
+    <div class="control-grid">
+      ${targetTypesBlock}
+      ${targetPerformanceBlock}
+    </div>
+    <div class="control-grid">
+      ${targetStatusBlock}
+      ${ammoEffectivenessBlock}
+    </div>
+    <div class="control-grid">
+      ${ammoBlock}
+    </div>
+  `;
+  const deliveryPanel = `
+    ${renderTaskFocusCard("Доставка · ключові метрики", deliveryStat, [
+      {label:"Доставлено", value: fmtNum(deliveryStat?.deliveredCargoCount || 0)},
+      {label:"Статус вантажу", value: deliveryStat?.topCargoStatus || "—"},
+      {label:"Обсяг вантажу", value: fmtNum(deliveryStat?.cargoQty || 0)},
+      {label:"Втрати", value: fmtNum(deliveryStat?.lossCount || 0)},
+    ])}
+    <div class="control-grid">
+      ${deliveryBlock || `<div class="item analytics-block"><div class="hint">По статусу вантажу даних поки немає.</div></div>`}
+      ${buildDeltaNrkTopList("Платформи доставки · по місіях", deliveryPlatformRows.slice(0, 8), "По платформах доставки даних поки немає.")}
+    </div>
+    <div class="control-grid">
+      ${buildDeltaNrkTopList("Підрозділи доставки · по місіях", deliveryUnitRows.slice(0, 8), "По підрозділах доставки даних поки немає.")}
+    </div>
+  `;
+  const risksPanel = `
+    <div class="control-grid">
+      ${assetLossBlock}
+      ${reliabilityBlock}
+    </div>
+    ${wrapDeltaBplaCollapsible("День / ніч", buildDeltaNrkDayNightHtml(analytics), true)}
+    ${wrapDeltaBplaCollapsible("Якість заповнення даних", buildDeltaNrkTimeQualityHtml(analytics))}
+  `;
+
+  const switchButtons = [
+    {key:"overview", label:"Огляд", panel: overviewPanel},
+    {key:"recon", label:"Розвідка", panel: reconPanel},
+    {key:"strike", label:"Ураження", panel: strikePanel},
+    {key:"delivery", label:"Доставка", panel: deliveryPanel},
+    {key:"risks", label:"Ризики", panel: risksPanel},
+  ];
+
   return `
     <div class="staffing-analytics-modal comparison-analytics-modal delta-nrk-analytics-modal">
       ${filtersBlock}
       ${buildDeltaBplaAutoSummaryHtml(analytics)}
-      ${buildDeltaBplaMonthlyAnalyticsHtml(analytics)}
-      <div class="control-grid">
-        ${wrapDeltaBplaCollapsible("Платформи", platformsBlock)}
-        ${wrapDeltaBplaCollapsible("Розвідка / Ураження по підрозділах", unitTaskBlock)}
-      </div>
-      <div class="control-grid">
-        ${wrapDeltaBplaCollapsible("Типи задач", taskTypesBlock)}
-        ${wrapDeltaBplaCollapsible("Підрозділи", unitsBlock)}
-      </div>
-      <div class="control-grid">
-        ${wrapDeltaBplaCollapsible("Цілі", targetTypesBlock)}
-        ${wrapDeltaBplaCollapsible("Ураження по типах цілей", targetPerformanceBlock)}
-      </div>
-      <div class="control-grid">
-        ${wrapDeltaBplaCollapsible("Статус цілей", targetStatusBlock)}
-        ${wrapDeltaBplaCollapsible("Втрати", assetLossBlock)}
-      </div>
-      <div class="control-grid">
-        ${wrapDeltaBplaCollapsible("Надійність", reliabilityBlock)}
-        ${wrapDeltaBplaCollapsible("Ефективність боєприпасів", ammoEffectivenessBlock)}
-      </div>
-      <div class="control-grid">
-        ${wrapDeltaBplaCollapsible("Боєприпаси", ammoBlock)}
-        ${wrapDeltaBplaCollapsible("Статус вантажу", deliveryBlock || `<div class="item analytics-block"><div class="hint">По статусу вантажу даних поки немає.</div></div>`)}
-      </div>
-      ${wrapDeltaBplaCollapsible("День / ніч", buildDeltaNrkDayNightHtml(analytics))}
-      ${wrapDeltaBplaCollapsible("Керування", controlBlock)}
       ${buildDeltaBplaExecutiveReportHtml(analytics, modalKey)}
-      ${wrapDeltaBplaCollapsible("Якість заповнення даних", buildDeltaNrkTimeQualityHtml(analytics))}
+      <div class="item analytics-block comparison-switch-block">
+        <div class="row"><div class="name">Аналітика БпЛА</div></div>
+        <div class="comparison-switcher" data-topswitch-group="${overviewSwitchGroupId}">
+          <div class="comparison-switcher-head">
+            <div class="comparison-switcher-buttons">
+              ${switchButtons.map((btn, index)=>`
+                <button
+                  type="button"
+                  class="comparison-switcher-btn ${index===0 ? "is-active" : ""}"
+                  data-action="switchComparisonTopPanel"
+                  data-arg1="${overviewSwitchGroupId}"
+                  data-arg2="${btn.key}"
+                >${htmlesc(btn.label)}</button>
+              `).join("")}
+            </div>
+          </div>
+          <div class="comparison-switch-panels">
+            ${switchButtons.map((btn, index)=>`
+              <div class="comparison-switch-panel ${index===0 ? "is-active" : ""}" data-topswitch-panel="${overviewSwitchGroupId}:${btn.key}">
+                ${btn.panel}
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      </div>
       ${wrapDeltaBplaCollapsible("Перевірка імпорту", diagnosticsBlock)}
       ${wrapDeltaBplaCollapsible("Логіка підрахунку", countingLogicBlock)}
     </div>
