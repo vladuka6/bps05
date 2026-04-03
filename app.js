@@ -9187,6 +9187,8 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
   const strikePanelMissions = analytics.missions.filter(item=>/уражен/i.test(String(item.taskType || "")));
   const deliveryStatusDeliveredRow = (analytics.cargoStatuses || []).find(item=>/доставлено/i.test(String(item.label || ""))) || null;
   const deliveryStatusTopRow = (analytics.cargoStatuses || [])[0] || null;
+  const deliveryDeliveredCount = Number(deliveryStatusDeliveredRow?.value || 0);
+  const deliveryOtherStatusCount = Math.max(0, deliveryMissions.length - deliveryDeliveredCount);
   const deliveryLossCount = deliveryMissions.filter(item=>item.reliabilityKind === "loss").length;
   const deliveryReliabilityRate = deliveryMissions.length
     ? ((deliveryMissions.filter(item=>item.reliabilityKind === "returned").length / deliveryMissions.length) * 100)
@@ -9712,7 +9714,8 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
       total: deliveryMissions.length,
       reliabilityRate: deliveryReliabilityRate,
     }, [
-      {label:"Місій з доставленим вантажем", value: fmtNum(deliveryStatusDeliveredRow?.value || 0)},
+      {label:"Доставлено", value: fmtNum(deliveryDeliveredCount)},
+      {label:"Інші статуси", value: fmtNum(deliveryOtherStatusCount)},
       {label:"Статус вантажу", value: deliveryStatusTopRow?.label || "—"},
       {label:"Кількість вантажу", value: fmtNum(deliveryCargoQtyTotal)},
       {label:"Місій зі втратою засобу", value: fmtNum(deliveryLossCount)},
