@@ -8273,7 +8273,7 @@ function buildDeltaBplaAutoSummaryHtml(analytics){
     {label:"Розвідка", value: fmtNum(analytics.reconMissionCount), text: `${percentOfMissions(analytics.reconMissionCount)}% місій`},
     {label:"Ураження", value: fmtNum(analytics.strikeMissionCount), text: `${percentOfMissions(analytics.strikeMissionCount)}% місій · цілі ${fmtNum(analytics.totalTargets)}`},
     {label:"Доставка", value: fmtNum(analytics.deliveryMissionCount), text: `${percentOfMissions(analytics.deliveryMissionCount)}% місій · доставлено ${fmtNum(analytics.deliveredCargoCount)}`},
-    {label:"Цілі", value: fmtNum(analytics.totalTargets), text: `${fmtNum(analytics.targetMissionCount)} місій з цілями`},
+    {label:"Цілі", value: fmtNum(analytics.totalTargets), text: `${fmtNum(analytics.targetMissionCount)} місій типу Ураження з цілями`},
     {label:"Платформа", value: analytics.topAsset?.label || "—", text: analytics.topAsset ? `${fmtNum(analytics.topAsset.value)} місій` : "Немає даних"},
     {label:"Сер. час", value: htmlesc(formatDurationMinutes(analytics.timeQuality?.avgDurationMinutes || 0)), text: `${fmtNum(analytics.timeQuality?.validDurationCount || 0)} місій із тривалістю`},
     {label:"Надійність", value: `${fmtNum(analytics.reliabilityRate)}%`, text: `Повернення ${fmtNum(analytics.returnedCount)} · Втрати ${fmtNum(analytics.lossCount)}`, tone: analytics.lossCount > 0 ? "danger" : "ok"},
@@ -8389,7 +8389,9 @@ function buildDeltaBplaExecutiveReportText(analytics){
   const topTask = analytics.topTaskType?.label ? `${analytics.topTaskType.label} (${fmtNum(analytics.topTaskType.value)} місій)` : "—";
   const topUnit = analytics.unitsByMissions?.[0]?.label ? `${analytics.unitsByMissions[0].label} (${fmtNum(analytics.unitsByMissions[0].value)} місій)` : "—";
   const topTarget = analytics.targetTypes?.[0]?.label ? `${analytics.targetTypes[0].label} (${fmtNum(analytics.targetTypes[0].value)} місій)` : "—";
-  const topAmmo = analytics.topAmmoType?.label ? `${analytics.topAmmoType.label} (${fmtNum(analytics.topAmmoType.value)} місій)` : "—";
+  const topAmmo = analytics.topAmmoName?.label
+    ? `${analytics.topAmmoName.label} (${fmtNum(analytics.topAmmoName.value)} місій)`
+    : (analytics.topAmmoType?.label ? `${analytics.topAmmoType.label} (${fmtNum(analytics.topAmmoType.value)} місій)` : "—");
   const topStatus = analytics.topTargetStatus?.label ? `${analytics.topTargetStatus.label} (${fmtNum(analytics.topTargetStatus.value)} місій)` : "—";
   const topRiskAsset = analytics.assetStats?.slice().sort((a,b)=>(b.lossCount - a.lossCount) || (b.total - a.total) || String(a.label).localeCompare(String(b.label), "uk"))[0] || null;
   const missingDuration = Math.max(0, analytics.missionCount - Number(analytics.timeQuality?.durationFilledCount || 0));
@@ -8404,7 +8406,7 @@ function buildDeltaBplaExecutiveReportText(analytics){
   lines.push(`- Усього цілей: ${fmtNum(analytics.totalTargets)}; місій із цілями: ${fmtNum(analytics.targetMissionCount)}; усього БК: ${fmtNum(analytics.totalAmmoQty)}.`);
   lines.push(`- Надійність: ${fmtNum(analytics.reliabilityRate)}% (повернення ${fmtNum(analytics.returnedCount)}, втрати ${fmtNum(analytics.lossCount)}).`);
   lines.push(`- Основна платформа: ${topAsset}; найактивніший підрозділ: ${topUnit}; основний тип задачі: ${topTask}.`);
-  lines.push(`- Найпоширеніша ціль: ${topTarget}; основний статус цілей: ${topStatus}; найуживаніший БК: ${topAmmo}.`);
+  lines.push(`- Найпоширеніша ціль у задачах ураження: ${topTarget}; основний статус цілей: ${topStatus}; найуживаніший боєприпас / БК: ${topAmmo}.`);
 
   lines.push("");
   lines.push("2. Позитивні моменти");
@@ -8629,17 +8631,23 @@ function buildDeltaBplaAnalytics(rows, title="", filters={}){
   const assets = summarizeNormalizedLabelCounts(missions, item=>item.asset, normalizeDeltaPlatformKey);
   const unitsByMissions = countBy(missions, item=>item.unit);
   const controlTypes = summarizeNormalizedLabelCounts(missions, item=>item.controlType);
-  const targetTypes = countMissionTags(missions, item=>item.targetTypes);
-  const targetStatuses = countMissionTags(missions, item=>item.targetStatuses);
-  const ammoTypes = countMissionTags(missions, item=>item.ammoTypes.length ? item.ammoTypes : item.ammoNames);
-  const cargoStatuses = countMissionTags(missions, item=>item.cargoStatuses);
-  const totalTargets = missions.reduce((sum, item)=>sum + (Number(item.targetCount) || 0), 0);
-  const targetMissionCount = missions.filter(item=>item.targetTypes.length || item.targetStatuses.length || item.targetCount > 0).length;
+  const strikeMissions = missions.filter(item=>/уражен/i.test(String(item.taskType || "")));
+  const reconMissions = missions.filter(item=>/розвід|цілевказ/i.test(String(item.taskType || "")));
+  const deliveryMissions = missions.filter(item=>/достав/i.test(String(item.taskType || "")));
+  const missionsWithAmmo = missions.filter(item=>(item.ammoTypes || []).length || (item.ammoNames || []).length);
+  const strikeMissionsWithTargets = strikeMissions.filter(item=>(item.targetTypes || []).length || (item.targetStatuses || []).length || (Number(item.targetCount) || 0) > 0);
+  const targetTypes = countMissionTags(strikeMissions, item=>item.targetTypes);
+  const targetStatuses = countMissionTags(strikeMissions, item=>item.targetStatuses);
+  const ammoTypes = countMissionTags(missionsWithAmmo, item=>item.ammoTypes);
+  const ammoNames = countMissionTags(missionsWithAmmo, item=>item.ammoNames);
+  const cargoStatuses = countMissionTags(deliveryMissions, item=>item.cargoStatuses);
+  const totalTargets = strikeMissions.reduce((sum, item)=>sum + (Number(item.targetCount) || 0), 0);
+  const targetMissionCount = strikeMissionsWithTargets.length;
   const totalAmmoQty = missions.reduce((sum, item)=>sum + (Number(item.ammoQty) || 0), 0);
-  const deliveryMissionCount = missions.filter(item=>/достав/i.test(String(item.taskType || ""))).length;
-  const deliveredCargoCount = missions.filter(item=>(item.cargoStatuses || []).some(tag=>/доставлено/i.test(tag))).length;
-  const reconMissionCount = missions.filter(item=>/розвід|цілевказ/i.test(String(item.taskType || ""))).length;
-  const strikeMissionCount = missions.filter(item=>/уражен/i.test(String(item.taskType || ""))).length;
+  const deliveryMissionCount = deliveryMissions.length;
+  const deliveredCargoCount = deliveryMissions.filter(item=>(item.cargoStatuses || []).some(tag=>/доставлено/i.test(tag))).length;
+  const reconMissionCount = reconMissions.length;
+  const strikeMissionCount = strikeMissions.length;
   const miningMissionCount = missions.filter(item=>/мінуван|загороджен/i.test(String(item.taskType || ""))).length;
   const returnedCount = missions.filter(item=>item.reliabilityKind === "returned").length;
   const lossCount = missions.filter(item=>item.reliabilityKind === "loss").length;
@@ -8696,6 +8704,67 @@ function buildDeltaBplaAnalytics(rows, title="", filters={}){
     reconPercent: bucket.total ? Math.round((bucket.reconCount / bucket.total) * 100) : 0,
     strikePercent: bucket.total ? Math.round((bucket.strikeCount / bucket.total) * 100) : 0,
   })).sort((a,b)=>((b.reconCount + b.strikeCount) - (a.reconCount + a.strikeCount)) || b.total-a.total || String(a.label).localeCompare(String(b.label), "uk"));
+
+  const taskTypeStatsMap = new Map();
+  const addBucketValue = (map, value)=>{
+    const raw = String(value || "").trim();
+    if(!raw) return;
+    map.set(raw, (map.get(raw) || 0) + 1);
+  };
+  const getTopBucketLabel = map=>{
+    if(!(map instanceof Map) || !map.size) return "";
+    return Array.from(map.entries())
+      .sort((a,b)=>b[1]-a[1] || String(a[0]).localeCompare(String(b[0]), "uk"))[0]?.[0] || "";
+  };
+
+  missions.forEach(item=>{
+    const label = String(item.taskType || "").trim() || "Не визначено";
+    if(!taskTypeStatsMap.has(label)){
+      taskTypeStatsMap.set(label, {
+        label,
+        total: 0,
+        targetCount: 0,
+        targetMissionCount: 0,
+        deliveredCargoCount: 0,
+        cargoQty: 0,
+        ammoQty: 0,
+        lossCount: 0,
+        returnedCount: 0,
+        targetTypes: new Map(),
+        targetStatuses: new Map(),
+        cargoStatuses: new Map(),
+        ammoTypes: new Map(),
+        ammoNames: new Map(),
+      });
+    }
+    const bucket = taskTypeStatsMap.get(label);
+    bucket.total += 1;
+    bucket.targetCount += Number(item.targetCount) || 0;
+    if((item.targetTypes || []).length || (item.targetStatuses || []).length || (Number(item.targetCount) || 0) > 0){
+      bucket.targetMissionCount += 1;
+    }
+    bucket.cargoQty += Number(item.cargoQty) || 0;
+    bucket.ammoQty += Number(item.ammoQty) || 0;
+    if((item.cargoStatuses || []).some(tag=>/доставлено/i.test(String(tag || "")))){
+      bucket.deliveredCargoCount += 1;
+    }
+    if(item.reliabilityKind === "loss") bucket.lossCount += 1;
+    if(item.reliabilityKind === "returned") bucket.returnedCount += 1;
+    (item.targetTypes || []).forEach(value=>addBucketValue(bucket.targetTypes, value));
+    (item.targetStatuses || []).forEach(value=>addBucketValue(bucket.targetStatuses, value));
+    (item.cargoStatuses || []).forEach(value=>addBucketValue(bucket.cargoStatuses, value));
+    (item.ammoTypes || []).forEach(value=>addBucketValue(bucket.ammoTypes, value));
+    (item.ammoNames || []).forEach(value=>addBucketValue(bucket.ammoNames, value));
+  });
+  const taskTypeStats = Array.from(taskTypeStatsMap.values()).map(bucket=>({
+    ...bucket,
+    reliabilityRate: bucket.total ? ((bucket.returnedCount / bucket.total) * 100) : 0,
+    topTargetType: getTopBucketLabel(bucket.targetTypes),
+    topTargetStatus: getTopBucketLabel(bucket.targetStatuses),
+    topCargoStatus: getTopBucketLabel(bucket.cargoStatuses),
+    topAmmoType: getTopBucketLabel(bucket.ammoTypes),
+    topAmmoName: getTopBucketLabel(bucket.ammoNames),
+  })).sort((a,b)=>b.total-a.total || String(a.label).localeCompare(String(b.label), "uk"));
 
   const dayNightByUnitMap = new Map();
   const dayNightByAssetMap = new Map();
@@ -8779,13 +8848,16 @@ function buildDeltaBplaAnalytics(rows, title="", filters={}){
     topAsset: assets[0] || null,
     assetStats,
     unitTaskStats,
+    taskTypeStats,
     unitsByMissions,
     controlTypes,
     targetTypes,
     targetStatuses,
     topTargetStatus: targetStatuses[0] || null,
     ammoTypes,
+    ammoNames,
     topAmmoType: ammoTypes[0] || null,
+    topAmmoName: ammoNames[0] || null,
     cargoStatuses,
     totalTargets,
     targetMissionCount,
@@ -8931,9 +9003,38 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
       tone: "b-blue",
     }))
     .sort((a,b)=>Number(String(b.valueText || "0").replace(/\s+/g, "")) - Number(String(a.valueText || "0").replace(/\s+/g, "")) || String(a.label).localeCompare(String(b.label), "uk"));
-  const taskTypeRows = analytics.taskTypes.map(item=>({label:item.label, valueText:fmtNum(item.value), meta:`${fmtNum(analytics.missionCount ? Math.round((item.value / analytics.missionCount) * 100) : 0)}% місій`, tone:"b-violet"}));
-  const targetTypeRows = analytics.targetTypes.map(item=>({label:item.label, valueText:fmtNum(item.value), meta:`${fmtNum(analytics.missionCount ? Math.round((item.value / analytics.missionCount) * 100) : 0)}% місій, де була ця ціль`, tone:"b-blue"}));
-  const targetStatusRows = analytics.targetStatuses.map(item=>({label:item.label, valueText:fmtNum(item.value), meta:`${fmtNum(analytics.missionCount ? Math.round((item.value / analytics.missionCount) * 100) : 0)}% місій, де був цей статус`, tone:"b-ok"}));
+  const strikeOnlyMissions = analytics.missions.filter(item=>/уражен/i.test(String(item.taskType || "")));
+  const taskTypeRows = (analytics.taskTypeStats || []).map(item=>{
+    const percent = analytics.missionCount ? Math.round((item.total / analytics.missionCount) * 100) : 0;
+    const meta = [`${fmtNum(percent)}% місій`];
+    if(/уражен/i.test(String(item.label || ""))){
+      if(item.targetMissionCount > 0) meta.push(`місій з цілями ${fmtNum(item.targetMissionCount)}`);
+      if(item.targetCount > 0) meta.push(`цілей ${fmtNum(item.targetCount)}`);
+      if(item.topTargetStatus) meta.push(`статус ${item.topTargetStatus}`);
+      if(item.topAmmoName || item.topAmmoType) meta.push(`боєприпас ${item.topAmmoName || item.topAmmoType}`);
+    } else if(/розвід|цілевказ/i.test(String(item.label || ""))){
+      if(item.targetMissionCount > 0) meta.push(`місій з цілями ${fmtNum(item.targetMissionCount)}`);
+      if(item.targetCount > 0) meta.push(`цілей ${fmtNum(item.targetCount)}`);
+      if(item.topTargetType) meta.push(`осн. ціль ${item.topTargetType}`);
+    } else if(/достав/i.test(String(item.label || ""))){
+      meta.push(`доставлено ${fmtNum(item.deliveredCargoCount)}`);
+      if(item.topCargoStatus) meta.push(`статус ${item.topCargoStatus}`);
+      if(item.cargoQty > 0) meta.push(`вантаж ${fmtNum(item.cargoQty)}`);
+    } else {
+      if(item.targetCount > 0) meta.push(`цілей ${fmtNum(item.targetCount)}`);
+      if(item.topTargetStatus) meta.push(`статус ${item.topTargetStatus}`);
+    }
+    if(item.lossCount > 0) meta.push(`втрати ${fmtNum(item.lossCount)}`);
+    meta.push(`надійність ${fmtNum(Math.round(item.reliabilityRate || 0))}%`);
+    return {
+      label: item.label,
+      valueText: fmtNum(item.total),
+      meta: meta.join(" · "),
+      tone: /уражен/i.test(String(item.label || "")) ? "b-danger" : (/достав/i.test(String(item.label || "")) ? "b-ok" : "b-violet"),
+    };
+  });
+  const targetTypeRows = analytics.targetTypes.map(item=>({label:item.label, valueText:fmtNum(item.value), meta:`${fmtNum(analytics.strikeMissionCount ? Math.round((item.value / analytics.strikeMissionCount) * 100) : 0)}% місій типу Ураження, де була ця ціль`, tone:"b-blue"}));
+  const targetStatusRows = analytics.targetStatuses.map(item=>({label:item.label, valueText:fmtNum(item.value), meta:`${fmtNum(analytics.strikeMissionCount ? Math.round((item.value / analytics.strikeMissionCount) * 100) : 0)}% місій типу Ураження, де був цей статус`, tone:"b-ok"}));
   const targetSummaryMap = new Map();
   const addAssocCount = (map, value)=>{
     const key = String(value || "").trim();
@@ -8944,7 +9045,7 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
     if(!(map instanceof Map) || !map.size) return "";
     return Array.from(map.entries()).sort((a,b)=>b[1]-a[1] || String(a[0]).localeCompare(String(b[0]), "uk"))[0]?.[0] || "";
   };
-  analytics.missions.forEach(item=>{
+  strikeOnlyMissions.forEach(item=>{
     const missionTargetTypes = item.targetTypes?.length ? item.targetTypes : ((Number(item.targetCount) || 0) > 0 ? ["Не визначено"] : []);
     missionTargetTypes.forEach(targetLabel=>{
       const label = String(targetLabel || "").trim();
@@ -8982,11 +9083,11 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
       label: bucket.label,
       valueText: fmtNum(bucket.missionCount),
       meta: [
-        `${fmtNum(analytics.missionCount ? Math.round((bucket.missionCount / analytics.missionCount) * 100) : 0)}% місій`,
+        `${fmtNum(analytics.strikeMissionCount ? Math.round((bucket.missionCount / analytics.strikeMissionCount) * 100) : 0)}% місій типу Ураження`,
         bucket.totalTargets > 0 ? `цілей ${fmtNum(bucket.totalTargets)}` : "",
         statusParts.length ? `статуси ${statusParts.join(" · ")}` : "",
         topAssocLabel(bucket.assets) ? `платф. ${topAssocLabel(bucket.assets)}` : "",
-        topAssocLabel(bucket.ammoTypes) ? `БК ${topAssocLabel(bucket.ammoTypes)}` : (topAssocLabel(bucket.ammoNames) ? `боєприпас ${topAssocLabel(bucket.ammoNames)}` : ""),
+        topAssocLabel(bucket.ammoNames) ? `боєприпас ${topAssocLabel(bucket.ammoNames)}` : (topAssocLabel(bucket.ammoTypes) ? `БК ${topAssocLabel(bucket.ammoTypes)}` : ""),
       ].filter(Boolean).join(" · "),
       tone: "b-blue",
     };
@@ -9043,7 +9144,7 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
     .sort((a,b)=>String(a.label).localeCompare(String(b.label), "uk"));
   const targetAmmoRows = Array.from(targetSummaryMap.values()).map(bucket=>({
     label: bucket.label,
-    valueText: topAssocLabel(bucket.ammoTypes) || topAssocLabel(bucket.ammoNames) || "—",
+    valueText: topAssocLabel(bucket.ammoNames) || topAssocLabel(bucket.ammoTypes) || "—",
     meta: [
       `${fmtNum(bucket.missionCount)} місій із цією ціллю`,
       topAssocLabel(bucket.assets) ? `платф. ${topAssocLabel(bucket.assets)}` : "",
@@ -9052,7 +9153,8 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
     tone: "b-violet",
   })).filter(item=>item.valueText !== "—")
     .sort((a,b)=>String(a.label).localeCompare(String(b.label), "uk"));
-  const ammoRows = analytics.ammoTypes.map(item=>({label:item.label, valueText:fmtNum(item.value), meta:`${fmtNum(analytics.missionCount ? Math.round((item.value / analytics.missionCount) * 100) : 0)}% місій, де був цей тип БК`, tone:"b-blue"}));
+  const ammoTypeRows = analytics.ammoTypes.map(item=>({label:item.label, valueText:fmtNum(item.value), meta:`${fmtNum(analytics.missionCount ? Math.round((item.value / analytics.missionCount) * 100) : 0)}% місій, де був цей тип БК`, tone:"b-blue"}));
+  const ammoRows = analytics.ammoNames.map(item=>({label:item.label, valueText:fmtNum(item.value), meta:`${fmtNum(analytics.missionCount ? Math.round((item.value / analytics.missionCount) * 100) : 0)}% місій, де був цей боєприпас`, tone:"b-violet"}));
   const deliveryRows = analytics.cargoStatuses.map(item=>({label:item.label, valueText:fmtNum(item.value), meta:`${fmtNum(analytics.missionCount ? Math.round((item.value / analytics.missionCount) * 100) : 0)}% місій, де був цей статус вантажу`, tone:"b-ok"}));
   const unitsRows = analytics.unitsByMissions.map(item=>({label:item.label, valueText:fmtNum(item.value), meta:`${fmtNum(analytics.missionCount ? Math.round((item.value / analytics.missionCount) * 100) : 0)}% місій`, tone:"b-blue"}));
   const controlRows = analytics.controlTypes.map(item=>({label:item.label, valueText:fmtNum(item.value), meta:`${fmtNum(analytics.missionCount ? Math.round((item.value / analytics.missionCount) * 100) : 0)}% місій`, tone:"b-violet"}));
@@ -9125,56 +9227,50 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
       }
     ])
   );
-  const taskTypesModalKey = detailModal(`${analytics.title || "Delta / БпЛА"} · Типи задач`, "Типи задач · по місіях", `Унікальних типів: ${fmtNum(taskTypeRows.length)}`, taskTypeRows, "По типах задач даних поки немає.");
+  const taskTypesModalKey = detailModal(`${analytics.title || "Delta / БпЛА"} · Типи задач`, "Типи задач · по місіях", `Унікальних типів: ${fmtNum(taskTypeRows.length)} · місій: ${fmtNum(analytics.missionCount)}`, taskTypeRows, "По типах задач даних поки немає.");
   const targetTypesModalKey = registerRenderedTableModal(
     `${analytics.title || "Delta / БпЛА"} · Цілі`,
     buildDeltaNrkInsightModalHtml([
       {
-        title: "Типи цілей · по місіях",
-        summary: `Унікальних типів цілей: ${fmtNum(targetTypeRows.length)} · місій з цілями: ${fmtNum(analytics.targetMissionCount)}`,
+        title: "Цілі ураження · по місіях",
+        summary: `Унікальних типів цілей: ${fmtNum(targetTypeRows.length)} · місій типу Ураження з цілями: ${fmtNum(analytics.targetMissionCount)}`,
         rows: targetOverviewRows.length ? targetOverviewRows : targetTypeRows,
-        emptyText: "По типах цілей даних поки немає.",
+        emptyText: "По цілях ураження даних поки немає.",
       },
       {
         title: "Цілі × Платформи",
-        summary: `Яка платформа найчастіше працює по кожній цілі`,
+        summary: `Яка платформа найчастіше працює по кожній цілі у задачах типу Ураження`,
         rows: targetPlatformRows,
         emptyText: "По зв’язку цілей з платформами даних поки немає.",
       },
       {
         title: "Цілі × Підрозділи",
-        summary: `Який підрозділ найчастіше працює по кожній цілі`,
+        summary: `Який підрозділ найчастіше працює по кожній цілі у задачах типу Ураження`,
         rows: targetUnitRows,
         emptyText: "По зв’язку цілей з підрозділами даних поки немає.",
       },
       {
-        title: "Цілі × Тип задачі",
-        summary: `У якому типі задачі найчастіше зустрічається кожна ціль`,
-        rows: targetTaskRows,
-        emptyText: "По зв’язку цілей з типами задач даних поки немає.",
-      },
-      {
         title: "Цілі × Статуси",
-        summary: `Які статуси найчастіше мають різні типи цілей`,
+        summary: `Які статуси найчастіше мають різні типи цілей у задачах типу Ураження`,
         rows: targetStatusMatrixRows,
         emptyText: "По зв’язку цілей зі статусами даних поки немає.",
       },
       {
         title: "Цілі × БК",
-        summary: `Який БК або боєприпас найчастіше використовується по кожній цілі`,
+        summary: `Який БК або боєприпас найчастіше використовується по кожній цілі у задачах типу Ураження`,
         rows: targetAmmoRows,
         emptyText: "По зв’язку цілей з БК даних поки немає.",
       },
       {
-        title: "Статус цілей · по місіях",
-        summary: `Унікальних статусів: ${fmtNum(targetStatusRows.length)}`,
+        title: "Статус цілей ураження · по місіях",
+        summary: `Унікальних статусів: ${fmtNum(targetStatusRows.length)} · місій типу Ураження: ${fmtNum(analytics.strikeMissionCount)}`,
         rows: targetStatusRows,
         emptyText: "По статусу цілей даних поки немає.",
       },
       {
-        title: "Місії з цілями",
-        summary: `${fmtNum(analytics.targetMissionCount)} місій, де вказані цілі`,
-        rows: analytics.missions
+        title: "Місії типу Ураження з цілями",
+        summary: `${fmtNum(analytics.targetMissionCount)} місій типу Ураження, де вказані цілі`,
+        rows: strikeOnlyMissions
           .filter(item=>item.targetTypes?.length || item.targetStatuses?.length || (Number(item.targetCount) || 0) > 0)
           .map(item=>({
             label: item.unit || "Без підрозділу",
@@ -9191,12 +9287,28 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
             ].filter(Boolean).join(" · "),
             tone: "b-blue",
           })),
-        emptyText: "Місій із цілями поки немає.",
+        emptyText: "Місій типу Ураження з цілями поки немає.",
       }
     ])
   );
-  const targetStatusModalKey = detailModal(`${analytics.title || "Delta / БпЛА"} · Статус цілей`, "Статус цілей · по місіях", `Унікальних статусів: ${fmtNum(targetStatusRows.length)}`, targetStatusRows, "По статусу цілей даних поки немає.");
-  const ammoModalKey = detailModal(`${analytics.title || "Delta / БпЛА"} · Боєприпаси`, "Типи БК · по місіях", `Унікальних типів БК: ${fmtNum(ammoRows.length)} · усього БК: ${fmtNum(analytics.totalAmmoQty)}`, ammoRows, "По боєприпасах даних поки немає.");
+  const targetStatusModalKey = detailModal(`${analytics.title || "Delta / БпЛА"} · Статус цілей`, "Статус цілей ураження · по місіях", `Унікальних статусів: ${fmtNum(targetStatusRows.length)} · місій типу Ураження: ${fmtNum(analytics.strikeMissionCount)}`, targetStatusRows, "По статусу цілей даних поки немає.");
+  const ammoModalKey = registerRenderedTableModal(
+    `${analytics.title || "Delta / БпЛА"} · Боєприпаси`,
+    buildDeltaNrkInsightModalHtml([
+      {
+        title: "Боєприпаси · по місіях",
+        summary: `Унікальних боєприпасів: ${fmtNum(ammoRows.length)} · усього БК: ${fmtNum(analytics.totalAmmoQty)}`,
+        rows: ammoRows,
+        emptyText: "По боєприпасах даних поки немає.",
+      },
+      {
+        title: "Типи БК · по місіях",
+        summary: `Унікальних типів БК: ${fmtNum(ammoTypeRows.length)}`,
+        rows: ammoTypeRows,
+        emptyText: "По типах БК даних поки немає.",
+      }
+    ])
+  );
   const deliveryModalKey = detailModal(`${analytics.title || "Delta / БпЛА"} · Статус вантажу`, "Статус вантажу · по місіях", `Логістичних місій: ${fmtNum(analytics.deliveryMissionCount)} · доставлено: ${fmtNum(analytics.deliveredCargoCount)}`, deliveryRows, "По статусу вантажу даних поки немає.");
   const unitsModalKey = detailModal(`${analytics.title || "Delta / БпЛА"} · Підрозділи`, "Підрозділи · по місіях", `Усього підрозділів: ${fmtNum(unitsRows.length)}`, unitsRows, "По підрозділах даних поки немає.");
   const controlModalKey = detailModal(`${analytics.title || "Delta / БпЛА"} · Керування`, "Тип керування · по місіях", `Унікальних типів: ${fmtNum(controlRows.length)}`, controlRows, "По типу керування даних поки немає.");
@@ -9205,9 +9317,9 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
   const unitTaskBlock = buildDeltaNrkTopList("Розвідка / Ураження · по підрозділах", unitTaskRows.slice(0, 8), "По підрозділах даних поки немає.").replace('<div class="row"><div class="name">Розвідка / Ураження · по підрозділах</div></div>', `<div class="row"><div class="name">Розвідка / Ураження · по підрозділах</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${unitTaskModalKey}">Детальніше</button></div>`);
   const assetLossBlock = buildDeltaNrkTopList("Втрати · причини та умови", lossCauseRows.slice(0, 8), "Втрат по причинах поки немає.").replace('<div class="row"><div class="name">Втрати · причини та умови</div></div>', `<div class="row"><div class="name">Втрати · причини та умови</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${assetLossModalKey}">Детальніше</button></div>`);
   const taskTypesBlock = buildDeltaNrkTopList("Типи задач · по місіях", taskTypeRows.slice(0, 8), "По типах задач даних поки немає.").replace('<div class="row"><div class="name">Типи задач · по місіях</div></div>', `<div class="row"><div class="name">Типи задач · по місіях</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${taskTypesModalKey}">Детальніше</button></div>`);
-  const targetTypesBlock = buildDeltaNrkTopList("Цілі · повна аналітика", targetOverviewRows.slice(0, 8), "По цілях даних поки немає.").replace('<div class="row"><div class="name">Цілі · повна аналітика</div></div>', `<div class="row"><div class="name">Цілі · повна аналітика</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${targetTypesModalKey}">Детальніше</button></div>`);
-  const targetStatusBlock = buildDeltaNrkTopList("Статус цілей · по місіях", targetStatusRows.slice(0, 8), "По статусу цілей даних поки немає.").replace('<div class="row"><div class="name">Статус цілей · по місіях</div></div>', `<div class="row"><div class="name">Статус цілей · по місіях</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${targetStatusModalKey}">Детальніше</button></div>`);
-  const ammoBlock = buildDeltaNrkTopList("Боєприпаси · по місіях", ammoRows.slice(0, 8), "По боєприпасах даних поки немає.").replace('<div class="row"><div class="name">Боєприпаси · по місіях</div></div>', `<div class="row"><div class="name">Боєприпаси · по місіях</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${ammoModalKey}">Детальніше</button></div>`);
+  const targetTypesBlock = buildDeltaNrkTopList("Цілі ураження · повна аналітика", targetOverviewRows.slice(0, 8), "По цілях ураження даних поки немає.").replace('<div class="row"><div class="name">Цілі ураження · повна аналітика</div></div>', `<div class="row"><div class="name">Цілі ураження · повна аналітика</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${targetTypesModalKey}">Детальніше</button></div>`);
+  const targetStatusBlock = buildDeltaNrkTopList("Статус цілей ураження · по місіях", targetStatusRows.slice(0, 8), "По статусу цілей ураження даних поки немає.").replace('<div class="row"><div class="name">Статус цілей ураження · по місіях</div></div>', `<div class="row"><div class="name">Статус цілей ураження · по місіях</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${targetStatusModalKey}">Детальніше</button></div>`);
+  const ammoBlock = buildDeltaNrkTopList("Боєприпаси · по місіях", (ammoRows.length ? ammoRows : ammoTypeRows).slice(0, 8), "По боєприпасах даних поки немає.").replace('<div class="row"><div class="name">Боєприпаси · по місіях</div></div>', `<div class="row"><div class="name">Боєприпаси · по місіях</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${ammoModalKey}">Детальніше</button></div>`);
   const deliveryBlock = deliveryRows.length ? buildDeltaNrkTopList("Статус вантажу · по місіях", deliveryRows.slice(0, 8), "По статусу вантажу даних поки немає.").replace('<div class="row"><div class="name">Статус вантажу · по місіях</div></div>', `<div class="row"><div class="name">Статус вантажу · по місіях</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${deliveryModalKey}">Детальніше</button></div>`) : "";
   const unitsBlock = buildDeltaNrkTopList("Підрозділи · по місіях", unitsRows.slice(0, 8), "По підрозділах даних поки немає.").replace('<div class="row"><div class="name">Підрозділи · по місіях</div></div>', `<div class="row"><div class="name">Підрозділи · по місіях</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${unitsModalKey}">Детальніше</button></div>`);
   const controlBlock = buildDeltaNrkTopList("Керування · по місіях", controlRows.slice(0, 8), "По типу керування даних поки немає.").replace('<div class="row"><div class="name">Керування · по місіях</div></div>', `<div class="row"><div class="name">Керування · по місіях</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${controlModalKey}">Детальніше</button></div>`);
