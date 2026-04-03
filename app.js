@@ -8392,6 +8392,24 @@ function buildDeltaBplaExecutiveReportText(analytics){
   const topAmmo = analytics.topAmmoName?.label
     ? `${analytics.topAmmoName.label} (${fmtNum(analytics.topAmmoName.value)} місій)`
     : (analytics.topAmmoType?.label ? `${analytics.topAmmoType.label} (${fmtNum(analytics.topAmmoType.value)} місій)` : "—");
+  const topEffectiveAmmo = (analytics.ammoEffectiveness || [])
+    .filter(item=>Number(item.missionCount || 0) > 0)
+    .slice()
+    .sort((a,b)=>
+      ((b.destroyedCount + b.damagedCount) - (a.destroyedCount + a.damagedCount))
+      || (b.missionCount - a.missionCount)
+      || (b.targetCount - a.targetCount)
+      || String(a.label).localeCompare(String(b.label), "uk")
+    )[0] || null;
+  const topReliableAmmo = (analytics.ammoEffectiveness || [])
+    .filter(item=>Number(item.missionCount || 0) >= 3)
+    .slice()
+    .sort((a,b)=>
+      ((b.destroyedCount - b.notHitCount) - (a.destroyedCount - a.notHitCount))
+      || ((b.destroyedCount + b.damagedCount) - (a.destroyedCount + a.damagedCount))
+      || (b.missionCount - a.missionCount)
+      || String(a.label).localeCompare(String(b.label), "uk")
+    )[0] || null;
   const topStatus = analytics.topTargetStatus?.label ? `${analytics.topTargetStatus.label} (${fmtNum(analytics.topTargetStatus.value)} місій)` : "—";
   const topRiskAsset = analytics.assetStats?.slice().sort((a,b)=>(b.lossCount - a.lossCount) || (b.total - a.total) || String(a.label).localeCompare(String(b.label), "uk"))[0] || null;
   const missingDuration = Math.max(0, analytics.missionCount - Number(analytics.timeQuality?.durationFilledCount || 0));
@@ -8420,6 +8438,12 @@ function buildDeltaBplaExecutiveReportText(analytics){
   }
   if(analytics.deliveryMissionCount > 0 && analytics.deliveredCargoCount > 0){
     lines.push(`- У логістичних задачах зафіксовано ${fmtNum(analytics.deliveredCargoCount)} місій із доставленим вантажем.`);
+  }
+  if(topEffectiveAmmo){
+    lines.push(`- Найефективніший боєприпас у задачах ураження: ${topEffectiveAmmo.label} — ${fmtNum(topEffectiveAmmo.destroyedCount)} знищень, ${fmtNum(topEffectiveAmmo.damagedCount)} ушкоджень при ${fmtNum(topEffectiveAmmo.missionCount)} місіях.`);
+  }
+  if(topReliableAmmo && topReliableAmmo !== topEffectiveAmmo){
+    lines.push(`- Найстабільніший боєприпас за співвідношенням результату до невдалих уражень: ${topReliableAmmo.label} — цілі ${fmtNum(topReliableAmmo.targetCount)}, не уражено ${fmtNum(topReliableAmmo.notHitCount)}.`);
   }
 
   lines.push("");
@@ -8766,6 +8790,151 @@ function buildDeltaBplaAnalytics(rows, title="", filters={}){
     topAmmoName: getTopBucketLabel(bucket.ammoNames),
   })).sort((a,b)=>b.total-a.total || String(a.label).localeCompare(String(b.label), "uk"));
 
+  const hasTargetStatus = (item, pattern)=>(item.targetStatuses || []).some(tag=>pattern.test(String(tag || "")));
+  const ammoEffectivenessMap = new Map();
+  const targetPerformanceMap = new Map();
+  strikeMissions.forEach(item=>{
+    const ammoLabels = (item.ammoNames || []).length ? item.ammoNames : (item.ammoTypes || []);
+    const targetLabels = (item.targetTypes || []).length ? item.targetTypes : ((Number(item.targetCount) || 0) > 0 ? ["Не визначено"] : []);
+    const isDestroyed = hasTargetStatus(item, /знищ/i);
+    const isDamaged = hasTargetStatus(item, /ушкод/i);
+    const isNotHit = hasTargetStatus(item, /не\s*уражен/i);
+
+    ammoLabels.forEach(label=>{
+      const rawLabel = String(label || "").trim();
+      if(!rawLabel) return;
+      if(!ammoEffectivenessMap.has(rawLabel)){
+        ammoEffectivenessMap.set(rawLabel, {
+          label: rawLabel,
+          missionCount: 0,
+          targetCount: 0,
+          destroyedCount: 0,
+          damagedCount: 0,
+          notHitCount: 0,
+          assets: new Map(),
+          targetTypes: new Map(),
+        });
+      }
+      const bucket = ammoEffectivenessMap.get(rawLabel);
+      bucket.missionCount += 1;
+      bucket.targetCount += Number(item.targetCount) || 0;
+      if(isDestroyed) bucket.destroyedCount += 1;
+      if(isDamaged) bucket.damagedCount += 1;
+      if(isNotHit) bucket.notHitCount += 1;
+      addBucketValue(bucket.assets, item.asset);
+      (targetLabels || []).forEach(targetLabel=>addBucketValue(bucket.targetTypes, targetLabel));
+    });
+
+    targetLabels.forEach(label=>{
+      const rawLabel = String(label || "").trim();
+      if(!rawLabel) return;
+      if(!targetPerformanceMap.has(rawLabel)){
+        targetPerformanceMap.set(rawLabel, {
+          label: rawLabel,
+          missionCount: 0,
+          targetCount: 0,
+          destroyedCount: 0,
+          damagedCount: 0,
+          notHitCount: 0,
+          ammoNames: new Map(),
+          ammoTypes: new Map(),
+          assets: new Map(),
+        });
+      }
+      const bucket = targetPerformanceMap.get(rawLabel);
+      bucket.missionCount += 1;
+      bucket.targetCount += Number(item.targetCount) || 0;
+      if(isDestroyed) bucket.destroyedCount += 1;
+      if(isDamaged) bucket.damagedCount += 1;
+      if(isNotHit) bucket.notHitCount += 1;
+      (item.ammoNames || []).forEach(ammoName=>addBucketValue(bucket.ammoNames, ammoName));
+      (item.ammoTypes || []).forEach(ammoType=>addBucketValue(bucket.ammoTypes, ammoType));
+      addBucketValue(bucket.assets, item.asset);
+    });
+  });
+  const ammoEffectiveness = Array.from(ammoEffectivenessMap.values()).map(bucket=>({
+    ...bucket,
+    topAsset: getTopBucketLabel(bucket.assets),
+    topTargetType: getTopBucketLabel(bucket.targetTypes),
+  })).sort((a,b)=>b.missionCount-a.missionCount || b.targetCount-a.targetCount || String(a.label).localeCompare(String(b.label), "uk"));
+  const targetPerformance = Array.from(targetPerformanceMap.values()).map(bucket=>({
+    ...bucket,
+    topAmmoName: getTopBucketLabel(bucket.ammoNames),
+    topAmmoType: getTopBucketLabel(bucket.ammoTypes),
+    topAsset: getTopBucketLabel(bucket.assets),
+  })).sort((a,b)=>b.missionCount-a.missionCount || b.targetCount-a.targetCount || String(a.label).localeCompare(String(b.label), "uk"));
+
+  const ammoTargetStatusMap = new Map();
+  const platformAmmoResultMap = new Map();
+  strikeMissions.forEach(item=>{
+    const ammoLabels = (item.ammoNames || []).length ? item.ammoNames : ((item.ammoTypes || []).length ? item.ammoTypes : ["Не визначено"]);
+    const targetLabels = (item.targetTypes || []).length ? item.targetTypes : ((Number(item.targetCount) || 0) > 0 ? ["Не визначено"] : []);
+    const statusLabels = (item.targetStatuses || []).length ? item.targetStatuses : ["Не визначено"];
+    const topStatusLabel = statusLabels[0] || "Не визначено";
+    const topTargetLabel = targetLabels[0] || "Не визначено";
+    const platformLabel = String(item.asset || "").trim() || "Без платформи";
+    const isDestroyed = hasTargetStatus(item, /знищ/i);
+    const isDamaged = hasTargetStatus(item, /ушкод/i);
+    const isNotHit = hasTargetStatus(item, /не\s*уражен/i);
+
+    ammoLabels.forEach(ammoLabel=>{
+      const ammoText = String(ammoLabel || "").trim() || "Не визначено";
+      targetLabels.forEach(targetLabel=>{
+        const targetText = String(targetLabel || "").trim() || "Не визначено";
+        const comboKey = `${normalizeAnalyticsHeader(ammoText)}__${normalizeAnalyticsHeader(targetText)}`;
+        if(!ammoTargetStatusMap.has(comboKey)){
+          ammoTargetStatusMap.set(comboKey, {
+            ammoLabel: ammoText,
+            targetLabel: targetText,
+            missionCount: 0,
+            statuses: new Map(),
+            destroyedCount: 0,
+            damagedCount: 0,
+            notHitCount: 0,
+          });
+        }
+        const bucket = ammoTargetStatusMap.get(comboKey);
+        bucket.missionCount += 1;
+        statusLabels.forEach(status=>addBucketValue(bucket.statuses, status));
+        if(isDestroyed) bucket.destroyedCount += 1;
+        if(isDamaged) bucket.damagedCount += 1;
+        if(isNotHit) bucket.notHitCount += 1;
+      });
+
+      const platformAmmoKey = `${normalizeDeltaPlatformKey(platformLabel)}__${normalizeAnalyticsHeader(ammoText)}`;
+      if(!platformAmmoResultMap.has(platformAmmoKey)){
+        platformAmmoResultMap.set(platformAmmoKey, {
+          platformLabel,
+          ammoLabel: ammoText,
+          missionCount: 0,
+          targetCount: 0,
+          statuses: new Map(),
+          destroyedCount: 0,
+          damagedCount: 0,
+          notHitCount: 0,
+          targetTypes: new Map(),
+        });
+      }
+      const resultBucket = platformAmmoResultMap.get(platformAmmoKey);
+      resultBucket.missionCount += 1;
+      resultBucket.targetCount += Number(item.targetCount) || 0;
+      statusLabels.forEach(status=>addBucketValue(resultBucket.statuses, status));
+      targetLabels.forEach(target=>addBucketValue(resultBucket.targetTypes, target));
+      if(isDestroyed) resultBucket.destroyedCount += 1;
+      if(isDamaged) resultBucket.damagedCount += 1;
+      if(isNotHit) resultBucket.notHitCount += 1;
+    });
+  });
+  const ammoTargetStatus = Array.from(ammoTargetStatusMap.values()).map(bucket=>({
+    ...bucket,
+    topStatus: getTopBucketLabel(bucket.statuses),
+  })).sort((a,b)=>b.missionCount-a.missionCount || String(a.ammoLabel).localeCompare(String(b.ammoLabel), "uk") || String(a.targetLabel).localeCompare(String(b.targetLabel), "uk"));
+  const platformAmmoResults = Array.from(platformAmmoResultMap.values()).map(bucket=>({
+    ...bucket,
+    topStatus: getTopBucketLabel(bucket.statuses),
+    topTargetType: getTopBucketLabel(bucket.targetTypes),
+  })).sort((a,b)=>b.missionCount-a.missionCount || String(a.platformLabel).localeCompare(String(b.platformLabel), "uk") || String(a.ammoLabel).localeCompare(String(b.ammoLabel), "uk"));
+
   const dayNightByUnitMap = new Map();
   const dayNightByAssetMap = new Map();
   let dayCount = 0;
@@ -8848,6 +9017,10 @@ function buildDeltaBplaAnalytics(rows, title="", filters={}){
     topAsset: assets[0] || null,
     assetStats,
     unitTaskStats,
+    ammoEffectiveness,
+    ammoTargetStatus,
+    platformAmmoResults,
+    targetPerformance,
     taskTypeStats,
     unitsByMissions,
     controlTypes,
@@ -9155,6 +9328,58 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
     .sort((a,b)=>String(a.label).localeCompare(String(b.label), "uk"));
   const ammoTypeRows = analytics.ammoTypes.map(item=>({label:item.label, valueText:fmtNum(item.value), meta:`${fmtNum(analytics.missionCount ? Math.round((item.value / analytics.missionCount) * 100) : 0)}% місій, де був цей тип БК`, tone:"b-blue"}));
   const ammoRows = analytics.ammoNames.map(item=>({label:item.label, valueText:fmtNum(item.value), meta:`${fmtNum(analytics.missionCount ? Math.round((item.value / analytics.missionCount) * 100) : 0)}% місій, де був цей боєприпас`, tone:"b-violet"}));
+  const ammoEffectivenessRows = (analytics.ammoEffectiveness || []).map(item=>({
+    label: item.label,
+    valueText: fmtNum(item.missionCount),
+    meta: [
+      `${fmtNum(analytics.strikeMissionCount ? Math.round((item.missionCount / analytics.strikeMissionCount) * 100) : 0)}% місій типу Ураження`,
+      item.targetCount > 0 ? `цілей ${fmtNum(item.targetCount)}` : "",
+      `знищено ${fmtNum(item.destroyedCount)}`,
+      `ушкоджено ${fmtNum(item.damagedCount)}`,
+      `не уражено ${fmtNum(item.notHitCount)}`,
+      item.topTargetType ? `осн. ціль ${item.topTargetType}` : "",
+      item.topAsset ? `платф. ${item.topAsset}` : "",
+    ].filter(Boolean).join(" · "),
+    tone: "b-danger",
+  }));
+  const ammoTargetStatusRows = (analytics.ammoTargetStatus || []).map(item=>({
+    label: `${item.ammoLabel} → ${item.targetLabel}`,
+    valueText: fmtNum(item.missionCount),
+    meta: [
+      item.topStatus ? `осн. статус ${item.topStatus}` : "",
+      `знищено ${fmtNum(item.destroyedCount)}`,
+      `ушкоджено ${fmtNum(item.damagedCount)}`,
+      `не уражено ${fmtNum(item.notHitCount)}`,
+    ].filter(Boolean).join(" · "),
+    tone: "b-violet",
+  }));
+  const platformAmmoResultRows = (analytics.platformAmmoResults || []).map(item=>({
+    label: `${item.platformLabel} → ${item.ammoLabel}`,
+    valueText: fmtNum(item.missionCount),
+    meta: [
+      item.targetCount > 0 ? `цілей ${fmtNum(item.targetCount)}` : "",
+      item.topTargetType ? `осн. ціль ${item.topTargetType}` : "",
+      item.topStatus ? `осн. статус ${item.topStatus}` : "",
+      `знищено ${fmtNum(item.destroyedCount)}`,
+      `ушкоджено ${fmtNum(item.damagedCount)}`,
+      `не уражено ${fmtNum(item.notHitCount)}`,
+    ].filter(Boolean).join(" · "),
+    tone: "b-blue",
+  }));
+  const targetPerformanceRows = (analytics.targetPerformance || []).map(item=>({
+    label: item.label,
+    valueText: fmtNum(item.missionCount),
+    meta: [
+      `${fmtNum(analytics.strikeMissionCount ? Math.round((item.missionCount / analytics.strikeMissionCount) * 100) : 0)}% місій типу Ураження`,
+      item.targetCount > 0 ? `цілей ${fmtNum(item.targetCount)}` : "",
+      `знищено ${fmtNum(item.destroyedCount)}`,
+      `ушкоджено ${fmtNum(item.damagedCount)}`,
+      `не уражено ${fmtNum(item.notHitCount)}`,
+      item.topAmmoName ? `боєприпас ${item.topAmmoName}` : (item.topAmmoType ? `БК ${item.topAmmoType}` : ""),
+      item.topAsset ? `платф. ${item.topAsset}` : "",
+    ].filter(Boolean).join(" · "),
+    tone: "b-blue",
+  }));
   const deliveryRows = analytics.cargoStatuses.map(item=>({label:item.label, valueText:fmtNum(item.value), meta:`${fmtNum(analytics.missionCount ? Math.round((item.value / analytics.missionCount) * 100) : 0)}% місій, де був цей статус вантажу`, tone:"b-ok"}));
   const unitsRows = analytics.unitsByMissions.map(item=>({label:item.label, valueText:fmtNum(item.value), meta:`${fmtNum(analytics.missionCount ? Math.round((item.value / analytics.missionCount) * 100) : 0)}% місій`, tone:"b-blue"}));
   const controlRows = analytics.controlTypes.map(item=>({label:item.label, valueText:fmtNum(item.value), meta:`${fmtNum(analytics.missionCount ? Math.round((item.value / analytics.missionCount) * 100) : 0)}% місій`, tone:"b-violet"}));
@@ -9232,6 +9457,12 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
     `${analytics.title || "Delta / БпЛА"} · Цілі`,
     buildDeltaNrkInsightModalHtml([
       {
+        title: "Ураження по типах цілей",
+        summary: `Типів цілей: ${fmtNum(targetPerformanceRows.length)} · місій типу Ураження: ${fmtNum(analytics.strikeMissionCount)}`,
+        rows: targetPerformanceRows,
+        emptyText: "По ефективності ураження за типами цілей даних поки немає.",
+      },
+      {
         title: "Цілі ураження · по місіях",
         summary: `Унікальних типів цілей: ${fmtNum(targetTypeRows.length)} · місій типу Ураження з цілями: ${fmtNum(analytics.targetMissionCount)}`,
         rows: targetOverviewRows.length ? targetOverviewRows : targetTypeRows,
@@ -9296,6 +9527,24 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
     `${analytics.title || "Delta / БпЛА"} · Боєприпаси`,
     buildDeltaNrkInsightModalHtml([
       {
+        title: "Ефективність боєприпасів",
+        summary: `Боєприпасів: ${fmtNum(ammoEffectivenessRows.length)} · місій типу Ураження: ${fmtNum(analytics.strikeMissionCount)}`,
+        rows: ammoEffectivenessRows,
+        emptyText: "По ефективності боєприпасів даних поки немає.",
+      },
+      {
+        title: "Боєприпас × ціль × статус",
+        summary: `Комбінацій: ${fmtNum(ammoTargetStatusRows.length)} · місій типу Ураження: ${fmtNum(analytics.strikeMissionCount)}`,
+        rows: ammoTargetStatusRows,
+        emptyText: "По зв’язку боєприпас → ціль → статус даних поки немає.",
+      },
+      {
+        title: "Платформа × боєприпас × результат",
+        summary: `Комбінацій: ${fmtNum(platformAmmoResultRows.length)} · місій типу Ураження: ${fmtNum(analytics.strikeMissionCount)}`,
+        rows: platformAmmoResultRows,
+        emptyText: "По зв’язку платформа → боєприпас → результат даних поки немає.",
+      },
+      {
         title: "Боєприпаси · по місіях",
         summary: `Унікальних боєприпасів: ${fmtNum(ammoRows.length)} · усього БК: ${fmtNum(analytics.totalAmmoQty)}`,
         rows: ammoRows,
@@ -9319,7 +9568,9 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
   const taskTypesBlock = buildDeltaNrkTopList("Типи задач · по місіях", taskTypeRows.slice(0, 8), "По типах задач даних поки немає.").replace('<div class="row"><div class="name">Типи задач · по місіях</div></div>', `<div class="row"><div class="name">Типи задач · по місіях</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${taskTypesModalKey}">Детальніше</button></div>`);
   const targetTypesBlock = buildDeltaNrkTopList("Цілі ураження · повна аналітика", targetOverviewRows.slice(0, 8), "По цілях ураження даних поки немає.").replace('<div class="row"><div class="name">Цілі ураження · повна аналітика</div></div>', `<div class="row"><div class="name">Цілі ураження · повна аналітика</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${targetTypesModalKey}">Детальніше</button></div>`);
   const targetStatusBlock = buildDeltaNrkTopList("Статус цілей ураження · по місіях", targetStatusRows.slice(0, 8), "По статусу цілей ураження даних поки немає.").replace('<div class="row"><div class="name">Статус цілей ураження · по місіях</div></div>', `<div class="row"><div class="name">Статус цілей ураження · по місіях</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${targetStatusModalKey}">Детальніше</button></div>`);
+  const targetPerformanceBlock = buildDeltaNrkTopList("Ураження по типах цілей", targetPerformanceRows.slice(0, 8), "По ефективності ураження за типами цілей даних поки немає.").replace('<div class="row"><div class="name">Ураження по типах цілей</div></div>', `<div class="row"><div class="name">Ураження по типах цілей</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${targetTypesModalKey}">Детальніше</button></div>`);
   const ammoBlock = buildDeltaNrkTopList("Боєприпаси · по місіях", (ammoRows.length ? ammoRows : ammoTypeRows).slice(0, 8), "По боєприпасах даних поки немає.").replace('<div class="row"><div class="name">Боєприпаси · по місіях</div></div>', `<div class="row"><div class="name">Боєприпаси · по місіях</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${ammoModalKey}">Детальніше</button></div>`);
+  const ammoEffectivenessBlock = buildDeltaNrkTopList("Ефективність боєприпасів", ammoEffectivenessRows.slice(0, 8), "По ефективності боєприпасів даних поки немає.").replace('<div class="row"><div class="name">Ефективність боєприпасів</div></div>', `<div class="row"><div class="name">Ефективність боєприпасів</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${ammoModalKey}">Детальніше</button></div>`);
   const deliveryBlock = deliveryRows.length ? buildDeltaNrkTopList("Статус вантажу · по місіях", deliveryRows.slice(0, 8), "По статусу вантажу даних поки немає.").replace('<div class="row"><div class="name">Статус вантажу · по місіях</div></div>', `<div class="row"><div class="name">Статус вантажу · по місіях</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${deliveryModalKey}">Детальніше</button></div>`) : "";
   const unitsBlock = buildDeltaNrkTopList("Підрозділи · по місіях", unitsRows.slice(0, 8), "По підрозділах даних поки немає.").replace('<div class="row"><div class="name">Підрозділи · по місіях</div></div>', `<div class="row"><div class="name">Підрозділи · по місіях</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${unitsModalKey}">Детальніше</button></div>`);
   const controlBlock = buildDeltaNrkTopList("Керування · по місіях", controlRows.slice(0, 8), "По типу керування даних поки немає.").replace('<div class="row"><div class="name">Керування · по місіях</div></div>', `<div class="row"><div class="name">Керування · по місіях</div><button type="button" class="btn ghost btn-mini" data-action="openRenderedTableModal" data-arg1="${controlModalKey}">Детальніше</button></div>`);
@@ -9340,11 +9591,15 @@ function buildDeltaBplaAnalyticsModalHtml(rows, title="", opts={}){
       </div>
       <div class="control-grid">
         ${wrapDeltaBplaCollapsible("Цілі", targetTypesBlock)}
-        ${wrapDeltaBplaCollapsible("Статус цілей", targetStatusBlock)}
+        ${wrapDeltaBplaCollapsible("Ураження по типах цілей", targetPerformanceBlock)}
       </div>
       <div class="control-grid">
+        ${wrapDeltaBplaCollapsible("Статус цілей", targetStatusBlock)}
         ${wrapDeltaBplaCollapsible("Втрати", assetLossBlock)}
+      </div>
+      <div class="control-grid">
         ${wrapDeltaBplaCollapsible("Надійність", reliabilityBlock)}
+        ${wrapDeltaBplaCollapsible("Ефективність боєприпасів", ammoEffectivenessBlock)}
       </div>
       <div class="control-grid">
         ${wrapDeltaBplaCollapsible("Боєприпаси", ammoBlock)}
