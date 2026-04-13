@@ -6709,6 +6709,35 @@ function buildDeltaNrkExecutiveReportText(analytics){
   const monthMissionDelta = lastMonth && prevMonth ? (Number(lastMonth.missionCount || 0) - Number(prevMonth.missionCount || 0)) : 0;
   const monthWeightDelta = lastMonth && prevMonth ? (Number(lastMonth.totalWeight || 0) - Number(prevMonth.totalWeight || 0)) : 0;
   const monthSuccessDelta = lastMonth && prevMonth ? (Number(lastMonth.successRate || 0) - Number(prevMonth.successRate || 0)) : 0;
+  const formatTrend = (value, noun, suffix="")=>{
+    const num = Number(value) || 0;
+    if(num > 0) return `${noun} більше на ${fmtNum(num)}${suffix}`;
+    if(num < 0) return `${noun} менше на ${fmtNum(Math.abs(num))}${suffix}`;
+    return `${noun} без змін`;
+  };
+  const formatQualityTrend = (value, noun, suffix=" п.п.")=>{
+    const num = Number(value) || 0;
+    if(num > 0) return `${noun} вища на ${fmtNum(num)}${suffix}`;
+    if(num < 0) return `${noun} нижча на ${fmtNum(Math.abs(num))}${suffix}`;
+    return `${noun} без змін`;
+  };
+  const now = new Date();
+  const formatFullDate = date=>{
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = String(date.getFullYear());
+    return `${day}.${month}.${year}`;
+  };
+  const isOpenCurrentMonth = monthKey=>{
+    const match = /^(\d{4})-(\d{2})$/.exec(String(monthKey || "").trim());
+    if(!match) return false;
+    const year = Number(match[1]);
+    const monthIndex = Number(match[2]) - 1;
+    if(year !== now.getFullYear() || monthIndex !== now.getMonth()) return false;
+    const monthLastDay = new Date(year, monthIndex + 1, 0).getDate();
+    return now.getDate() < monthLastDay;
+  };
+  const lastMonthIsOpen = !!(lastMonth && isOpenCurrentMonth(lastMonth.key));
 
   const reporterMissingCount = analytics.missions.filter(item=>!String(item.reporter || "").trim()).length;
   const noPrimaryLinkCount = analytics.missions.filter(item=>!String(item.primaryLink || "").trim()).length;
@@ -6716,10 +6745,14 @@ function buildDeltaNrkExecutiveReportText(analytics){
   const noAnyLinkCount = analytics.missions.filter(item=>!String(item.primaryLink || "").trim() && !String(item.reserveLink || "").trim()).length;
   const noWeightCount = analytics.missions.filter(item=>(Number(item.cargoWeight) || 0) <= 0).length;
   const noResultCount = analytics.missions.filter(item=>!String(item.result || "").trim()).length;
+  const logisticsMissionCount = Math.max(0, Number(analytics.missionCount || 0) - Number(analytics.evacuationCount || 0));
+  const unitNames = (analytics.unitsByMissions || []).map(item=>String(item.label || "").trim()).filter(Boolean);
   const topAsset = analytics.topAsset?.label ? `${analytics.topAsset.label} (${fmtNum(analytics.topAsset.value)} місій)` : "—";
   const topUnit = analytics.unitsByMissions?.[0]?.label ? `${analytics.unitsByMissions[0].label} (${fmtNum(analytics.unitsByMissions[0].value)} місій)` : "—";
-  const topPointsUnit = analytics.pointsByUnits?.[0]?.label ? `${analytics.pointsByUnits[0].label} (${fmtNum(analytics.pointsByUnits[0].value)} бал.)` : "—";
-  const topEfficiencyUnit = analytics.pointsByUnits?.[0]?.label ? `${analytics.pointsByUnits.slice().sort((a,b)=>b.avgPoints-a.avgPoints || b.value-a.value)[0]?.label || "—"} (${fmtNum(analytics.pointsByUnits.slice().sort((a,b)=>b.avgPoints-a.avgPoints || b.value-a.value)[0]?.avgPoints || 0)} бал./місію)` : "—";
+  const sortedUnitsByPoints = (analytics.pointsByUnits || []).slice().sort((a,b)=>b.value-a.value || b.avgPoints-a.avgPoints || String(a.label).localeCompare(String(b.label), "uk"));
+  const sortedUnitsByAvgPoints = (analytics.pointsByUnits || []).slice().sort((a,b)=>b.avgPoints-a.avgPoints || b.value-a.value || String(a.label).localeCompare(String(b.label), "uk"));
+  const topPointsUnit = sortedUnitsByPoints[0]?.label ? `${sortedUnitsByPoints[0].label} (${fmtNum(sortedUnitsByPoints[0].value)} бал.)` : "—";
+  const topEfficiencyUnit = sortedUnitsByAvgPoints[0]?.label ? `${sortedUnitsByAvgPoints[0].label} (${fmtNum(sortedUnitsByAvgPoints[0].avgPoints)} бал./місію)` : "—";
   const unitMissionMap = new Map((analytics.unitsByMissions || []).map(item=>[String(item.label || "").trim(), Number(item.value) || 0]));
   const unitWeightMap = new Map((analytics.unitsByWeight || []).map(item=>[String(item.label || "").trim(), Number(item.value) || 0]));
   const unitsWithIssues = Array.from(new Set(
@@ -6755,16 +6788,19 @@ function buildDeltaNrkExecutiveReportText(analytics){
   const topRiskAsset = assetRisks[0] || null;
   const topWeightUnitEntry = Array.from(unitWeightMap.entries()).sort((a,b)=>b[1]-a[1] || String(a[0]).localeCompare(String(b[0]), "uk"))[0] || null;
   const topWeightUnit = topWeightUnitEntry ? `${topWeightUnitEntry[0]} (${fmtNum(topWeightUnitEntry[1])} кг)` : "—";
-  const topPointsAsset = analytics.pointsByAssets?.[0]?.label ? `${analytics.pointsByAssets[0].label} (${fmtNum(analytics.pointsByAssets[0].value)} бал.)` : "—";
-  const topEfficiencyAsset = analytics.pointsByAssets?.length
-    ? `${analytics.pointsByAssets.slice().sort((a,b)=>b.avgPoints-a.avgPoints || b.value-a.value)[0]?.label || "—"} (${fmtNum(analytics.pointsByAssets.slice().sort((a,b)=>b.avgPoints-a.avgPoints || b.value-a.value)[0]?.avgPoints || 0)} бал./місію)`
+  const sortedAssetsByAvgPoints = (analytics.pointsByAssets || []).slice().sort((a,b)=>b.avgPoints-a.avgPoints || b.value-a.value || String(a.label).localeCompare(String(b.label), "uk"));
+  const topEfficiencyAsset = sortedAssetsByAvgPoints[0]?.label
+    ? `${sortedAssetsByAvgPoints[0].label} (${fmtNum(sortedAssetsByAvgPoints[0].avgPoints)} бал./місію)`
     : "—";
 
   lines.push(`Короткий звіт Delta / НРК${scopeParts.length ? ` (${scopeParts.join("; ")})` : ""}`);
   lines.push("");
   lines.push("1. Загальна картина");
-  lines.push(`- Унікальних місій: ${fmtNum(analytics.missionCount)}; технічних записів: ${fmtNum(analytics.recordCount)}.`);
-  lines.push(`- Логістичних місій: ${fmtNum(Math.max(0, analytics.missionCount - analytics.evacuationCount))}; евакуаційних: ${fmtNum(analytics.evacuationCount)}.`);
+  if(unitNames.length){
+    lines.push(`- Підрозділи: ${unitNames.join(", ")}.`);
+  }
+  lines.push(`- Унікальних місій: ${fmtNum(analytics.missionCount)}.`);
+  lines.push(`- Логістичних місій: ${fmtNum(logisticsMissionCount)}; евакуаційних: ${fmtNum(analytics.evacuationCount)}.`);
   lines.push(`- Доставлено: ${fmtNum(analytics.deliveredCount)}; не доставлено: ${fmtNum(analytics.notDeliveredCount)}; успішність логістики: ${fmtNum(analytics.deliverySuccessRate)}%.`);
   lines.push(`- Загальна вага: ${fmtNum(analytics.totalWeight)} кг; середня вага на місію: ${fmtNum(analytics.avgWeight)} кг.`);
   lines.push(`- Надійність: ${fmtNum(analytics.reliabilityRate)}% (повернення ${fmtNum(analytics.returnedCount)}, пошкодження ${fmtNum(analytics.damagedCount)}, втрати ${fmtNum(analytics.lossCount)}).`);
@@ -6776,8 +6812,10 @@ function buildDeltaNrkExecutiveReportText(analytics){
 
   lines.push("");
   lines.push("2. Позитивні моменти");
-  if(lastMonth && prevMonth){
-    lines.push(`- Останній місяць у зрізі: ${lastMonth.label}. Динаміка до ${prevMonth.label}: місії ${monthMissionDelta > 0 ? "+" : ""}${fmtNum(monthMissionDelta)}, вага ${monthWeightDelta > 0 ? "+" : ""}${fmtNum(monthWeightDelta)} кг, успішність ${monthSuccessDelta > 0 ? "+" : ""}${fmtNum(monthSuccessDelta)} п.п..`);
+  if(lastMonth && prevMonth && lastMonthIsOpen){
+    lines.push(`- Останній місяць у зрізі: ${lastMonth.label} (неповний, станом на ${formatFullDate(now)}). Наразі зафіксовано ${fmtNum(lastMonth.missionCount)} місій, ${fmtNum(lastMonth.totalWeight)} кг та успішність ${fmtNum(lastMonth.successRate)}%.`);
+  } else if(lastMonth && prevMonth){
+    lines.push(`- Останній місяць у зрізі: ${lastMonth.label}. Порівняно з ${prevMonth.label}: ${formatTrend(monthMissionDelta, "місій")}, ${formatTrend(monthWeightDelta, "ваги", " кг")}, ${formatQualityTrend(monthSuccessDelta, "успішність")}.`);
   } else if(lastMonth){
     lines.push(`- Поточний місяць у зрізі: ${lastMonth.label}; місій ${fmtNum(lastMonth.missionCount)}, вага ${fmtNum(lastMonth.totalWeight)} кг, успішність ${fmtNum(lastMonth.successRate)}%.`);
   }
@@ -6823,8 +6861,12 @@ function buildDeltaNrkExecutiveReportText(analytics){
   lines.push("");
   lines.push("4. На що звернути увагу");
   lines.push(`- Якість даних: початок місії заповнено у ${fmtNum(analytics.timeQuality.startFilledPercent)}% місій, завершення — у ${fmtNum(analytics.timeQuality.endFilledPercent)}%, тривалість — у ${fmtNum(analytics.timeQuality.durationFilledPercent)}%.`);
-  lines.push(`- Доповідач не вказаний у ${fmtNum(reporterMissingCount)} місій.`);
-  lines.push(`- Основний зв’язок не вказано у ${fmtNum(noPrimaryLinkCount)} місій, резервний — у ${fmtNum(noReserveLinkCount)} місій.`);
+  if(reporterMissingCount > 0){
+    lines.push(`- Доповідач не вказаний у ${fmtNum(reporterMissingCount)} місій.`);
+  }
+  if(noPrimaryLinkCount > 0 || noReserveLinkCount > 0){
+    lines.push(`- Основний зв’язок не вказано у ${fmtNum(noPrimaryLinkCount)} місій, резервний — у ${fmtNum(noReserveLinkCount)} місій.`);
+  }
   if(analytics.timeQuality.invalidTimelineCount > 0){
     lines.push(`- Є ${fmtNum(analytics.timeQuality.invalidTimelineCount)} місій з некоректною часовою парою початок/завершення.`);
   }
@@ -8384,10 +8426,34 @@ function buildDeltaBplaExecutiveReportText(analytics){
   const monthMissionDelta = lastMonth && prevMonth ? (Number(lastMonth.missionCount || 0) - Number(prevMonth.missionCount || 0)) : 0;
   const monthTargetDelta = lastMonth && prevMonth ? (Number(lastMonth.targetCount || 0) - Number(prevMonth.targetCount || 0)) : 0;
   const monthStrikeDelta = lastMonth && prevMonth ? (Number(lastMonth.strikeCount || 0) - Number(prevMonth.strikeCount || 0)) : 0;
+  const now = new Date();
+  const formatFullDate = date=>{
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = String(date.getFullYear());
+    return `${day}.${month}.${year}`;
+  };
+  const formatTrend = (value, noun)=>{
+    const num = Number(value) || 0;
+    if(num > 0) return `${noun} більше на ${fmtNum(num)}`;
+    if(num < 0) return `${noun} менше на ${fmtNum(Math.abs(num))}`;
+    return `${noun} без змін`;
+  };
+  const isOpenCurrentMonth = monthKey=>{
+    const match = /^(\d{4})-(\d{2})$/.exec(String(monthKey || "").trim());
+    if(!match) return false;
+    const year = Number(match[1]);
+    const monthIndex = Number(match[2]) - 1;
+    if(year !== now.getFullYear() || monthIndex !== now.getMonth()) return false;
+    const monthLastDay = new Date(year, monthIndex + 1, 0).getDate();
+    return now.getDate() < monthLastDay;
+  };
+  const lastMonthIsOpen = !!(lastMonth && isOpenCurrentMonth(lastMonth.key));
 
   const topAsset = analytics.topAsset?.label ? `${analytics.topAsset.label} (${fmtNum(analytics.topAsset.value)} місій)` : "—";
   const topTask = analytics.topTaskType?.label ? `${analytics.topTaskType.label} (${fmtNum(analytics.topTaskType.value)} місій)` : "—";
   const topUnit = analytics.unitsByMissions?.[0]?.label ? `${analytics.unitsByMissions[0].label} (${fmtNum(analytics.unitsByMissions[0].value)} місій)` : "—";
+  const unitNames = (analytics.unitsByMissions || []).map(item=>String(item.label || "").trim()).filter(Boolean);
   const topTarget = analytics.targetTypes?.[0]?.label ? `${analytics.targetTypes[0].label} (${fmtNum(analytics.targetTypes[0].value)} місій)` : "—";
   const topAmmo = analytics.topAmmoName?.label
     ? `${analytics.topAmmoName.label} (${fmtNum(analytics.topAmmoName.value)} місій)`
@@ -8419,7 +8485,10 @@ function buildDeltaBplaExecutiveReportText(analytics){
   lines.push(`Короткий звіт Delta / БпЛА${scopeParts.length ? ` (${scopeParts.join("; ")})` : ""}`);
   lines.push("");
   lines.push("1. Загальна картина");
-  lines.push(`- Унікальних місій: ${fmtNum(analytics.missionCount)}; технічних записів: ${fmtNum(analytics.recordCount)}.`);
+  if(unitNames.length){
+    lines.push(`- Підрозділи: ${unitNames.join(", ")}.`);
+  }
+  lines.push(`- Унікальних місій: ${fmtNum(analytics.missionCount)}.`);
   lines.push(`- Розвідка: ${fmtNum(analytics.reconMissionCount)}; ураження: ${fmtNum(analytics.strikeMissionCount)}; доставка: ${fmtNum(analytics.deliveryMissionCount)}; мінування: ${fmtNum(analytics.miningMissionCount)}.`);
   lines.push(`- Усього цілей: ${fmtNum(analytics.totalTargets)}; місій із цілями: ${fmtNum(analytics.targetMissionCount)}; усього БК: ${fmtNum(analytics.totalAmmoQty)}.`);
   lines.push(`- Надійність: ${fmtNum(analytics.reliabilityRate)}% (повернення ${fmtNum(analytics.returnedCount)}, втрати ${fmtNum(analytics.lossCount)}).`);
@@ -8428,8 +8497,10 @@ function buildDeltaBplaExecutiveReportText(analytics){
 
   lines.push("");
   lines.push("2. Позитивні моменти");
-  if(lastMonth && prevMonth){
-    lines.push(`- Останній місяць у зрізі: ${lastMonth.label}. Динаміка до ${prevMonth.label}: місії ${monthMissionDelta > 0 ? "+" : ""}${fmtNum(monthMissionDelta)}, цілі ${monthTargetDelta > 0 ? "+" : ""}${fmtNum(monthTargetDelta)}, ураження ${monthStrikeDelta > 0 ? "+" : ""}${fmtNum(monthStrikeDelta)}.`);
+  if(lastMonth && prevMonth && lastMonthIsOpen){
+    lines.push(`- Останній місяць у зрізі: ${lastMonth.label} (неповний, станом на ${formatFullDate(now)}). Наразі зафіксовано ${fmtNum(lastMonth.missionCount)} місій, ${fmtNum(lastMonth.targetCount)} цілей та ${fmtNum(lastMonth.strikeCount)} місій типу «Ураження».`);
+  } else if(lastMonth && prevMonth){
+    lines.push(`- Останній місяць у зрізі: ${lastMonth.label}. Порівняно з ${prevMonth.label}: ${formatTrend(monthMissionDelta, "місій")}, ${formatTrend(monthTargetDelta, "цілей")}, ${formatTrend(monthStrikeDelta, "задач ураження")}.`);
   } else if(lastMonth){
     lines.push(`- Поточний місяць у зрізі: ${lastMonth.label}; місій ${fmtNum(lastMonth.missionCount)}, цілей ${fmtNum(lastMonth.targetCount)}, ураження ${fmtNum(lastMonth.strikeCount)}.`);
   }
@@ -8471,6 +8542,9 @@ function buildDeltaBplaExecutiveReportText(analytics){
   lines.push(`- Для контролю ефективності по цілях варто окремо дивитись зв’язку: ціль → платформа → БК → статус.`);
   if(analytics.dayNight?.total){
     lines.push(`- Нічних місій у зрізі: ${fmtNum(analytics.dayNight.nightPercent)}%, денних — ${fmtNum(analytics.dayNight.dayPercent)}%.`);
+  }
+  if(missingControl > 0){
+    lines.push(`- Тип керування не вказаний у ${fmtNum(missingControl)} місій.`);
   }
 
   lines.push("");
@@ -13444,6 +13518,69 @@ function buildWorksheetXml(name, header, rows){
 
 }
 
+function calcReportingMonthColumnWidths(header, rows){
+
+  const measure = (value)=>String(value || "").replace(/\s+/g, " ").trim().length;
+  const maxLens = header.map((label, index)=>
+    Math.max(
+      measure(label),
+      ...rows.map(row=>measure(Array.isArray(row) ? row[index] : ""))
+    )
+  );
+
+  return maxLens.map((len, index)=>{
+    if(index === 0) return 26;
+    if(index === 2) return Math.max(180, Math.min(260, 22 + len * 6));
+    if(index === 3) return Math.max(90, Math.min(140, 20 + len * 7));
+    if(index === 4) return Math.max(110, Math.min(170, 20 + len * 7));
+    return Math.max(130, Math.min(240, 24 + len * 7));
+  });
+
+}
+
+function buildReportingMonthWorksheetXml(name, title, header, rows, columnWidths){
+
+  const widths = Array.isArray(columnWidths) && columnWidths.length === header.length
+    ? columnWidths
+    : calcReportingMonthColumnWidths(header, rows);
+  const columnsXml = widths.map(width=>`<Column ss:Width="${Math.round(width)}"/>`).join("");
+
+  const titleRowXml = `
+    <Row ss:AutoFitHeight="0" ss:Height="24">
+      <Cell ss:MergeAcross="${Math.max(0, header.length - 1)}" ss:StyleID="reportTitle">
+        <Data ss:Type="String">${xmlEsc(title)}</Data>
+      </Cell>
+    </Row>
+  `;
+
+  const headerXml = `
+    <Row ss:AutoFitHeight="0" ss:Height="30">
+      ${header.map(h=>`<Cell ss:StyleID="reportHeader"><Data ss:Type="String">${xmlEsc(h)}</Data></Cell>`).join("")}
+    </Row>
+  `;
+
+  const rowsXml = rows.map(row=>`
+    <Row ss:AutoFitHeight="1">
+      ${row.map((value, index)=>{
+        const styleId = index === 0
+          ? "reportCellCenter"
+          : (index === 2 ? "reportCellWrap" : (index === 3 ? "reportCellCenter" : "reportCell"));
+        return `<Cell ss:StyleID="${styleId}"><Data ss:Type="String">${xmlEsc(value)}</Data></Cell>`;
+      }).join("")}
+    </Row>
+  `).join("");
+
+  return `<Worksheet ss:Name="${xmlEsc(normalizeSheetName(name))}">
+    <Table>
+      ${columnsXml}
+      ${titleRowXml}
+      ${headerXml}
+      ${rowsXml}
+    </Table>
+  </Worksheet>`;
+
+}
+
 function buildTasksWorkbookXml(sheets){
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -13478,15 +13615,70 @@ function buildTasksWorkbookXml(sheets){
 
   </Style>
 
-  <Style ss:ID="header">
+   <Style ss:ID="header">
 
-   <Font ss:Bold="1" ss:FontName="Times New Roman"/>
+     <Font ss:Bold="1" ss:FontName="Times New Roman"/>
 
-   <Interior ss:Color="#DCE6F1" ss:Pattern="Solid"/>
+     <Interior ss:Color="#DCE6F1" ss:Pattern="Solid"/>
 
-  </Style>
+    </Style>
 
- </Styles>
+    <Style ss:ID="reportTitle">
+     <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+     <Borders>
+      <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B7C0CE"/>
+      <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B7C0CE"/>
+      <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B7C0CE"/>
+      <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B7C0CE"/>
+     </Borders>
+     <Font ss:Bold="1" ss:FontName="Times New Roman" ss:Size="12"/>
+    </Style>
+
+    <Style ss:ID="reportHeader">
+     <Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>
+     <Borders>
+      <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B7C0CE"/>
+      <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B7C0CE"/>
+      <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B7C0CE"/>
+      <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B7C0CE"/>
+     </Borders>
+     <Font ss:Bold="1" ss:FontName="Times New Roman" ss:Size="12"/>
+    </Style>
+
+    <Style ss:ID="reportCell">
+     <Alignment ss:Vertical="Center"/>
+     <Borders>
+      <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B7C0CE"/>
+      <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B7C0CE"/>
+      <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B7C0CE"/>
+      <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B7C0CE"/>
+     </Borders>
+     <Font ss:FontName="Times New Roman" ss:Size="12"/>
+    </Style>
+
+    <Style ss:ID="reportCellCenter">
+     <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+     <Borders>
+      <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B7C0CE"/>
+      <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B7C0CE"/>
+      <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B7C0CE"/>
+      <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B7C0CE"/>
+     </Borders>
+     <Font ss:FontName="Times New Roman" ss:Size="12"/>
+    </Style>
+
+    <Style ss:ID="reportCellWrap">
+     <Alignment ss:Vertical="Center" ss:WrapText="1"/>
+     <Borders>
+      <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B7C0CE"/>
+      <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B7C0CE"/>
+      <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B7C0CE"/>
+      <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B7C0CE"/>
+     </Borders>
+     <Font ss:FontName="Times New Roman" ss:Size="12"/>
+    </Style>
+
+   </Styles>
 
  ${sheets.join("\n")}
 
@@ -13667,6 +13859,143 @@ function reportingExportRows(monthStr){
   });
 
   return rows;
+
+}
+
+function reportingExportRowsForExcel(monthStr){
+
+  const plans = (STATE.reportPlans || []).slice().sort((a,b)=>{
+
+    const da = Array.isArray(a.daysOfMonth) && a.daysOfMonth.length ? Math.min(...a.daysOfMonth) : (Number(a.dayOfMonth) || 0);
+
+    const db = Array.isArray(b.daysOfMonth) && b.daysOfMonth.length ? Math.min(...b.daysOfMonth) : (Number(b.dayOfMonth) || 0);
+
+    if(da !== db) return da - db;
+
+    return (a.title || "").localeCompare(b.title || "");
+
+  });
+
+  const rows = [];
+  const basisFromDescription = (text)=>{
+    const original = String(text || "").trim();
+    if(!original) return "";
+    const raw = original.replace(/\s+/g, " ").trim();
+    const matches = raw.match(/№\s*[^,;\n\r]+?\s+від\s+\d{2}\.\d{2}\.\d{4}/g);
+    if(matches) return matches.map(item=>item.trim()).join("; ");
+    const firstLine = original
+      .split(/\r?\n/)
+      .map(line=>String(line || "").trim())
+      .find(Boolean);
+    return firstLine || raw;
+  };
+  const weekLabels = ["Нд","Пн","Вт","Ср","Чт","Пт","Сб"];
+  const reportingLabelForPlan = (plan, scheduleDates)=>{
+    const daysOfMonth = Array.isArray(plan.daysOfMonth) ? plan.daysOfMonth.filter(Boolean) : [];
+    const weekDays = Array.isArray(plan.weekDays) ? plan.weekDays.filter(x=>Number.isFinite(Number(x))) : [];
+    if(daysOfMonth.length){
+      return daysOfMonth
+        .map(day=>String(day).padStart(2, "0"))
+        .map(day=>`${day}.${String(monthStr || "").slice(5,7)}`)
+        .join(", ");
+    }
+    if(weekDays.length){
+      return weekDays
+        .map(x=>weekLabels[Number(x)] || "")
+        .filter(Boolean)
+        .join(", ");
+    }
+    return (scheduleDates || []).map(date=>fmtDateShort(date)).join(", ");
+  };
+  const mergeMap = new Map();
+
+  plans.forEach(plan=>{
+
+    const deptIds = Array.isArray(plan.deptIds) ? plan.deptIds : [];
+
+    const scheduleDates = reportPlanScheduleDates(plan, monthStr);
+
+    const planTasks = STATE.tasks.filter(t=>t.reportPlanId===plan.id && t.reportMonth===monthStr);
+
+    const taskMap = new Map();
+
+    planTasks.forEach(t=>{
+
+      const d = reportPlanTaskDate(t);
+
+      if(!d) return;
+
+      const key = `${t.departmentId || ""}__${d}`;
+
+      if(!taskMap.has(key)) taskMap.set(key, t);
+
+    });
+
+    deptIds.forEach(deptId=>{
+
+      const dept = getDeptById(deptId);
+      const basis = basisFromDescription(plan.description || "");
+      const reporting = reportingLabelForPlan(plan, scheduleDates);
+
+      const key = [
+        String(plan.title || "").trim(),
+        basis,
+        reporting,
+        String(dept?.name || "").trim()
+      ].join("||");
+      if(!mergeMap.has(key)){
+        mergeMap.set(key, [
+          plan.title || "",
+          basis,
+          reporting,
+          dept?.name || ""
+        ]);
+      }
+
+    });
+
+  });
+
+  return Array.from(mergeMap.values()).sort((a,b)=>
+    String(a[0] || "").localeCompare(String(b[0] || ""), "uk")
+    || String(a[3] || "").localeCompare(String(b[3] || ""), "uk")
+  ).map((row, index)=>[
+    index + 1,
+    ...row
+  ]);
+
+}
+
+function exportReportingMonthExcelNow(){
+
+  const u = currentSessionUser();
+
+  if(!u || u.role!=="boss"){
+
+    showSheet("Немає прав", `<div class="hint">Експорт доступний тільки керівнику.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
+
+    return;
+
+  }
+
+  const monthStr = UI.reportingMonth || kyivDateStr().slice(0,7);
+  const monthNames = ["січень","лютий","березень","квітень","травень","червень","липень","серпень","вересень","жовтень","листопад","грудень"];
+  const [year, month] = String(monthStr || "").split("-");
+  const monthIndex = Math.max(0, Math.min(11, Number(month || 1) - 1));
+  const sheetTitle = `План заходів на ${monthNames[monthIndex]} ${year || ""} року`.trim();
+  const header = ["№ з/п","Назва заходу","Підстава","Звітування","Відділ"];
+  const rows = reportingExportRowsForExcel(monthStr);
+  const xml = buildTasksWorkbookXml([
+    buildReportingMonthWorksheetXml(
+      `Звітність ${monthStr}`,
+      sheetTitle,
+      header,
+      rows,
+      calcReportingMonthColumnWidths(header, rows)
+    )
+  ]);
+  downloadExcelXml(`reporting_${monthStr}.xls`, xml);
+  showToast(`Excel по звітності ${monthStr} збережено`, "ok");
 
 }
 
@@ -18184,11 +18513,10 @@ function viewReporting(){
 
   }, 0);
 
-  const missingPlanned = Math.max(totalPlanned - tasksForMonth.length, 0);
-
   const createdPct = totalPlanned ? pctSafe(tasksForMonth.length, totalPlanned) : 0;
 
   const donePct = totalPlanned ? pctSafe(doneInMonth, totalPlanned) : 0;
+  const todayShort = fmtDate(kyivDateStr());
 
 
 
@@ -18447,7 +18775,7 @@ function viewReporting(){
 
             <div class="report-tile">
 
-              <div class="k">Створено</div>
+              <div class="k">Створено станом на ${htmlesc(todayShort)}</div>
 
               <div class="v">${tasksForMonth.length}</div>
 
@@ -18461,10 +18789,14 @@ function viewReporting(){
 
               <div class="v">${doneInMonth}</div>
 
-              <div class="s">${missingPlanned ? `ще ${missingPlanned} не створено` : (totalPlanned ? `${donePct}% від плану` : "—")}</div>
+              <div class="s">${totalPlanned ? `${donePct}% від плану` : "—"}</div>
 
             </div>
 
+          </div>
+
+          <div class="actions reporting-toolbar-actions">
+            <button class="btn ghost" data-action="exportReportingMonthExcelNow">⬇️ Excel</button>
           </div>
 
         </div>
@@ -27079,6 +27411,7 @@ const ACTIONS = {
   openDbTasksPreview,
 
   exportBackupNow,
+  exportReportingMonthExcelNow,
 
   openAbout,
 
