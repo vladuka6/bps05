@@ -157,5 +157,5 @@ async function handleDbTasks(env) {
   const { results } = await env.DB.prepare(
     "SELECT * FROM tasks ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 2000"
   ).all();
-  return json({ tasks: results || [] });
+  return json({ items: results || [], tasks: results || [] });
 }

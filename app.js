@@ -12324,7 +12324,7 @@ async function ensureDbTasksCache(force=false){
 
     const data = await res.json();
 
-    const items = Array.isArray(data?.items) ? data.items : [];
+    const items = Array.isArray(data?.items) ? data.items : (Array.isArray(data?.tasks) ? data.tasks : []);
 
     DB_TASKS_CACHE = items.map(normalizeDbTask).filter(Boolean);
 
@@ -12338,7 +12338,23 @@ async function ensureDbTasksCache(force=false){
 
     DB_TASKS_LOADING = false;
 
-    if(UI.tab===ROUTES.TASKS) render();
+    if(UI.tab===ROUTES.TASKS){
+      try { render(); } catch(err) { console.warn("DB tasks refresh render failed", err); }
+    }
+
+  }
+
+}
+
+async function refreshDbTasksCacheAfterSync(){
+
+  try{
+
+    await ensureDbTasksCache(true);
+
+  } catch(err){
+
+    console.warn("DB tasks cache refresh failed", err);
 
   }
 
@@ -27457,7 +27473,7 @@ async function pushSync(){
 
       markSyncDirty(false);
 
-      await ensureDbTasksCache(true);
+      await refreshDbTasksCacheAfterSync();
 
       render();
 
@@ -27577,7 +27593,7 @@ async function pullSync(){
 
       render();
 
-      await ensureDbTasksCache(true);
+      await refreshDbTasksCacheAfterSync();
 
       _lastPullAt = nowIsoKyiv();
 
@@ -27599,7 +27615,7 @@ async function pullSync(){
 
           render();
 
-          await ensureDbTasksCache(true);
+          await refreshDbTasksCacheAfterSync();
 
           _lastPullAt = nowIsoKyiv();
 
@@ -27623,7 +27639,7 @@ async function pullSync(){
 
       render();
 
-      await ensureDbTasksCache(true);
+      await refreshDbTasksCacheAfterSync();
 
       _lastPullAt = nowIsoKyiv();
 
@@ -27643,7 +27659,7 @@ async function pullSync(){
 
         render();
 
-        await ensureDbTasksCache(true);
+        await refreshDbTasksCacheAfterSync();
 
         _lastPullAt = nowIsoKyiv();
 
@@ -27661,7 +27677,7 @@ async function pullSync(){
 
       render();
 
-      await ensureDbTasksCache(true);
+      await refreshDbTasksCacheAfterSync();
 
     }
 
@@ -27902,6 +27918,7 @@ render();
 initAutoSync();
 
 initOverdueTicker();
+
 
 
 
