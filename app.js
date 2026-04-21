@@ -20,7 +20,11 @@ const DEVICE_ID_KEY = "planner_device_id";
 
 const EVAL_TOAST_DATE_KEY = "planner_eval_toast_date";
 
+const SYNC_DIRTY_KEY = "planner_sync_dirty";
+
 let _syncTimer = null;
+
+let _syncRetryTimer = null;
 
 let _syncInFlight = false;
 
@@ -37,6 +41,10 @@ let _syncPending = false;
 let _syncInitDone = !SYNC_URL;
 
 let _lastLocalPersistOk = true;
+
+let _syncDirty = false;
+
+let _syncLastError = null;
 
 let DB_TASKS_CACHE = null;
 
@@ -91,6 +99,8 @@ function safeRemove(key){
   }
 
 }
+
+_syncDirty = safeGet(SYNC_DIRTY_KEY) === "1";
 
 let _deviceId = null;
 
@@ -762,6 +772,22 @@ function markStateChanged(st){
 
 }
 
+function markSyncDirty(value=true){
+
+  _syncDirty = !!value;
+
+  if(_syncDirty){
+
+    safeSet(SYNC_DIRTY_KEY, "1");
+
+  } else {
+
+    safeRemove(SYNC_DIRTY_KEY);
+
+  }
+
+}
+
 function saveState(st, opts={}){
 
   DB_TASKS_CACHE = null;
@@ -771,6 +797,8 @@ function saveState(st, opts={}){
   if(!opts.skipSyncStamp){
 
     markStateChanged(st);
+
+    markSyncDirty(true);
 
     queueSync();
 
@@ -1631,6 +1659,38 @@ async function authenticateUser(login, pass){
 function getDeptById(id){ return STATE.departments.find(d=>d.id===id) || null; }
 
 function currentSessionUser(){ return STATE.session.userId ? getUserById(STATE.session.userId) : null; }
+
+function syncUiState(){
+
+  if(!SYNC_URL){
+
+    return {label:"Локально", cls:"ok", title:"Хмарна синхронізація вимкнена"};
+
+  }
+
+  if(!_syncInitDone){
+
+    return {label:"Завантаж.", cls:"err", title:"Завантаження даних з хмари..."};
+
+  }
+
+  if(_syncLastError || !_syncReady){
+
+    const pendingText = _syncDirty ? ". Є локальні зміни, які ще не підтверджені хмарою" : "";
+
+    return {label:"Офлайн", cls:"err", title:`Синхронізація недоступна${_syncLastError ? `: ${_syncLastError}` : ""}${pendingText}`};
+
+  }
+
+  if(_syncDirty || _syncPending){
+
+    return {label:"Очікує", cls:"warn", title:"Є локальні зміни, які ще не підтверджені хмарою"};
+
+  }
+
+  return {label:"Синхрон.", cls:"ok", title:"Дані синхронізовано"};
+
+}
 
 
 
@@ -14726,13 +14786,15 @@ function appShell({title, subtitle, bodyHtml, showFab, fabAction, tabs}){
 
   const profileIcon = (u && u.readOnly) ? "🚪" : "👤";
 
-  const syncTitle = _syncReady ? "Дані завантажено" : (_syncInitDone ? "Дані не завантажено" : "Завантаження даних...");
+  const syncState = syncUiState();
 
-  const syncLabel = _syncReady ? "Синхрон." : "Офлайн";
+  const syncTitle = syncState.title;
 
-  const syncDot = SYNC_URL ? `<span class="sync-dot ${_syncReady ? "ok" : "err"}" title="${syncTitle}"></span>` : ``;
+  const syncLabel = syncState.label;
 
-  const syncNeedsLogin = !!(SYNC_URL && _syncInitDone && !_syncReady);
+  const syncDot = SYNC_URL ? `<span class="sync-dot ${syncState.cls}" title="${htmlesc(syncTitle)}"></span>` : ``;
+
+  const syncNeedsLogin = !!(SYNC_URL && _syncInitDone && !_syncReady && !_syncDirty);
 
   const syncBanner = syncNeedsLogin ? `
 
@@ -14806,7 +14868,7 @@ function appShell({title, subtitle, bodyHtml, showFab, fabAction, tabs}){
 
           <div class="top-actions">
 
-            <div class="header-sync" title="${syncTitle}">
+            <div class="header-sync" title="${htmlesc(syncTitle)}">
 
               ${syncDot}
 
@@ -14928,9 +14990,11 @@ function viewLogin(){
 
   const syncLoading = !!SYNC_URL && !_syncInitDone;
 
-  const syncTitle = _syncReady ? "\u0414\u0430\u043d\u0456 \u0437\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0435\u043d\u043e" : (_syncInitDone ? "\u0414\u0430\u043d\u0456 \u043d\u0435 \u0437\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0435\u043d\u043e" : "\u0417\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0435\u043d\u043d\u044f \u0434\u0430\u043d\u0438\u0445...");
+  const syncState = syncUiState();
 
-  const syncDot = SYNC_URL ? `<span class="sync-dot ${_syncReady ? "ok" : "err"}" title="${syncTitle}"></span>` : ``;
+  const syncTitle = syncState.title;
+
+  const syncDot = SYNC_URL ? `<span class="sync-dot ${syncState.cls}" title="${htmlesc(syncTitle)}"></span>` : ``;
 
   document.body.classList.remove("role-boss");
 
@@ -15080,7 +15144,7 @@ function viewLogin(){
 
       STATE.session.userId = user.id;
 
-      saveState(STATE);
+      saveState(STATE, {skipSyncStamp:true});
 
       UI.tab = ROUTES.TASKS;
 
@@ -15107,6 +15171,20 @@ function viewLogin(){
     safeRemove(LS_KEY);
 
     STATE = seed();
+
+    ensureSyncMeta(STATE);
+
+    STATE.sync.updatedAt = "";
+
+    STATE.sync.revision = 0;
+
+    saveState(STATE, {skipSyncStamp:true});
+
+    markSyncDirty(false);
+
+    _syncPending = false;
+
+    if(_syncTimer) clearTimeout(_syncTimer);
 
     render();
 
@@ -27833,6 +27911,24 @@ function stateStamp(st){
 
 }
 
+function looksLikeRemoteStateRegression(localState, remoteState){
+
+  const count = (state, key)=>Array.isArray(state?.[key]) ? state[key].length : 0;
+
+  const localReports = count(localState, "reportPlans");
+
+  const remoteReports = count(remoteState, "reportPlans");
+
+  if(localReports > 0 && remoteReports === 0) return true;
+
+  const localTasks = count(localState, "tasks");
+
+  const remoteTasks = count(remoteState, "tasks");
+
+  return localTasks >= 50 && remoteTasks > 0 && remoteTasks < localTasks * 0.65;
+
+}
+
 function queueSync(){
 
   if(!SYNC_URL) return;
@@ -27850,6 +27946,22 @@ function queueSync(){
   if(_syncTimer) clearTimeout(_syncTimer);
 
   _syncTimer = setTimeout(pushSync, SYNC_DEBOUNCE_MS);
+
+}
+
+function scheduleSyncRetry(){
+
+  if(!SYNC_URL || !_syncDirty) return;
+
+  if(_syncRetryTimer) clearTimeout(_syncRetryTimer);
+
+  _syncRetryTimer = setTimeout(()=>{
+
+    _syncRetryTimer = null;
+
+    pushSync();
+
+  }, 10000);
 
 }
 
@@ -27881,11 +27993,33 @@ async function pushSync(){
 
       _lastPushAt = nowIsoKyiv();
 
+      _syncLastError = null;
+
+      markSyncDirty(false);
+
       await ensureDbTasksCache(true);
+
+      render();
+
+    } else {
+
+      _syncLastError = `HTTP ${res.status}`;
+
+      scheduleSyncRetry();
+
+      render();
 
     }
 
-  } catch{}
+  } catch(err){
+
+    _syncLastError = err?.message || "sync failed";
+
+    scheduleSyncRetry();
+
+    render();
+
+  }
 
   _syncInFlight = false;
 
@@ -27909,6 +28043,8 @@ async function pullSync(){
 
       _syncInitDone = true;
 
+      _syncLastError = `HTTP ${res.status}`;
+
       if(!wasInitDone) render();
 
       return;
@@ -27923,6 +28059,8 @@ async function pullSync(){
 
       _syncInitDone = true;
 
+      _syncLastError = "bad sync response";
+
       if(!wasInitDone) render();
 
       return;
@@ -27936,6 +28074,8 @@ async function pullSync(){
       _syncReady = true;
 
       _syncInitDone = true;
+
+      _syncLastError = null;
 
       if(isFirstSync){
 
@@ -27965,13 +28105,49 @@ async function pullSync(){
 
     _syncInitDone = true;
 
+    _syncLastError = null;
+
     const localStamp = stateStamp(STATE);
 
     const remoteStamp = stateStamp(remote);
 
+    if(_syncDirty || _syncPending){
+
+      queueSync();
+
+      render();
+
+      await ensureDbTasksCache(true);
+
+      _lastPullAt = nowIsoKyiv();
+
+      _syncInFlight = false;
+
+      return;
+
+    }
+
     if(isFirstSync){
 
       if(remoteStamp && (!localStamp || remoteStamp > localStamp)){
+
+        if(looksLikeRemoteStateRegression(STATE, remote)){
+
+          _syncLastError = "remote state regression blocked";
+
+          queueSync();
+
+          render();
+
+          await ensureDbTasksCache(true);
+
+          _lastPullAt = nowIsoKyiv();
+
+          _syncInFlight = false;
+
+          return;
+
+        }
 
         STATE = remote;
 
@@ -27999,6 +28175,24 @@ async function pullSync(){
 
     if(remoteStamp && (!localStamp || remoteStamp > localStamp)){
 
+      if(looksLikeRemoteStateRegression(STATE, remote)){
+
+        _syncLastError = "remote state regression blocked";
+
+        queueSync();
+
+        render();
+
+        await ensureDbTasksCache(true);
+
+        _lastPullAt = nowIsoKyiv();
+
+        _syncInFlight = false;
+
+        return;
+
+      }
+
       STATE = remote;
 
       saveState(STATE, {skipSyncStamp:true});
@@ -28015,7 +28209,11 @@ async function pullSync(){
 
     if(_syncPending) queueSync();
 
-  } catch{}
+  } catch(err){
+
+    _syncLastError = err?.message || "sync failed";
+
+  }
 
   _syncInFlight = false;
 

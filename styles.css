@@ -69,6 +69,10 @@
       background: var(--danger);
       box-shadow: 0 0 0 3px rgba(255,92,122,.18);
     }
+    .sync-dot.warn{
+      background: var(--warn);
+      box-shadow: 0 0 0 3px rgba(255,204,102,.22);
+    }
     .logo{
       width:40px;height:40px;border-radius: 14px;
       background: linear-gradient(145deg, rgba(95,142,245,.95), rgba(128,188,255,.88));
