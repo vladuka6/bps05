@@ -8,9 +8,13 @@ const LS_KEY = "planner_prototype_ua_v2_full";
 
 const THEME_KEY = "planner_theme_pref";
 
-const SYNC_URL = "/sync";
+const API_BASE_URL = "https://bps05.vladuka6.workers.dev";
 
-const AUTH_LOGIN_URL = "/auth/login";
+const SYNC_URL = `${API_BASE_URL}/sync`;
+
+const AUTH_LOGIN_URL = `${API_BASE_URL}/auth/login`;
+
+const DB_TASKS_URL = `${API_BASE_URL}/db/tasks`;
 
 const SYNC_POLL_MS = 30000;
 
@@ -12318,7 +12322,7 @@ async function ensureDbTasksCache(force=false){
 
   try{
 
-    const res = await fetch("/db/tasks", { credentials: "include" });
+    const res = await fetch(DB_TASKS_URL, { credentials: "include" });
 
     if(!res.ok) throw new Error(`HTTP ${res.status}`);
 
@@ -25771,7 +25775,7 @@ async function openDbTasksPreview(){
 
   try{
 
-    const res = await fetch("/db/tasks", { credentials: "include" });
+    const res = await fetch(DB_TASKS_URL, { credentials: "include" });
 
     if(!res.ok){
 
@@ -25847,7 +25851,7 @@ async function openDbTasksPreview(){
 
     showSheet("Помилка D1", `
 
-      <div class="hint">Не вдалося прочитати <span class="mono">/db/tasks</span>.<br/>${htmlesc(err?.message || "Невідома помилка")}</div>
+      <div class="hint">Не вдалося прочитати <span class="mono">${htmlesc(DB_TASKS_URL)}</span>.<br/>${htmlesc(err?.message || "Невідома помилка")}</div>
 
       <div class="sep"></div>
 

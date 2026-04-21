@@ -4,15 +4,16 @@
     const path = url.pathname;
 
     try {
-      if (path === "/favicon.ico") return new Response(null, { status: 204 });
+      if (request.method === "OPTIONS") return handleOptions(request);
+      if (path === "/favicon.ico") return new Response(null, { status: 204, headers: corsHeaders(request) });
       if (path === "/auth/login" && request.method === "POST") return handleLogin(request, env);
       if (path === "/sync" && request.method === "GET") return handleSyncGet(request, env);
       if (path === "/sync" && request.method === "PUT") return handleSyncPut(request, env);
-      if (path === "/db/tasks" && request.method === "GET") return handleDbTasks(env);
-      if (path === "/auth/logout") return json({ ok: true }, { headers: clearCookieHeaders() });
+      if (path === "/db/tasks" && request.method === "GET") return handleDbTasks(request, env);
+      if (path === "/auth/logout") return json({ ok: true }, { headers: clearCookieHeaders(request) }, request);
       return env.ASSETS.fetch(request);
     } catch (err) {
-      return json({ ok: false, error: err?.message || "server error" }, { status: 500 });
+      return json({ ok: false, error: err?.message || "server error" }, { status: 500 }, request);
     }
   }
 };
@@ -20,23 +21,47 @@
 const PRIMARY_STATE_ID = "vladuka6@gmail.com";
 const MIRROR_STATE_IDS = ["main"];
 
-function json(data, init = {}) {
+function corsHeaders(request) {
+  const origin = request?.headers?.get("Origin") || "";
+  const allowed = new Set([
+    "https://bps05.fun",
+    "https://bps05.vladuka6.workers.dev",
+  ]);
+  const headers = {
+    "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Cache-Control, Pragma",
+    "Access-Control-Allow-Credentials": "true",
+    "Vary": "Origin",
+  };
+  if (allowed.has(origin)) headers["Access-Control-Allow-Origin"] = origin;
+  return headers;
+}
+
+function handleOptions(request) {
+  return new Response(null, { status: 204, headers: corsHeaders(request) });
+}
+
+function json(data, init = {}, request = null) {
   const headers = new Headers(init.headers || {});
   headers.set("Content-Type", "application/json; charset=utf-8");
   headers.set("Cache-Control", "no-store");
+  const cors = corsHeaders(request);
+  Object.entries(cors).forEach(([key, value]) => headers.set(key, value));
   return new Response(JSON.stringify(data), { ...init, headers });
 }
 
-function cookieHeaders(userId) {
+function cookieHeaders(request, userId) {
   return {
-    "Set-Cookie": `bps05_user=${encodeURIComponent(userId)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000`,
+    ...corsHeaders(request),
+    "Set-Cookie": `bps05_user=${encodeURIComponent(userId)}; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=2592000`,
     "Cache-Control": "no-store"
   };
 }
 
-function clearCookieHeaders() {
+function clearCookieHeaders(request) {
   return {
-    "Set-Cookie": "bps05_user=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0",
+    ...corsHeaders(request),
+    "Set-Cookie": "bps05_user=; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=0",
     "Cache-Control": "no-store"
   };
 }
@@ -58,14 +83,14 @@ async function handleLogin(request, env) {
   const body = await request.json().catch(() => ({}));
   const login = String(body.login || "").trim();
   const pass = String(body.pass || "");
-  if (!login || !pass) return json({ ok: false }, { status: 400 });
+  if (!login || !pass) return json({ ok: false }, { status: 400 }, request);
 
   const row = await env.DB.prepare(
     "SELECT id, login, name, role, department_id, active, read_only FROM users WHERE login = ? AND pass = ? AND active = 1 LIMIT 1"
   ).bind(login, pass).first();
 
-  if (!row) return json({ ok: false }, { status: 401 });
-  return json({ ok: true, user: rowToUser(row) }, { headers: cookieHeaders(row.id) });
+  if (!row) return json({ ok: false }, { status: 401 }, request);
+  return json({ ok: true, user: rowToUser(row) }, { headers: cookieHeaders(request, row.id) }, request);
 }
 
 async function loadState(env) {
@@ -77,13 +102,13 @@ async function loadState(env) {
 
 async function handleSyncGet(request, env) {
   const state = await loadState(env);
-  return json({ state });
+  return json({ state }, {}, request);
 }
 
 async function handleSyncPut(request, env) {
   const body = await request.json().catch(() => ({}));
   const state = body?.state;
-  if (!state || typeof state !== "object") return json({ ok: false, error: "bad state" }, { status: 400 });
+  if (!state || typeof state !== "object") return json({ ok: false, error: "bad state" }, { status: 400 }, request);
 
   const stateJson = JSON.stringify(state);
   const updatedAt = state?.sync?.updatedAt || new Date().toISOString();
@@ -98,7 +123,7 @@ async function handleSyncPut(request, env) {
   }
 
   await syncTasksTable(env, state);
-  return json({ ok: true });
+  return json({ ok: true }, {}, request);
 }
 
 function toDbTask(t) {
@@ -153,9 +178,9 @@ async function syncTasksTable(env, state) {
   }
 }
 
-async function handleDbTasks(env) {
+async function handleDbTasks(request, env) {
   const { results } = await env.DB.prepare(
     "SELECT * FROM tasks ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 2000"
   ).all();
-  return json({ items: results || [], tasks: results || [] });
+  return json({ items: results || [], tasks: results || [] }, {}, request);
 }
