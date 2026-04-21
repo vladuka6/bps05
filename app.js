@@ -6895,6 +6895,7 @@ function buildDeltaNrkExecutiveReportHtml(analytics, modalKey=""){
       <div class="delta-nrk-collapsible-body">
         <div class="delta-report-copybar">
           <button type="button" class="btn ghost btn-mini" data-action="copyTextFromElement" data-arg1="${textareaId}">Копіювати текст</button>
+          <button type="button" class="btn ghost btn-mini" data-action="exportTextElementWord" data-arg1="${textareaId}">Експорт Word</button>
         </div>
         <textarea id="${textareaId}" class="delta-report-textarea" readonly>${htmlesc(reportText)}</textarea>
       </div>
@@ -8560,6 +8561,7 @@ function buildDeltaBplaExecutiveReportHtml(analytics, modalKey=""){
         <div class="item analytics-block">
           <div class="delta-report-copybar">
             <button type="button" class="btn ghost btn-mini" data-action="copyTextFromElement" data-arg1="${textareaId}">Копіювати текст</button>
+            <button type="button" class="btn ghost btn-mini" data-action="exportTextElementWord" data-arg1="${textareaId}">Експорт Word</button>
           </div>
           <textarea id="${textareaId}" class="delta-report-textarea mono" readonly>${htmlesc(reportText)}</textarea>
         </div>
@@ -10374,6 +10376,86 @@ async function copyTextFromElement(id){
     }
     showToast("Не вдалося скопіювати текст.", "warn");
   }
+
+}
+
+function buildWordReportHtml(text, title=""){
+
+  const safeTitle = htmlesc(title || "Звіт");
+  const lines = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+  let firstTitleUsed = false;
+
+  const body = lines.map((line)=>{
+    const raw = String(line || "");
+    const trimmed = raw.trim();
+
+    if(!trimmed) return `<p class="spacer">&nbsp;</p>`;
+
+    if(!firstTitleUsed){
+      firstTitleUsed = true;
+      return `<h1>${htmlesc(trimmed)}</h1>`;
+    }
+
+    if(/^\d+\.\s+/.test(trimmed)){
+      return `<h2>${htmlesc(trimmed)}</h2>`;
+    }
+
+    if(trimmed.startsWith("- ")){
+      return `<p class="bullet">${htmlesc(trimmed)}</p>`;
+    }
+
+    return `<p>${htmlesc(trimmed)}</p>`;
+  }).join("\n");
+
+  return `<!doctype html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+  <meta charset="utf-8">
+  <title>${safeTitle}</title>
+  <!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
+  <style>
+    @page { margin: 2cm 1.6cm 2cm 1.6cm; }
+    body { font-family: "Times New Roman", Times, serif; font-size: 14pt; color: #111827; line-height: 1.28; }
+    h1 { font-size: 16pt; text-align: center; font-weight: 700; margin: 0 0 16pt 0; }
+    h2 { font-size: 14pt; font-weight: 700; margin: 12pt 0 6pt 0; }
+    p { margin: 0 0 5pt 0; }
+    .bullet { margin-left: 18pt; text-indent: -10pt; }
+    .spacer { margin: 0 0 4pt 0; font-size: 6pt; line-height: 6pt; }
+  </style>
+</head>
+<body>
+${body}
+</body>
+</html>`;
+
+}
+
+function exportTextElementWord(id){
+
+  const el = document.getElementById(String(id || ""));
+  if(!el){
+    showToast("Не знайдено текст для експорту.", "warn");
+    return;
+  }
+
+  const text = "value" in el ? String(el.value || "") : String(el.textContent || "");
+  if(!text.trim()){
+    showToast("Немає тексту для експорту.", "warn");
+    return;
+  }
+
+  const firstLine = text.split(/\r?\n/).map(x=>x.trim()).find(Boolean) || "Звіт";
+  const html = buildWordReportHtml(text, firstLine);
+  const blob = new Blob(["\uFEFF" + html], {type:"application/msword;charset=utf-8"});
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = `${sanitizeExportFilename(firstLine)}.doc`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(href), 1000);
+  showToast("Word-звіт збережено.", "ok");
 
 }
 
@@ -26965,6 +27047,7 @@ const ACTIONS = {
   applyDeltaQuickDateFilter,
   resetDeltaNrkAnalyticsFilters,
   copyTextFromElement,
+  exportTextElementWord,
   filterStaffingUnitsBlock,
   setStaffingUnitsScope,
   setStaffingUnitsViewMode,
