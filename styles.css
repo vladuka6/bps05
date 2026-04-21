@@ -2751,52 +2751,6 @@
       grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
       gap:6px;
     }
-    .recurring-block{
-      margin-top:8px;
-      padding:10px;
-      border-radius: var(--radius2);
-      border:1px dashed rgba(150,170,205,.45);
-      background: rgba(255,255,255,.6);
-    }
-    .recurring-block summary{
-      cursor:pointer;
-      font-weight:900;
-      color: var(--muted);
-      list-style:none;
-    }
-    .recurring-block summary::-webkit-details-marker{display:none;}
-    .rec-body.disabled{
-      opacity:.6;
-      filter:saturate(.7);
-      pointer-events:none;
-    }
-    .rec-type-row{
-      display:flex;
-      gap:6px;
-      flex-wrap:wrap;
-      margin-top:6px;
-    }
-    .rec-type-pill{
-      display:inline-flex;
-      align-items:center;
-      gap:6px;
-      padding:6px 10px;
-      border-radius:999px;
-      border:1px solid rgba(150,170,205,.45);
-      background: rgba(255,255,255,.8);
-      font-size:12px;
-      font-weight:900;
-      color: var(--muted);
-      cursor:pointer;
-      user-select:none;
-    }
-    .rec-type-pill input{display:none;}
-    .rec-type-pill.active{
-      border-color: rgba(110,168,254,.45);
-      background: rgba(110,168,254,.18);
-      color:#2d5fbd;
-    }
-    .recurring-block .rec-toggle-grid,
     .rec-toggle-grid{
       display:flex;
       flex-direction:row;
@@ -2808,7 +2762,6 @@
       -webkit-overflow-scrolling: touch;
     }
     .monthday-grid{flex-wrap:wrap; overflow:visible;}
-    .recurring-block .rec-toggle,
     .rec-toggle{
       display:inline-flex;
       align-items:center;
@@ -2823,7 +2776,6 @@
       position:relative;
       cursor:pointer;
     }
-    .recurring-block .rec-toggle input,
     .rec-toggle input{
       position:absolute;
       opacity:0;
@@ -2837,7 +2789,6 @@
       color: var(--text);
       white-space:nowrap;
     }
-    .recurring-block .rec-toggle input:checked + .rec-label,
     .rec-toggle input:checked + .rec-label{
       color:#2d5fbd;
     }

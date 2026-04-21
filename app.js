@@ -577,7 +577,7 @@ function migrateState(st){
 
     weeklyTasks: Array.isArray(st.weeklyTasks) ? st.weeklyTasks : [],
 
-    recurringTemplates: Array.isArray(st.recurringTemplates) ? st.recurringTemplates : [],
+    recurringTemplates: [],
 
     reportPlans: Array.isArray(st.reportPlans) ? st.reportPlans : [],
 
@@ -1061,88 +1061,6 @@ function setWeeklyWeekIndexFromSelect(){
   UI.weeklyAnchorDate = weeks[Math.max(0, Math.min(w, weeks.length) - 1)] || kyivDateStr();
 
   render();
-
-}
-
-function recurringMatchesToday(tpl, today){
-
-  if(!tpl || !tpl.schedule) return false;
-
-  if(tpl.lastGenerated === today) return false;
-
-  if(tpl.schedule.type === "weekly"){
-
-    const day = new Date(today + "T12:00:00").getDay();
-
-    return Array.isArray(tpl.schedule.days) && tpl.schedule.days.includes(day);
-
-  }
-
-  if(tpl.schedule.type === "monthly"){
-
-    const day = Number(today.slice(8,10));
-
-    return Array.isArray(tpl.schedule.dates) && tpl.schedule.dates.includes(day);
-
-  }
-
-  return false;
-
-}
-
-function runRecurringTemplates(){
-
-  if(!STATE.recurringTemplates) STATE.recurringTemplates = [];
-
-  const today = kyivDateStr();
-
-  STATE.recurringTemplates.forEach(tpl=>{
-
-    if(!recurringMatchesToday(tpl, today)) return;
-
-    tpl.lastGenerated = today;
-
-    const dueDate = tpl.noDue ? null : today;
-
-    const controlAlways = tpl.noDue ? !!tpl.controlAlways : false;
-
-    const nextControlDate = (tpl.noDue && !controlAlways) ? (tpl.nextControlDate || null) : null;
-
-    createTask({
-
-      id: genTaskCode((tpl.type==="managerial") ? "T" : (tpl.type==="internal" ? "I" : "P")),
-
-      type: tpl.type,
-
-      title: tpl.title,
-
-      description: tpl.description || "",
-
-      departmentId: tpl.departmentId || null,
-
-      responsibleUserId: tpl.responsibleUserId || "u_boss",
-
-      complexity: tpl.complexity || "середня",
-
-      status: "в_процесі",
-
-      startDate: today,
-
-      dueDate,
-
-      nextControlDate,
-
-      controlAlways,
-
-      createdBy: tpl.createdBy || "u_boss",
-
-      createdAt: nowIsoKyiv(),
-
-      updatedAt: nowIsoKyiv(),
-
-    }, tpl.createdBy || "u_boss");
-
-  });
 
 }
 
@@ -24661,106 +24579,6 @@ function openCreateTask(kind, preselectDeptId=null, preselectDueDate=null){
 
 
 
-  const recurringBlock = (u.role==="boss" && !u.readOnly) ? (()=>{
-
-    const days = [
-
-      {v:1, label:"Пн"},
-
-      {v:2, label:"Вт"},
-
-      {v:3, label:"Ср"},
-
-      {v:4, label:"Чт"},
-
-      {v:5, label:"Пт"},
-
-      {v:6, label:"Сб"},
-
-      {v:0, label:"Нд"},
-
-    ];
-
-    return `
-
-      <details class="recurring-block">
-
-        <summary>Повторення</summary>
-
-        <div class="field">
-
-          <div class="toggle-row">
-
-            <span class="toggle-label">Повторювана задача</span>
-
-            <label class="switch">
-
-              <input id="recEnabled" type="checkbox" data-change="toggleRecurrenceEnabled" />
-
-              <span class="slider"></span>
-
-            </label>
-
-          </div>
-
-        </div>
-
-        <div id="recBody" class="rec-body disabled">
-
-          <div class="rec-type-row">
-
-            <label class="rec-type-pill">
-
-              <input type="radio" name="recType" value="weekly" checked data-change="toggleRecurrenceType" />
-
-              <span>Щотижня</span>
-
-            </label>
-
-            <label class="rec-type-pill">
-
-              <input type="radio" name="recType" value="monthly" data-change="toggleRecurrenceType" />
-
-              <span>Щомісяця</span>
-
-            </label>
-
-          </div>
-
-          <div id="recWeekly" class="rec-toggle-grid">
-
-            ${days.map(d=>`
-
-              <label class="rec-toggle">
-
-                <input type="checkbox" name="recDay" value="${d.v}" />
-
-                <span class="rec-label">${d.label}</span>
-
-              </label>
-
-            `).join("")}
-
-          </div>
-
-          <div id="recMonthly" class="field" style="display:none;">
-
-            <label>Дати місяця (через кому)</label>
-
-            <input id="recDates" placeholder="5, 15" />
-
-          </div>
-
-        </div>
-
-      </details>
-
-    `;
-
-  })() : "";
-
-
-
   showSheet(
 
     kind==="managerial" ? "Нова управлінська задача" :
@@ -24797,10 +24615,6 @@ function openCreateTask(kind, preselectDeptId=null, preselectDueDate=null){
 
 
 
-    ${recurringBlock}
-
-
-
     ${deptBlock}
 
 
@@ -24826,10 +24640,6 @@ function openCreateTask(kind, preselectDeptId=null, preselectDueDate=null){
   }
 
   toggleNoDue();
-
-  toggleRecurrenceEnabled();
-
-  toggleRecurrenceType();
 
   if(!isPersonal){
 
@@ -24873,40 +24683,6 @@ function openCreateTask(kind, preselectDeptId=null, preselectDueDate=null){
 
 }
 
-function toggleRecurrenceEnabled(){
-
-  const enabled = document.getElementById("recEnabled")?.checked;
-
-  const block = document.getElementById("recBody");
-
-  if(block) block.classList.toggle("disabled", !enabled);
-
-}
-
-function toggleRecurrenceType(){
-
-  const type = document.querySelector('input[name="recType"]:checked')?.value || "weekly";
-
-  const weekly = document.getElementById("recWeekly");
-
-  const monthly = document.getElementById("recMonthly");
-
-  if(weekly) weekly.style.display = (type === "weekly") ? "block" : "none";
-
-  if(monthly) monthly.style.display = (type === "monthly") ? "block" : "none";
-
-  document.querySelectorAll(".rec-type-pill").forEach(el=>{
-
-    const val = el.querySelector('input')?.value;
-
-    el.classList.toggle("active", val === type);
-
-  });
-
-}
-
-
-
 function createTaskNow(kind){
 
   const u = currentSessionUser();
@@ -24915,7 +24691,7 @@ function createTaskNow(kind){
 
   if(!title){
 
-    showSheet("Помилка", `<div class="hint">Вкажи назву задачі.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
+    showSheet("???????", `<div class="hint">????? ????? ??????.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
 
     return;
 
@@ -24941,13 +24717,11 @@ function createTaskNow(kind){
 
   const ctrl = (noDue && !ctrlAlways) ? (document.getElementById("tCtrl").value || null) : null;
 
-  const recEnabled = !!document.getElementById("recEnabled")?.checked;
 
 
+  if(!noDue && !dueDateVal){
 
-  if(!recEnabled && !noDue && !dueDateVal){
-
-    showSheet("Помилка", `<div class="hint">Вкажи дедлайн або вибери “Без дедлайну”.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
+    showSheet("???????", `<div class="hint">????? ??????? ??? ?????? ???? ?????????.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
 
     return;
 
@@ -24957,21 +24731,11 @@ function createTaskNow(kind){
 
   const today = kyivDateStr();
 
-  const status = "в_процесі";
-
-
+  const status = "?_???????";
 
   const type = kind;
 
   const idPrefix = (kind==="managerial") ? "T" : (kind==="internal" ? "I" : "P");
-
-  const id = genTaskCode(idPrefix);
-
-
-
-  let departmentId = null;
-
-  let responsibleUserId = "u_boss";
 
   const pickResponsibleForDept = (deptId)=>{
 
@@ -24985,345 +24749,9 @@ function createTaskNow(kind){
 
   };
 
-  let schedule = null;
+  const makeTask = (taskId, departmentId, responsibleUserId)=>createTask({
 
-  if(recEnabled){
-
-    const recType = document.querySelector('input[name="recType"]:checked')?.value || "weekly";
-
-    if(recType === "weekly"){
-
-      const days = [...document.querySelectorAll('input[name="recDay"]:checked')]
-
-        .map(x=>Number(x.value))
-
-        .filter(n=>Number.isFinite(n));
-
-      if(!days.length){
-
-        showSheet("Помилка", `<div class="hint">Обери дні тижня.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
-
-        return;
-
-      }
-
-      schedule = {type:"weekly", days: [...new Set(days)]};
-
-    } else {
-
-      const raw = (document.getElementById("recDates")?.value || "");
-
-      const dates = raw.split(/[\s,;]+/).map(x=>Number(x)).filter(n=>n>=1 && n<=31);
-
-      const unique = [...new Set(dates)];
-
-      if(!unique.length){
-
-        showSheet("Помилка", `<div class="hint">Вкажи дати місяця (наприклад: 5, 15).</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
-
-        return;
-
-      }
-
-      schedule = {type:"monthly", dates: unique};
-
-    }
-
-  }
-
-
-
-  if(kind==="personal"){
-
-    departmentId = null;
-
-    responsibleUserId = "u_boss";
-
-  } else if(kind==="managerial"){
-
-    const multiToggles = [...document.querySelectorAll('input[name="tDeptMulti"]')];
-
-    const selected = multiToggles.filter(x=>x.checked).map(x=>x.value);
-
-    if(!selected.length){
-
-      showSheet("Помилка", `<div class="hint">Обери хоча б один відділ.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
-
-      return;
-
-    }
-
-    if(selected.length === 1){
-
-      departmentId = selected[0];
-
-      responsibleUserId = pickResponsibleForDept(selected[0]);
-
-    } else {
-
-      if(recEnabled){
-
-        if(!STATE.recurringTemplates) STATE.recurringTemplates = [];
-
-        selected.forEach((deptIdSel)=>{
-
-          const tpl = {
-
-            id: uid("rt"),
-
-            type,
-
-            title,
-
-            description: desc,
-
-            departmentId: deptIdSel,
-
-            responsibleUserId: pickResponsibleForDept(deptIdSel),
-
-            complexity: cx,
-
-            noDue,
-
-            controlAlways: noDue ? !!ctrlAlways : false,
-
-            nextControlDate: (noDue && !ctrlAlways) ? ctrl : null,
-
-            schedule,
-
-            createdBy: u.id,
-
-            createdAt: nowIsoKyiv(),
-
-            lastGenerated: null,
-
-          };
-
-          STATE.recurringTemplates.push(tpl);
-
-          if(recurringMatchesToday(tpl, today)){
-
-            tpl.lastGenerated = today;
-
-            createTask({
-
-              id: genTaskCode(idPrefix),
-
-              type,
-
-              title,
-
-              description: desc,
-
-              departmentId: deptIdSel,
-
-              responsibleUserId: pickResponsibleForDept(deptIdSel),
-
-              complexity: cx,
-
-              status,
-
-              startDate: today,
-
-              dueDate: noDue ? null : today,
-
-              nextControlDate: (noDue && !ctrlAlways) ? ctrl : null,
-
-              controlAlways: noDue ? !!ctrlAlways : false,
-
-              createdBy: u.id,
-
-              createdAt: nowIsoKyiv(),
-
-              updatedAt: nowIsoKyiv()
-
-            }, u.id);
-
-          }
-
-        });
-
-        saveState(STATE);
-
-        hideSheet();
-
-        UI.tab = ROUTES.TASKS;
-
-        UI.taskFilter = "активні";
-
-        render();
-
-        showToast("Шаблони створено", "ok");
-
-        return;
-
-      }
-
-      selected.forEach((deptIdSel)=>{
-
-        const taskId = genTaskCode(idPrefix);
-
-        createTask({
-
-          id: taskId,
-
-          type,
-
-          title,
-
-          description: desc,
-
-          departmentId: deptIdSel,
-
-          responsibleUserId: pickResponsibleForDept(deptIdSel),
-
-          complexity: cx,
-
-          status,
-
-          startDate: today,
-
-          dueDate: due,
-
-          nextControlDate: ctrl,
-
-          controlAlways: ctrlAlways,
-
-          createdBy: u.id,
-
-          createdAt: nowIsoKyiv(),
-
-          updatedAt: nowIsoKyiv()
-
-        }, u.id);
-
-      });
-
-
-
-      hideSheet();
-
-      UI.tab = ROUTES.TASKS;
-
-      UI.taskFilter = "активні";
-
-      render();
-
-      return;
-
-    }
-
-  } else {
-
-    departmentId = document.getElementById("tDept").value;
-
-    responsibleUserId = document.getElementById("tResp").value;
-
-  }
-
-
-
-  if(recEnabled){
-
-    if(!STATE.recurringTemplates) STATE.recurringTemplates = [];
-
-    const tpl = {
-
-      id: uid("rt"),
-
-      type,
-
-      title,
-
-      description: desc,
-
-      departmentId,
-
-      responsibleUserId,
-
-      complexity: cx,
-
-      noDue,
-
-      controlAlways: noDue ? !!ctrlAlways : false,
-
-      nextControlDate: (noDue && !ctrlAlways) ? ctrl : null,
-
-      schedule,
-
-      createdBy: u.id,
-
-      createdAt: nowIsoKyiv(),
-
-      lastGenerated: null,
-
-    };
-
-    STATE.recurringTemplates.push(tpl);
-
-    if(recurringMatchesToday(tpl, today)){
-
-      tpl.lastGenerated = today;
-
-      createTask({
-
-        id,
-
-        type,
-
-        title,
-
-        description: desc,
-
-        departmentId,
-
-        responsibleUserId,
-
-        complexity: cx,
-
-        status,
-
-        startDate: today,
-
-        dueDate: noDue ? null : today,
-
-        nextControlDate: (noDue && !ctrlAlways) ? ctrl : null,
-
-        controlAlways: noDue ? !!ctrlAlways : false,
-
-        createdBy: u.id,
-
-        createdAt: nowIsoKyiv(),
-
-        updatedAt: nowIsoKyiv()
-
-      }, u.id);
-
-    } else {
-
-      saveState(STATE);
-
-    }
-
-    hideSheet();
-
-    UI.tab = ROUTES.TASKS;
-
-    UI.taskFilter = "активні";
-
-    render();
-
-    showToast("Шаблон створено", "ok");
-
-    return;
-
-  }
-
-
-
-  createTask({
-
-    id,
+    id: taskId,
 
     type,
 
@@ -25357,11 +24785,47 @@ function createTaskNow(kind){
 
 
 
+  if(kind==="personal"){
+
+    makeTask(genTaskCode(idPrefix), null, "u_boss");
+
+  } else if(kind==="managerial"){
+
+    const multiToggles = [...document.querySelectorAll('input[name="tDeptMulti"]')];
+
+    const selected = multiToggles.filter(x=>x.checked).map(x=>x.value);
+
+    if(!selected.length){
+
+      showSheet("???????", `<div class="hint">????? ???? ? ???? ??????.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
+
+      return;
+
+    }
+
+    selected.forEach((deptIdSel)=>{
+
+      makeTask(genTaskCode(idPrefix), deptIdSel, pickResponsibleForDept(deptIdSel));
+
+    });
+
+  } else {
+
+    const departmentId = document.getElementById("tDept").value;
+
+    const responsibleUserId = document.getElementById("tResp").value;
+
+    makeTask(genTaskCode(idPrefix), departmentId, responsibleUserId);
+
+  }
+
+
+
   hideSheet();
 
   UI.tab = ROUTES.TASKS;
 
-  UI.taskFilter = "активні";
+  UI.taskFilter = "???????";
 
   render();
 
@@ -27743,10 +27207,6 @@ const CHANGE_ACTIONS = {
 
   toggleNoDue,
 
-  toggleRecurrenceEnabled,
-
-  toggleRecurrenceType,
-
   toggleCtrlAlways,
 
   toggleDeptAll,
@@ -28396,8 +27856,6 @@ function render(){
   }
 
   enforceReadOnlyNavigation(user);
-
-  runRecurringTemplates();
 
   runReportPlans();
 
