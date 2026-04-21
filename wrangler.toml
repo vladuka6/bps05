@@ -1,0 +1,14 @@
+﻿name = "bps05"
+main = "worker.js"
+compatibility_date = "2026-04-21"
+workers_dev = true
+routes = [
+  { pattern = "bps05.fun/*", zone_name = "bps05.fun" }
+]
+
+assets = { directory = ".deploy", binding = "ASSETS" }
+
+[[d1_databases]]
+binding = "DB"
+database_name = "bps05-db"
+database_id = "28827468-59dc-4ab4-ba76-2a66c1a66164"
