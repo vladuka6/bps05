@@ -12386,6 +12386,12 @@ function getTaskSourceForView(){
 
     : [];
 
+  if(!stateTasks.length && DB_TASKS_CACHE.length){
+
+    return DB_TASKS_CACHE.filter(t=>t && !deletedIds.has(String(t.id || "")));
+
+  }
+
   const stateById = new Map(stateTasks.map(t=>[t.id, t]));
 
   const merged = [];
@@ -20715,7 +20721,11 @@ function viewTasks(){
 
   let tasks = getVisibleTasksForView(u);
 
-  const filter = UI.taskFilter;
+  const validTaskFilters = new Set(["\u0430\u043a\u0442\u0438\u0432\u043d\u0456", "\u043f\u0440\u043e\u0441\u0442\u0440\u043e\u0447\u0435\u043d\u0456", "\u043e\u0447\u0456\u043a\u0443\u0454_\u043f\u0456\u0434\u0442\u0432\u0435\u0440\u0434\u0436\u0435\u043d\u043d\u044f", "\u0431\u043b\u043e\u043a\u0435\u0440\u0438", "\u0431\u0435\u0437_\u043e\u043d\u043e\u0432\u043b\u0435\u043d\u044c", "\u0437\u0430\u043a\u0440\u0438\u0442\u0456"]);
+
+  const filter = validTaskFilters.has(UI.taskFilter) ? UI.taskFilter : "\u0430\u043a\u0442\u0438\u0432\u043d\u0456";
+
+  if(filter !== UI.taskFilter) UI.taskFilter = filter;
 
   const deptFilter = UI.taskDeptFilter || "all";
 
@@ -24711,7 +24721,7 @@ function createTaskNow(kind){
 
   if(!title){
 
-    showSheet("???????", `<div class="hint">????? ????? ??????.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
+    showSheet("\u041f\u043e\u043c\u0438\u043b\u043a\u0430", `<div class="hint">\u0412\u043a\u0430\u0436\u0438 \u043d\u0430\u0437\u0432\u0443 \u0437\u0430\u0434\u0430\u0447\u0456.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
 
     return;
 
@@ -24737,21 +24747,17 @@ function createTaskNow(kind){
 
   const ctrl = (noDue && !ctrlAlways) ? (document.getElementById("tCtrl").value || null) : null;
 
-
-
   if(!noDue && !dueDateVal){
 
-    showSheet("???????", `<div class="hint">????? ??????? ??? ?????? ???? ?????????.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
+    showSheet("\u041f\u043e\u043c\u0438\u043b\u043a\u0430", `<div class="hint">\u0412\u043a\u0430\u0436\u0438 \u0434\u0435\u0434\u043b\u0430\u0439\u043d \u0430\u0431\u043e \u0432\u0438\u0431\u0435\u0440\u0438 &laquo;\u0411\u0435\u0437 \u0434\u0435\u0434\u043b\u0430\u0439\u043d\u0443&raquo;.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
 
     return;
 
   }
 
-
-
   const today = kyivDateStr();
 
-  const status = "?_???????";
+  const status = "\u0432_\u043f\u0440\u043e\u0446\u0435\u0441\u0456";
 
   const type = kind;
 
@@ -24803,8 +24809,6 @@ function createTaskNow(kind){
 
   }, u.id);
 
-
-
   if(kind==="personal"){
 
     makeTask(genTaskCode(idPrefix), null, "u_boss");
@@ -24817,7 +24821,7 @@ function createTaskNow(kind){
 
     if(!selected.length){
 
-      showSheet("???????", `<div class="hint">????? ???? ? ???? ??????.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
+      showSheet("\u041f\u043e\u043c\u0438\u043b\u043a\u0430", `<div class="hint">\u041e\u0431\u0435\u0440\u0438 \u0445\u043e\u0447\u0430 \u0431 \u043e\u0434\u0438\u043d \u0432\u0456\u0434\u0434\u0456\u043b.</div><div class="sep"></div><button class="btn primary" data-action="hideSheet">OK</button>`);
 
       return;
 
@@ -24839,13 +24843,11 @@ function createTaskNow(kind){
 
   }
 
-
-
   hideSheet();
 
   UI.tab = ROUTES.TASKS;
 
-  UI.taskFilter = "???????";
+  UI.taskFilter = "\u0430\u043a\u0442\u0438\u0432\u043d\u0456";
 
   render();
 
