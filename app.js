@@ -28201,7 +28201,7 @@ async function pullSync(){
 
     if(isFirstSync){
 
-      if(remoteStamp && (!localStamp || remoteStamp > localStamp)){
+      if(remoteStamp && (!localStamp || remoteStamp > localStamp || !_syncDirty)){
 
         if(looksLikeRemoteStateRegression(STATE, remote)){
 

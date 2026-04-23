@@ -107,7 +107,7 @@ async function handleSyncGet(request, env) {
 
 async function handleSyncPut(request, env) {
   const body = await request.json().catch(() => ({}));
-  const state = body?.state;
+  let state = body?.state;
   if (!state || typeof state !== "object") return json({ ok: false, error: "bad state" }, { status: 400 }, request);
 
   const incomingTasks = Array.isArray(state.tasks) ? state.tasks.filter(t => t && t.id).length : 0;
@@ -126,6 +126,8 @@ async function handleSyncPut(request, env) {
     }, { status: 409 }, request);
   }
 
+  state = protectReferenceNotesFromStaleClients(currentState, state);
+
   const stateJson = JSON.stringify(state);
   const updatedAt = state?.sync?.updatedAt || new Date().toISOString();
   await env.DB.prepare(
@@ -140,6 +142,36 @@ async function handleSyncPut(request, env) {
 
   await syncTasksTable(env, state);
   return json({ ok: true }, {}, request);
+}
+
+function isProtectedBplaReferenceEntry(entry) {
+  const id = String(entry?.id || "");
+  return id === "ref_bas_bpla_inventory_by_detachments" || id.startsWith("ref_bpla_compare_20260417_");
+}
+
+function protectReferenceNotesFromStaleClients(currentState, incomingState) {
+  if (!currentState || !incomingState) return incomingState;
+
+  const currentEntries = Array.isArray(currentState?.referenceNotes?.entries)
+    ? currentState.referenceNotes.entries
+    : [];
+  const incomingEntries = Array.isArray(incomingState?.referenceNotes?.entries)
+    ? incomingState.referenceNotes.entries
+    : [];
+
+  const protectedCurrent = currentEntries.filter(isProtectedBplaReferenceEntry);
+  if (!protectedCurrent.length) return incomingState;
+
+  const protectedIds = new Set(protectedCurrent.map(entry => String(entry.id || "")));
+  const mergedEntries = incomingEntries.filter(entry => !protectedIds.has(String(entry?.id || "")));
+  mergedEntries.unshift(...protectedCurrent);
+
+  incomingState.referenceNotes = incomingState.referenceNotes && typeof incomingState.referenceNotes === "object"
+    ? incomingState.referenceNotes
+    : {};
+  incomingState.referenceNotes.entries = mergedEntries;
+
+  return incomingState;
 }
 
 function toDbTask(t) {
