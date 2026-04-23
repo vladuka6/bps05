@@ -2815,6 +2815,7 @@
     }
     .rendered-analytics-sheet .table-modal-body{
       min-width:0;
+      padding-top:8px;
     }
     .table-modal-body .rich-text{
       white-space:normal;
