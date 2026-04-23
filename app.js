@@ -5672,7 +5672,6 @@ function buildComparisonItemDetailHtml(item){
       rows: [
         {label:"Статус", value:item.usage?.label || "По загонах немає даних", accent:item.usage?.status === "used" ? "strong" : (item.usage?.status === "not_used" ? "weak" : "neutral")},
         {label:"Використовують", value:item.usage?.usedBy || "—", accent:item.usage?.status === "used" ? "strong" : "neutral"},
-        {label:"Примітка", value:item.usage?.note || "Інформація по загонах не вказана", accent:item.usage?.status === "not_used" ? "weak" : "neutral"},
       ],
     },
   ].filter(group=>group.rows.some(row=>String(row.value || "").trim() && String(row.value || "").trim() !== "—"));
@@ -5908,21 +5907,18 @@ function buildComparisonAnalyticsModalHtml(rows, title=""){
       }
       return `<div class="report-tile"><div class="k">${htmlesc(label)}</div><div class="v mono">${htmlesc(String(value))}</div><div class="s">${htmlesc(sub || "—")}</div></div>`;
     };
+    const summaryTiles = [
+      avgSystemPrice > 0 ? summaryTile("Сер. ціна БпАК", fmtCompactMoneyUa(avgSystemPrice), "грн") : "",
+      primaryProfile?.best ? summaryTile(primaryProfile.config.shortLabel || "Профіль 1", fmtNum(primaryProfile.best[primaryProfile.scoreKey]), primaryProfile.best.name, primaryProfile.best) : "",
+      secondaryProfile?.best ? summaryTile(secondaryProfile.config.shortLabel || "Профіль 2", fmtNum(secondaryProfile.best[secondaryProfile.scoreKey]), secondaryProfile.best.name, secondaryProfile.best) : "",
+      codifiedCount > 0 ? summaryTile("Кодифіковано", fmtNum(codifiedCount), `із ${fmtNum(items.length)}`) : "",
+      thermalCount > 0 ? summaryTile("З тепловізором", fmtNum(thermalCount), `із ${fmtNum(items.length)}`) : "",
+      vendorCount > 0 ? summaryTile("Виробників", fmtNum(vendorCount), "у таблиці") : "",
+    ].filter(Boolean);
 
     const summaryGrid = `
       <div class="report-grid staffing-analytics-kpis">
-        ${summaryTile("Сер. ціна БпАК", fmtCompactMoneyUa(avgSystemPrice), "грн")}
-        ${summaryTile("Макс. дальність", maxDistance ? fmtNum(maxDistance.distance) : "0", maxDistance ? maxDistance.name : "—", maxDistance)}
-        ${summaryTile("Макс. навантаження", maxPayload ? fmtNum(maxPayload.payload) : "0", maxPayload ? maxPayload.name : "—", maxPayload)}
-        ${summaryTile("Макс. швидкість", maxSpeed ? fmtNum(maxSpeed.speed) : "0", maxSpeed ? maxSpeed.name : "—", maxSpeed)}
-        ${summaryTile("Макс. радіус", maxRadius ? fmtNum(maxRadius.radius) : "0", maxRadius ? maxRadius.name : "—", maxRadius)}
-        ${summaryTile("Макс. висота", maxHeight ? fmtNum(maxHeight.height) : "0", maxHeight ? maxHeight.name : "—", maxHeight)}
-        ${summaryTile("Стійкість до вітру", maxWind ? fmtNum(maxWind.wind) : "0", maxWind ? maxWind.name : "—", maxWind)}
-        ${summaryTile(primaryProfile ? primaryProfile.config.shortLabel : "Профіль 1", primaryProfile?.best ? fmtNum(primaryProfile.best[primaryProfile.scoreKey]) : "0", primaryProfile?.best ? primaryProfile.best.name : "—", primaryProfile?.best || null)}
-        ${summaryTile(secondaryProfile ? secondaryProfile.config.shortLabel : "Профіль 2", secondaryProfile?.best ? fmtNum(secondaryProfile.best[secondaryProfile.scoreKey]) : "0", secondaryProfile?.best ? secondaryProfile.best.name : "—", secondaryProfile?.best || null)}
-        ${summaryTile("Кодифіковано", fmtNum(codifiedCount), `із ${fmtNum(items.length)}`)}
-        ${summaryTile("З тепловізором", fmtNum(thermalCount), "позицій")}
-        ${summaryTile("Виробників", fmtNum(vendorCount), "у таблиці")}
+        ${summaryTiles.join("")}
       </div>
     `;
 
@@ -5942,7 +5938,6 @@ function buildComparisonAnalyticsModalHtml(rows, title=""){
     return `
       <div class="staffing-analytics-modal comparison-analytics-modal">
         ${summaryGrid}
-        ${buildComparisonAutoSummaryHtml(analytics)}
         ${usageByDetachments}
         ${switchTopBlock}
       </div>
