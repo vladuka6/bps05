@@ -2516,6 +2516,7 @@
     .comparison-weight-grid{
         display:grid;
         gap:8px;
+        grid-template-columns:repeat(3, minmax(0, 1fr));
       }
     .comparison-weight-row{
         border:1px solid rgba(150,170,205,.26);
@@ -2565,6 +2566,63 @@
         font-size:10px;
         color:var(--muted);
         line-height:1.1;
+      }
+    .comparison-weight-input{
+        width:100%;
+        accent-color:#5f8ef5;
+      }
+    .comparison-profile-help-grid{
+        display:grid;
+        grid-template-columns:repeat(3, minmax(0, 1fr));
+        gap:8px;
+      }
+    .comparison-profile-help-card{
+        border:1px solid rgba(150,170,205,.28);
+        border-radius:10px;
+        background:rgba(255,255,255,.7);
+        padding:8px 9px;
+      }
+    .comparison-profile-help-title{
+        font-size:11px;
+        font-weight:1000;
+        color:var(--text);
+        margin-bottom:3px;
+      }
+    .comparison-score-formula{
+        border:1px solid rgba(95,142,245,.24);
+        border-radius:10px;
+        background:rgba(95,142,245,.08);
+        padding:8px 10px;
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:10px;
+        font-size:11px;
+        color:var(--text);
+      }
+    .comparison-score-rows{
+        display:flex;
+        flex-direction:column;
+        gap:6px;
+        margin-top:8px;
+      }
+    .comparison-score-row{
+        border:1px solid rgba(150,170,205,.24);
+        border-radius:10px;
+        background:rgba(255,255,255,.72);
+        padding:7px 9px;
+        display:grid;
+        grid-template-columns:minmax(0, 1fr) auto;
+        gap:10px;
+        align-items:center;
+        font-size:11px;
+      }
+    .comparison-score-row b{
+        display:block;
+        color:var(--text);
+      }
+    .comparison-score-row span{
+        color:var(--muted);
       }
     .comparison-switch-panel.is-active{
         display:block;
@@ -2659,6 +2717,13 @@
         .comparison-detail-grid{
             grid-template-columns:1fr;
             gap:6px;
+        }
+        .comparison-weight-grid,
+        .comparison-profile-help-grid{
+            grid-template-columns:1fr;
+        }
+        .comparison-score-row{
+            grid-template-columns:1fr;
         }
         .comparison-insight-grid{
             grid-template-columns:1fr;
@@ -5503,6 +5568,15 @@
     body.theme-dark .comparison-weight-row.is-primary{
       border-color:rgba(227,176,92,.34);
       background:linear-gradient(180deg, rgba(58,42,19,.88), rgba(44,33,15,.82));
+    }
+    body.theme-dark .comparison-profile-help-card,
+    body.theme-dark .comparison-score-row{
+      border-color:rgba(55,69,98,.72);
+      background:rgba(21,25,37,.82);
+    }
+    body.theme-dark .comparison-score-formula{
+      border-color:rgba(95,142,245,.28);
+      background:rgba(95,142,245,.1);
     }
     body.theme-dark .comparison-weight-bar{
       background:rgba(255,255,255,.08);

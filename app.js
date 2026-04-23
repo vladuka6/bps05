@@ -4145,6 +4145,23 @@ const COMPARISON_HEADER_ALIASES = {
   deployTime: [/час розгортання/, /розгортання згортання/, /розгортан/],
   cameraType: [/тип камери/, /камера/, /тепловіз/, /нічна/, /денна/],
   codified: [/кодифікація/, /кодифік/],
+  notes: [/приміт/, /використ/, /загони/, /загон/, /оодк/],
+};
+
+const COMPARISON_METRIC_LABELS = {
+  systemPrice: "Ціна БпАК",
+  unitPrice: "Ціна БпЛА",
+  quantity: "Кількість у БпАК",
+  payload: "Навантаження",
+  distance: "Дальність",
+  flightTime: "Час польоту",
+  speed: "Швидкість",
+  radius: "Радіус",
+  wind: "Стійкість до вітру",
+  deployTime: "Час розгортання",
+  height: "Висота",
+  thermal: "Тепловізор",
+  codified: "Кодифікація",
 };
 
 function detectComparisonSubtype(title="", headerRow=[]){
@@ -4215,6 +4232,7 @@ function detectComparisonColumns(headerRow, title=""){
     deployTime:-1,
     cameraType:-1,
     codified:-1,
+    notes:-1,
     subtype: detectComparisonSubtype(title, headerRow),
     units: null,
   };
@@ -4304,6 +4322,11 @@ function detectComparisonColumns(headerRow, title=""){
 
     if(result.codified < 0 && comparisonHeaderMatches(header, "codified")){
       result.codified = idx;
+      return;
+    }
+
+    if(result.notes < 0 && comparisonHeaderMatches(header, "notes")){
+      result.notes = idx;
     }
 
   });
@@ -4313,6 +4336,122 @@ function detectComparisonColumns(headerRow, title=""){
   result.units = detectComparisonHeaderUnits(headerRow, result);
 
   return result;
+
+}
+
+function detectComparisonNotesColumn(rows, columns){
+
+  if(columns?.notes >= 0) return columns.notes;
+
+  const hits = new Map();
+  const startIndex = Math.max(
+    0,
+    Math.min(...[
+      columns?.cameraType,
+      columns?.codified,
+      columns?.deployTime,
+      columns?.wind,
+      columns?.distance,
+      columns?.radius,
+    ].filter(idx=>idx >= 0))
+  );
+
+  (rows || []).forEach(row=>{
+    (row || []).forEach((cell, idx)=>{
+      if(idx < startIndex) return;
+      const text = normalizeAnalyticsHeader(cell);
+      if(!text) return;
+      if(/(використ|не використ|оодк|прикз|мприкз|надпсу|гцпос|закуплено|кодифікац|виробник)/.test(text)){
+        hits.set(idx, (hits.get(idx) || 0) + 1);
+      }
+    });
+  });
+
+  let best = -1;
+  let bestCount = 0;
+  hits.forEach((count, idx)=>{
+    if(count > bestCount || (count === bestCount && idx > best)){
+      best = idx;
+      bestCount = count;
+    }
+  });
+
+  return bestCount > 0 ? best : -1;
+
+}
+
+function isComparisonSummaryRow(row, columns){
+
+  const values = (row || []).map(value=>normalizeAnalyticsHeader(value)).filter(Boolean);
+  if(values.some(value=>/^всього\b|^усього\b/.test(value) || /^разом\b/.test(value))) return true;
+
+  const nameRaw = String(row?.[columns?.name] || row?.[columns?.model] || "").trim();
+  const vendorRaw = String(columns?.vendor >= 0 ? (row?.[columns.vendor] || "") : "").trim();
+  const firstRaw = String(row?.[0] || "").trim();
+  if(/^(всього|усього|разом)/i.test(firstRaw) || /^(всього|усього|разом)/i.test(vendorRaw)) return true;
+
+  // In several Excel sheets the summary row has "ВСЬОГО" in the first cell
+  // and a plain number (for example 30/13/14) in the model column.
+  if(/^\d+([,.]\d+)?$/.test(nameRaw) && values.some(value=>/всього|усього|разом/.test(value))) return true;
+
+  return false;
+
+}
+
+function parseComparisonUsageInfo(notes=""){
+
+  const raw = String(notes || "").replace(/\s+/g, " ").trim();
+  if(!raw){
+    return {
+      status: "unknown",
+      label: "По загонах немає даних",
+      usedBy: "",
+      note: "",
+    };
+  }
+
+  const normalized = normalizeAnalyticsHeader(raw);
+  const notUsed = /(не використ|не застосов|відсутн.*використ|в розробц)/.test(normalized);
+  const usedMatch = raw.match(/Використовує(?:ться)?\\s*:?[\\s-]*(.+)$/i);
+  const usedBy = usedMatch ? usedMatch[1].trim() : "";
+
+  if(notUsed){
+    return {
+      status: "not_used",
+      label: "Не використовується",
+      usedBy: "",
+      note: raw,
+    };
+  }
+
+  if(usedBy){
+    return {
+      status: "used",
+      label: "Використовують",
+      usedBy,
+      note: raw,
+    };
+  }
+
+  return {
+    status: "note",
+    label: "Є примітка",
+    usedBy: "",
+    note: raw,
+  };
+
+}
+
+function formatComparisonUsageMeta(item){
+
+  const usage = item?.usage || parseComparisonUsageInfo(item?.notes || "");
+  if(usage.status === "used"){
+    const text = usage.usedBy || usage.note || "";
+    return text ? `Використовують: ${text}` : "Використовують";
+  }
+  if(usage.status === "not_used") return "Не використовується в ООДК";
+  if(usage.status === "note") return usage.note;
+  return "По загонах немає даних";
 
 }
 
@@ -4377,6 +4516,51 @@ function calculateComparisonProfileScore(item, metricStats, weights){
   });
 
   return totalWeight > 0 ? Math.round((weightedSum / totalWeight) * 100) : 0;
+
+}
+
+function buildComparisonScoreBreakdown(item, metricStats, profile){
+
+  const rows = [];
+  let weightedSum = 0;
+  let totalWeight = 0;
+
+  (profile?.weights || []).forEach(metric=>{
+    const label = COMPARISON_METRIC_LABELS[metric.key] || metric.key;
+    const weight = Number(metric.weight || 0);
+    if(weight <= 0) return;
+
+    let score = null;
+    let rawValue = item?.[metric.key];
+    if(metric.kind === "flag"){
+      score = item?.[metric.key] ? 1 : 0;
+      rawValue = item?.[metric.key] ? "так" : "ні";
+    } else {
+      score = normalizeComparisonMetric(item?.[metric.key], metricStats?.[metric.key], !!metric.inverse);
+    }
+
+    if(score == null) return;
+    const contribution = score * weight;
+    weightedSum += contribution;
+    totalWeight += weight;
+
+    rows.push({
+      key: metric.key,
+      label,
+      rawValue,
+      direction: metric.inverse ? "менше = краще" : "більше = краще",
+      normalized: score,
+      weight,
+      contribution,
+    });
+  });
+
+  return {
+    rows,
+    weightedSum,
+    totalWeight,
+    score: totalWeight > 0 ? Math.round((weightedSum / totalWeight) * 100) : 0,
+  };
 
 }
 
@@ -4597,8 +4781,11 @@ function buildComparisonAnalytics(rows, title=""){
     wind: "м/с",
     deployTime: "хв",
   };
+  const notesColumn = detectComparisonNotesColumn(grid.slice(1), columns);
 
   const items = grid.slice(1).map((row, index)=>{
+    if(isComparisonSummaryRow(row, columns)) return null;
+
     const model = String(row?.[columns.model] || row?.[columns.name] || "").trim();
     const vendor = columns.vendor >= 0 ? String(row?.[columns.vendor] || "").trim() : "";
     const name = model || vendor || `Позиція ${index + 1}`;
@@ -4622,6 +4809,7 @@ function buildComparisonAnalytics(rows, title=""){
       deployTime: columns.deployTime >= 0 ? parseAnalyticsNumber(row?.[columns.deployTime]) : null,
       cameraType: columns.cameraType >= 0 ? String(row?.[columns.cameraType] || "").trim() : "",
       codifiedRaw: columns.codified >= 0 ? String(row?.[columns.codified] || "").trim().toLowerCase() : "",
+      notes: notesColumn >= 0 ? String(row?.[notesColumn] || "").trim() : "",
       subtype: columns.subtype,
       units: comparisonUnits,
     };
@@ -4635,6 +4823,7 @@ function buildComparisonAnalytics(rows, title=""){
 
     item.codified = /^(так|є|yes|true|1)$/i.test(item.codifiedRaw);
     item.thermal = /тепловіз|thermal|ir/i.test(item.cameraType);
+    item.usage = parseComparisonUsageInfo(item.notes);
 
     return item;
   }).filter(Boolean);
@@ -4680,6 +4869,8 @@ function buildComparisonAnalytics(rows, title=""){
     const scoreKey = `${profileId}Score`;
     items.forEach(item=>{
       item[scoreKey] = calculateComparisonProfileScore(item, metricStats, profile.weights);
+      item.__comparisonMetricStats = metricStats;
+      item.__comparisonScenario = scenario;
     });
     profileScores[profileId] = scoreKey;
     profileRankings[profileId] = items
@@ -4711,6 +4902,7 @@ function buildComparisonAnalytics(rows, title=""){
     units: comparisonUnits,
     scenario,
     scenarioProfiles,
+    metricStats,
     featuredProfiles,
     avgSystemPrice,
     maxDistance,
@@ -4756,7 +4948,7 @@ function renderComparisonTopList(title, rows, metricKey, metricLabel, unit=""){
                 <div class="comparison-compact-rank mono">${index + 1}</div>
                 <div class="comparison-compact-main">
                   <div class="comparison-compact-title">${htmlesc(item.name)}</div>
-                  <div class="comparison-compact-meta">${metricLabel}: ${fmtNum(item[metricKey])}${unit}${item.vendor ? ` · ${htmlesc(item.vendor)}` : ""}</div>
+                  <div class="comparison-compact-meta">${metricLabel}: ${fmtNum(item[metricKey])}${unit}${item.vendor ? ` · ${htmlesc(item.vendor)}` : ""}${item.notes ? ` · ${htmlesc(formatComparisonUsageMeta(item))}` : ""}</div>
                 </div>
                 <div class="badge b-blue mono">${fmtNum(item[metricKey])}${unit}</div>
               </button>
@@ -4789,7 +4981,7 @@ function renderComparisonTopListAsc(title, rows, metricKey, metricLabel, unit=""
                 <div class="comparison-compact-rank mono">${index + 1}</div>
                 <div class="comparison-compact-main">
                   <div class="comparison-compact-title">${htmlesc(item.name)}</div>
-                  <div class="comparison-compact-meta">${metricLabel}: ${formatValue(item)}${item.vendor ? ` · ${htmlesc(item.vendor)}` : ""}</div>
+                  <div class="comparison-compact-meta">${metricLabel}: ${formatValue(item)}${item.vendor ? ` · ${htmlesc(item.vendor)}` : ""}${item.notes ? ` · ${htmlesc(formatComparisonUsageMeta(item))}` : ""}</div>
                 </div>
                 <div class="badge b-ok mono">${formatValue(item)}</div>
               </button>
@@ -4803,69 +4995,120 @@ function renderComparisonTopListAsc(title, rows, metricKey, metricLabel, unit=""
 
 }
 
-function buildComparisonOverallRankingHelpHtml(){
+function buildComparisonOverallRankingHelpHtml(profileIds=["universal"]){
 
-  const universal = COMPARISON_PROFILE_CONFIG.universal;
-  const weightRows = (universal?.weights || []).map(item=>{
-    const labels = {
-      systemPrice: "Ціна комплексу",
-      payload: "Навантаження",
-      distance: "Дальність",
-      flightTime: "Час польоту",
-      speed: "Швидкість",
-      radius: "Радіус",
-      wind: "Стійкість до вітру",
-      deployTime: "Час розгортання",
-      height: "Висота",
-      thermal: "Тепловізор",
-      codified: "Кодифікація",
-    };
+  const activeIds = (Array.isArray(profileIds) && profileIds.length ? profileIds : ["universal"])
+    .filter(id=>COMPARISON_PROFILE_CONFIG[id]);
+  const primaryId = activeIds[0] || "universal";
+  const primaryProfile = COMPARISON_PROFILE_CONFIG[primaryId] || COMPARISON_PROFILE_CONFIG.universal;
+  const groupId = `cmp_weight_${Math.random().toString(36).slice(2, 8)}`;
+  const exampleValues = {
+    systemPrice: 0.82,
+    unitPrice: 0.74,
+    quantity: 0.5,
+    payload: 0.68,
+    distance: 0.72,
+    flightTime: 0.64,
+    speed: primaryId === "interceptor" ? 0.9 : 0.58,
+    radius: 0.62,
+    wind: 0.55,
+    deployTime: 0.76,
+    height: 0.6,
+    thermal: 1,
+    codified: 1,
+  };
 
-    const label = labels[item.key] || item.key;
-    const percent = Math.round(Number(item.weight || 0) * 100);
-    const isPrimary = item.key === "systemPrice";
+  const profileCards = activeIds.map(id=>{
+    const profile = COMPARISON_PROFILE_CONFIG[id];
+    const topWeights = (profile.weights || [])
+      .slice()
+      .sort((a,b)=>(b.weight || 0) - (a.weight || 0))
+      .slice(0, 4)
+      .map(item=>`${COMPARISON_METRIC_LABELS[item.key] || item.key} ${Math.round(Number(item.weight || 0) * 100)}%`)
+      .join(" · ");
     return `
-      <div class="comparison-weight-row ${isPrimary ? "is-primary" : ""}">
-        <div class="comparison-weight-head">
-          <div class="comparison-weight-label">${htmlesc(label)}</div>
-          <div class="comparison-weight-value mono">${percent}%</div>
-        </div>
-        <div class="comparison-weight-bar">
-          <div class="comparison-weight-fill" style="width:${Math.max(4, Math.min(percent, 100))}%"></div>
-        </div>
-        <div class="comparison-weight-note">${item.inverse ? "Менше = краще" : "Більше = краще"}</div>
+      <div class="comparison-profile-help-card">
+        <div class="comparison-profile-help-title">${htmlesc(profile.shortLabel || profile.label)}</div>
+        <div class="comparison-help-text">${htmlesc(topWeights || "Ваги не задані")}</div>
       </div>
     `;
   }).join("");
 
+  const weightRows = (primaryProfile?.weights || []).map(item=>{
+    const label = COMPARISON_METRIC_LABELS[item.key] || item.key;
+    const percent = Math.round(Number(item.weight || 0) * 100);
+    const example = exampleValues[item.key] ?? 0.5;
+    const isPrimary = percent >= 18;
+    return `
+      <div class="comparison-weight-row ${isPrimary ? "is-primary" : ""}">
+        <div class="comparison-weight-head">
+          <div class="comparison-weight-label">${htmlesc(label)}</div>
+          <div class="comparison-weight-value mono"><span data-weight-value="${groupId}:${htmlesc(item.key)}">${percent}</span>%</div>
+        </div>
+        <input
+          class="comparison-weight-input"
+          type="range"
+          min="0"
+          max="40"
+          step="1"
+          value="${percent}"
+          data-change="updateComparisonWeightPreview"
+          data-weight-group="${groupId}"
+          data-weight-key="${htmlesc(item.key)}"
+          data-example-score="${example}"
+        />
+        <div class="comparison-weight-bar">
+          <div class="comparison-weight-fill" data-weight-fill="${groupId}:${htmlesc(item.key)}" style="width:${Math.max(4, Math.min(percent, 100))}%"></div>
+        </div>
+        <div class="comparison-weight-note">${item.inverse ? "Менше = краще" : "Більше = краще"} · приклад: ${Math.round(example * 100)} зі 100</div>
+      </div>
+    `;
+  }).join("");
+
+  const exampleWeighted = (primaryProfile.weights || []).reduce((acc, item)=>{
+    const weight = Number(item.weight || 0);
+    const score = exampleValues[item.key] ?? 0.5;
+    return {sum: acc.sum + score * weight, weight: acc.weight + weight};
+  }, {sum:0, weight:0});
+  const defaultScore = exampleWeighted.weight > 0 ? Math.round((exampleWeighted.sum / exampleWeighted.weight) * 100) : 0;
+  const exampleRows = (primaryProfile.weights || []).map(item=>{
+    const label = COMPARISON_METRIC_LABELS[item.key] || item.key;
+    const weight = Math.round(Number(item.weight || 0) * 100);
+    const score = Math.round((exampleValues[item.key] ?? 0.5) * 100);
+    return `${label}: ${score}/100 × ${weight}%`;
+  }).slice(0, 6).join("; ");
+
   return `
     <div class="comparison-help-modal">
       <div class="comparison-help-block">
-        <div class="comparison-help-title">Як рахується “Загальний” рейтинг</div>
+        <div class="comparison-help-title">Бальна система рейтингу</div>
         <div class="comparison-help-text">
-          Це інтегральний рейтинг для швидкого вибору моделі без переплати.
+          Для кожного підвиду БпЛА використовується свій профіль. Кожна характеристика переводиться у шкалу <b>0–100</b>, множиться на свою вагу, після чого сума нормалізується до загального рейтингу.
         </div>
       </div>
       <div class="comparison-help-block comparison-help-primary">
-        <div class="comparison-help-title">Головний акцент</div>
-        <div class="comparison-help-text">
-          У “Загальному” рейтингу <b>ціна комплексу — пріоритет №1</b>. Якщо дві моделі близькі за можливостями, вище буде та, що дає схожий результат за менші гроші.
-        </div>
+        <div class="comparison-help-title">Профілі для цієї таблиці</div>
+        <div class="comparison-profile-help-grid">${profileCards}</div>
       </div>
-      <div class="comparison-help-block">
-        <div class="comparison-help-title">Ваги критеріїв</div>
+      <div class="comparison-help-block" data-weight-help="${groupId}">
+        <div class="comparison-help-title">Ваги критеріїв: ${htmlesc(primaryProfile.shortLabel || primaryProfile.label)}</div>
+        <div class="comparison-help-text">За замовчуванням виставлені робочі ваги. Можеш посунути повзунки нижче, щоб побачити, як зміниться приклад розрахунку.</div>
         <div class="comparison-weight-grid">${weightRows}</div>
       </div>
       <div class="comparison-help-block">
-        <div class="comparison-help-title">Приклад</div>
+        <div class="comparison-help-title">Приклад розрахунку</div>
         <div class="comparison-help-text">
-          Якщо модель <b>A</b> коштує <b>1,2 млн</b>, а модель <b>B</b> — <b>2,4 млн</b>, і при цьому різниця по дальності / навантаженню / часу польоту невелика, то вище у “Загальному” рейтингу буде <b>A</b>. Тобто рейтинг спеціально зсунений у бік <b>не переплачувати</b> за близькі можливості.
+          Формула: <b>рейтинг = сума(бал характеристики × вага) / сума ваг</b>. Наприклад: ${htmlesc(exampleRows)}.
+        </div>
+        <div class="comparison-score-formula">
+          <div>Рейтинг прикладу</div>
+          <b class="mono" data-weight-result="${groupId}">${fmtNum(defaultScore)} / 100</b>
         </div>
       </div>
       <div class="comparison-help-block">
         <div class="comparison-help-title">Що важливо</div>
         <div class="comparison-help-text">
-          Якщо одна модель істотно сильніша за ключовими характеристиками, вона все одно може піднятись вище, навіть якщо дорожча. Тобто це не “найдешевше будь-якою ціною”, а <b>розумний баланс із пріоритетом ціни</b>.
+          Для перехоплювача швидкість має більшу вагу; для логістики — вантаж і дальність; для розвідки — час польоту, дальність та камера; для ударних — навантаження, радіус/дальність і стійкість до умов.
         </div>
       </div>
     </div>
@@ -4975,7 +5218,7 @@ function renderComparisonCompactCards(title, rows, metricKey, unit="", tone="blu
                 <div class="comparison-compact-rank mono">${index + 1}</div>
                 <div class="comparison-compact-main">
                   <div class="comparison-compact-title">${htmlesc(item.name)}</div>
-                  <div class="comparison-compact-meta">${item.vendor ? `Виробник: ${htmlesc(item.vendor)}` : "Без виробника"}</div>
+                  <div class="comparison-compact-meta">${item.vendor ? `Виробник: ${htmlesc(item.vendor)}` : "Без виробника"}${item.notes ? ` · ${htmlesc(formatComparisonUsageMeta(item))}` : ""}</div>
                 </div>
                 <div class="badge b-${safeTone} mono">${fmtNum(item[metricKey])}${unit}</div>
               </button>
@@ -5001,7 +5244,7 @@ function renderComparisonLeaderCards(title, cards){
           const value = Number.isFinite(card.value) ? fmtNum(card.value) : "—";
           const unit = card.unit || "";
           const tone = ["blue","ok","warn"].includes(card.tone) ? card.tone : "blue";
-          const meta = card.meta || `${card.metricLabel}: ${value}${unit}${item.vendor ? ` · ${htmlesc(item.vendor)}` : ""}`;
+          const meta = card.meta || `${card.metricLabel}: ${value}${unit}${item.vendor ? ` · ${htmlesc(item.vendor)}` : ""}${item.notes ? ` · ${htmlesc(formatComparisonUsageMeta(item))}` : ""}`;
           return `
             <button type="button" class="comparison-leader-card comparison-card-btn" data-action="openRenderedTableModal" data-arg1="${detailKey}">
               <div class="comparison-leader-head">
@@ -5214,6 +5457,14 @@ function buildComparisonItemDetailHtml(item){
         {label:"Кодифікація", value:item.codified ? "Так" : "Ні", accent:classifyAccent("codified", item.codified)},
       ],
     },
+    {
+      title: "Використання в загонах",
+      rows: [
+        {label:"Статус", value:item.usage?.label || "По загонах немає даних", accent:item.usage?.status === "used" ? "strong" : (item.usage?.status === "not_used" ? "weak" : "neutral")},
+        {label:"Використовують", value:item.usage?.usedBy || "—", accent:item.usage?.status === "used" ? "strong" : "neutral"},
+        {label:"Примітка", value:item.usage?.note || "Інформація по загонах не вказана", accent:item.usage?.status === "not_used" ? "weak" : "neutral"},
+      ],
+    },
   ].filter(group=>group.rows.some(row=>String(row.value || "").trim() && String(row.value || "").trim() !== "—"));
 
   const profileRows = Object.entries(COMPARISON_PROFILE_CONFIG)
@@ -5221,6 +5472,33 @@ function buildComparisonItemDetailHtml(item){
     .filter(row=>Number.isFinite(item?.[row.key]))
     .map(row=>({...row, score:Number(item[row.key])}))
     .sort((a,b)=>b.score - a.score);
+  const primaryProfile = profileRows[0] || null;
+  const primaryProfileId = primaryProfile?.key ? primaryProfile.key.replace(/Score$/, "") : "";
+  const primaryProfileConfig = COMPARISON_PROFILE_CONFIG[primaryProfileId] || COMPARISON_PROFILE_CONFIG.universal;
+  const scoreBreakdown = buildComparisonScoreBreakdown(item, item.__comparisonMetricStats || {}, primaryProfileConfig);
+  const scoreBreakdownHtml = `
+    <div class="comparison-detail-section comparison-score-breakdown">
+      <div class="comparison-detail-section-title">Розрахунок рейтингу: ${htmlesc(primaryProfileConfig.shortLabel || primaryProfileConfig.label || "профіль")}</div>
+      <div class="comparison-score-formula">
+        <div>Формула: сума(бал характеристики × вага) / сума ваг</div>
+        <b class="mono">${fmtNum(scoreBreakdown.score)} / 100</b>
+      </div>
+      <div class="comparison-score-rows">
+        ${scoreBreakdown.rows.length
+          ? scoreBreakdown.rows.map(row=>`
+              <div class="comparison-score-row">
+                <div>
+                  <b>${htmlesc(row.label)}</b>
+                  <span>${htmlesc(row.direction)} · значення: ${htmlesc(String(row.rawValue ?? "—"))}</span>
+                </div>
+                <div class="mono">${fmtNum(row.normalized * 100)} × ${fmtNum(row.weight * 100)}% = ${fmtNum(row.contribution * 100)}</div>
+              </div>
+            `).join("")
+          : `<div class="hint">Для розрахунку не вистачає числових характеристик.</div>`
+        }
+      </div>
+    </div>
+  `;
 
   const flattenedRows = groups.flatMap(group=>group.rows);
   const strengthLabels = flattenedRows
@@ -5231,7 +5509,6 @@ function buildComparisonItemDetailHtml(item){
     .filter(row=>row.accent === "weak")
     .map(row=>row.label)
     .slice(0, 4);
-  const primaryProfile = profileRows[0] || null;
   const secondaryProfiles = profileRows.slice(1, 3);
   const recommendationBlock = `
     <div class="comparison-insight-grid">
@@ -5293,13 +5570,14 @@ function buildComparisonItemDetailHtml(item){
             </div>
           </div>
         `).join("")}
+        ${scoreBreakdownHtml}
       </div>
     </div>
   `;
 
 }
 
-function renderComparisonSwitchTopBlock(title, itemsByKey, units={}, defaultKey="price"){
+function renderComparisonSwitchTopBlock(title, itemsByKey, units={}, defaultKey="price", profileIds=null){
 
   const buttons = [
     {key:"overall", label:"Загальний"},
@@ -5316,7 +5594,7 @@ function renderComparisonSwitchTopBlock(title, itemsByKey, units={}, defaultKey=
   if(!buttons.length) return "";
 
   const groupId = `cmp_top_${Math.random().toString(36).slice(2, 8)}`;
-  const helpKey = registerRenderedTableModal("Довідка: загальний рейтинг", buildComparisonOverallRankingHelpHtml());
+  const helpKey = registerRenderedTableModal("Довідка: рейтинг БпЛА", buildComparisonOverallRankingHelpHtml(profileIds || ["universal"]));
 
   const panels = {
     overall: renderComparisonTopList("Рейтинг за загальним критерієм", itemsByKey.overall || [], "universalScore", "Загальний рейтинг", ""),
@@ -5450,7 +5728,7 @@ function buildComparisonAnalyticsModalHtml(rows, title=""){
     radius: topRadius,
     height: topHeight,
     wind: topWind,
-  }, units, "overall");
+  }, units, "overall", featuredProfiles.map(profile=>profile.id));
 
     return `
       <div class="staffing-analytics-modal comparison-analytics-modal">
@@ -10547,6 +10825,36 @@ function switchComparisonTopPanel(groupId, key){
   scope.querySelectorAll("[data-topswitch-panel]").forEach(panel=>{
     panel.classList.toggle("is-active", panel.getAttribute("data-topswitch-panel") === `${groupId}:${key}`);
   });
+
+}
+
+function updateComparisonWeightPreview(){
+
+  const input = document.activeElement?.matches?.("[data-weight-group]")
+    ? document.activeElement
+    : document.querySelector("[data-weight-group]");
+  const groupId = input?.getAttribute("data-weight-group");
+  if(!groupId) return;
+
+  let weightedSum = 0;
+  let totalWeight = 0;
+  document.querySelectorAll(`[data-weight-group="${CSS.escape(groupId)}"]`).forEach(el=>{
+    const key = el.getAttribute("data-weight-key") || "";
+    const weightPercent = Number(el.value || 0);
+    const exampleScore = Number(el.getAttribute("data-example-score") || 0);
+    const valueEl = document.querySelector(`[data-weight-value="${CSS.escape(`${groupId}:${key}`)}"]`);
+    const fillEl = document.querySelector(`[data-weight-fill="${CSS.escape(`${groupId}:${key}`)}"]`);
+    if(valueEl) valueEl.textContent = String(Math.round(weightPercent));
+    if(fillEl) fillEl.style.width = `${Math.max(4, Math.min(weightPercent, 100))}%`;
+    weightedSum += exampleScore * weightPercent;
+    totalWeight += weightPercent;
+  });
+
+  const resultEl = document.querySelector(`[data-weight-result="${CSS.escape(groupId)}"]`);
+  if(resultEl){
+    const score = totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 0;
+    resultEl.textContent = `${fmtNum(score)} / 100`;
+  }
 
 }
 
@@ -27499,6 +27807,7 @@ const CHANGE_ACTIONS = {
   setReferenceSearchFromInput,
 
   setReferenceDeptFilterFromInput,
+  updateComparisonWeightPreview,
 
   setWeeklyPeriodFromSelect,
 
