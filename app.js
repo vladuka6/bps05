@@ -10858,9 +10858,45 @@ function getWorkbookSheetPreviewRows(workbook, sheetName){
 
   if(!sheet) return [];
 
+  const readSheet = fillWorkbookVerticalMergedCells(sheet);
+
   return normalizeImportedWorksheetRows(
-    XLSX.utils.sheet_to_json(sheet, {header:1, defval:"", raw:false, blankrows:false})
+    XLSX.utils.sheet_to_json(readSheet, {header:1, defval:"", raw:false, blankrows:false})
   );
+
+}
+
+function fillWorkbookVerticalMergedCells(sheet){
+
+  if(!sheet || !Array.isArray(sheet["!merges"]) || typeof XLSX === "undefined" || !XLSX.utils) return sheet;
+
+  const next = {...sheet};
+
+  sheet["!merges"].forEach(range=>{
+    const start = range?.s;
+    const end = range?.e;
+    if(!start || !end) return;
+
+    // For comparison tables we mainly need vertical merges: producer / number
+    // cells should be repeated down each product row. Wide horizontal titles are
+    // intentionally left as-is to avoid duplicating the title across every col.
+    if(end.r <= start.r) return;
+
+    const sourceRef = XLSX.utils.encode_cell({r:start.r, c:start.c});
+    const source = sheet[sourceRef];
+    if(!source || source.v === undefined || source.v === null || String(source.v).trim() === "") return;
+
+    for(let r = start.r; r <= end.r; r++){
+      for(let c = start.c; c <= end.c; c++){
+        const ref = XLSX.utils.encode_cell({r, c});
+        const current = next[ref];
+        if(current && current.v !== undefined && current.v !== null && String(current.v).trim() !== "") continue;
+        next[ref] = {...source};
+      }
+    }
+  });
+
+  return next;
 
 }
 
