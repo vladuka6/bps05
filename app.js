@@ -4412,8 +4412,9 @@ function parseComparisonUsageInfo(notes=""){
 
   const normalized = normalizeAnalyticsHeader(raw);
   const notUsed = /(не використ|не застосов|відсутн.*використ|в розробц)/.test(normalized);
-  const usedMatch = raw.match(/Використовує(?:ться)?\\s*:?[\\s-]*(.+)$/i);
-  const usedBy = usedMatch ? usedMatch[1].trim() : "";
+  const usedMatch = raw.match(/(?:Використовує(?:ться)?|Використовується|Використовують|Застосовує(?:ться)?|Застосовують)\s*:?\s*-?\s*(.+)$/i);
+  const detachmentMatch = raw.match(/((?:\d{1,2}\s*,\s*)*\d{1,2})\s*(ПРИКЗ|прикз|ПрикЗ|ЗМО|змо|ООДК|оодк)/i);
+  const usedBy = usedMatch ? usedMatch[1].trim() : (detachmentMatch ? raw : "");
 
   if(notUsed){
     return {
@@ -4458,7 +4459,7 @@ function formatComparisonUsageMeta(item){
 function extractComparisonUsageDetachments(item){
 
   const usage = item?.usage || parseComparisonUsageInfo(item?.notes || "");
-  if(usage.status !== "used") return [];
+  if(usage.status !== "used" && usage.status !== "note") return [];
 
   const text = String(usage.usedBy || usage.note || "").trim();
   if(!text) return [];
@@ -4476,7 +4477,7 @@ function extractComparisonUsageDetachments(item){
     labels.add(match.replace(/\s+/g, " ").replace(/прикз|ПрикЗ/i, "ПРИКЗ").replace(/змо/i, "ЗМО").replace(/оодк/i, "ООДК"));
   });
 
-  if(!labels.size){
+  if(!labels.size && usage.status === "used"){
     source
       .split(/[;；]/)
       .map(part=>part.trim())
@@ -4500,11 +4501,6 @@ function buildComparisonUsageByDetachmentsHtml(items=[]){
       notUsed.push(item);
       return;
     }
-    if(usage.status !== "used"){
-      unknown.push(item);
-      return;
-    }
-
     const detachments = extractComparisonUsageDetachments(item);
     if(!detachments.length){
       unknown.push(item);
