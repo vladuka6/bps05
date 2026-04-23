@@ -4587,7 +4587,9 @@ function buildComparisonMetricStats(items, keys){
   const stats = {};
 
   (keys || []).forEach(key=>{
-    const values = items.map(item=>Number(item?.[key])).filter(Number.isFinite);
+    const values = items
+      .map(item=>Number(item?.[key]))
+      .filter(value=>Number.isFinite(value) && value > 0);
     if(!values.length){
       stats[key] = null;
       return;
@@ -4606,11 +4608,19 @@ function normalizeComparisonMetric(value, stat, inverse=false){
 
   const num = Number(value);
   if(!Number.isFinite(num) || !stat) return null;
+  if(num <= 0) return null;
 
-  if(stat.max === stat.min) return 1;
+  if(stat.max <= stat.min) return null;
 
   const raw = (num - stat.min) / (stat.max - stat.min);
   return inverse ? (1 - raw) : raw;
+
+}
+
+function sanitizeComparisonMetricNumber(value){
+
+  const num = Number(value);
+  return Number.isFinite(num) && num > 0 ? num : null;
 
 }
 
@@ -4700,9 +4710,7 @@ function buildComparisonScoreBreakdown(item, metricStats, profile){
         const valueText = fmtNum(Number(rawValue));
         const minText = fmtNum(stat.min);
         const maxText = fmtNum(stat.max);
-        if(stat.max === stat.min){
-          formulaText = `у всіх однакове значення ${valueText}, тому критерій дає 100 балів`;
-        } else if(metric.inverse){
+        if(metric.inverse){
           formulaText = `(${maxText} - ${valueText}) / (${maxText} - ${minText}) × 100`;
         } else {
           formulaText = `(${valueText} - ${minText}) / (${maxText} - ${minText}) × 100`;
@@ -4975,17 +4983,17 @@ function buildComparisonAnalytics(rows, title=""){
       name,
       vendor,
       model,
-      systemPrice: columns.systemPrice >= 0 ? parseAnalyticsNumber(row?.[columns.systemPrice]) : null,
-      unitPrice: columns.unitPrice >= 0 ? parseAnalyticsNumber(row?.[columns.unitPrice]) : null,
+      systemPrice: columns.systemPrice >= 0 ? sanitizeComparisonMetricNumber(parseAnalyticsNumber(row?.[columns.systemPrice])) : null,
+      unitPrice: columns.unitPrice >= 0 ? sanitizeComparisonMetricNumber(parseAnalyticsNumber(row?.[columns.unitPrice])) : null,
       quantity: columns.quantity >= 0 ? parseAnalyticsNumber(row?.[columns.quantity]) : null,
-      payload: columns.payload >= 0 ? parseAnalyticsNumber(row?.[columns.payload]) : null,
-      speed: columns.speed >= 0 ? parseAnalyticsNumber(row?.[columns.speed]) : null,
-      radius: columns.radius >= 0 ? parseAnalyticsNumber(row?.[columns.radius]) : null,
-      distance: columns.distance >= 0 ? parseAnalyticsNumber(row?.[columns.distance]) : null,
-      flightTime: columns.flightTime >= 0 ? parseAnalyticsNumber(row?.[columns.flightTime]) : null,
-      height: columns.height >= 0 ? parseAnalyticsNumber(row?.[columns.height]) : null,
-      wind: columns.wind >= 0 ? parseAnalyticsNumber(row?.[columns.wind]) : null,
-      deployTime: columns.deployTime >= 0 ? parseAnalyticsNumber(row?.[columns.deployTime]) : null,
+      payload: columns.payload >= 0 ? sanitizeComparisonMetricNumber(parseAnalyticsNumber(row?.[columns.payload])) : null,
+      speed: columns.speed >= 0 ? sanitizeComparisonMetricNumber(parseAnalyticsNumber(row?.[columns.speed])) : null,
+      radius: columns.radius >= 0 ? sanitizeComparisonMetricNumber(parseAnalyticsNumber(row?.[columns.radius])) : null,
+      distance: columns.distance >= 0 ? sanitizeComparisonMetricNumber(parseAnalyticsNumber(row?.[columns.distance])) : null,
+      flightTime: columns.flightTime >= 0 ? sanitizeComparisonMetricNumber(parseAnalyticsNumber(row?.[columns.flightTime])) : null,
+      height: columns.height >= 0 ? sanitizeComparisonMetricNumber(parseAnalyticsNumber(row?.[columns.height])) : null,
+      wind: columns.wind >= 0 ? sanitizeComparisonMetricNumber(parseAnalyticsNumber(row?.[columns.wind])) : null,
+      deployTime: columns.deployTime >= 0 ? sanitizeComparisonMetricNumber(parseAnalyticsNumber(row?.[columns.deployTime])) : null,
       cameraType: columns.cameraType >= 0 ? String(row?.[columns.cameraType] || "").trim() : "",
       codifiedRaw: columns.codified >= 0 ? String(row?.[columns.codified] || "").trim().toLowerCase() : "",
       notes: notesColumn >= 0 ? String(row?.[notesColumn] || "").trim() : "",
@@ -5679,7 +5687,7 @@ function buildComparisonItemDetailHtml(item){
               <div class="comparison-score-row">
                 <div>
                   <b>${htmlesc(row.label)}</b>
-                  <span>${htmlesc(valueText)}${rangeText ? ` · діапазон у таблиці: ${htmlesc(rangeText)}` : ""}</span>
+                  <span>цей БпЛА — ${htmlesc(valueText)}${rangeText ? ` · діапазон у таблиці: ${htmlesc(rangeText)}` : ""}</span>
                   ${row.formulaText ? `<span class="comparison-score-formula-line">${htmlesc(row.formulaText)} = ${fmtNum(row.normalized * 100)} балів</span>` : ""}
                 </div>
                 <div class="mono">${fmtNum(row.normalized * 100)}/100 × ${fmtNum(row.normalizedWeight * 100)}% = ${fmtNum(row.normalizedContribution * 100)}</div>
