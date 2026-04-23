@@ -14788,6 +14788,87 @@ function openSyncLogin(){
 
 }
 
+async function forceReloadStateFromCloud(){
+
+  if(!SYNC_URL){
+    showToast("Хмарна синхронізація вимкнена.", "warn");
+    return;
+  }
+
+  try{
+    const res = await fetch(`${SYNC_URL}?recover=${Date.now()}`, {
+      method: "GET",
+      credentials: "include",
+      cache: "no-store",
+      headers: {"Cache-Control":"no-cache", "Pragma":"no-cache"}
+    });
+
+    if(!res.ok){
+      showToast(`Не вдалося завантажити хмару: HTTP ${res.status}`, "warn");
+      return;
+    }
+
+    const data = await res.json();
+    if(!data || !data.state){
+      showToast("Хмара повернула порожні дані.", "warn");
+      return;
+    }
+
+    const localUserId = STATE?.session?.userId || null;
+    const remote = migrateState(data.state) || data.state;
+    remote.session = {userId: localUserId};
+
+    STATE = remote;
+    saveState(STATE, {skipSyncStamp:true});
+
+    markSyncDirty(false);
+    _syncPending = false;
+    _syncReady = true;
+    _syncInitDone = true;
+    _syncLastError = null;
+    _lastPullAt = nowIsoKyiv();
+
+    if(_syncTimer) clearTimeout(_syncTimer);
+    if(_syncRetryTimer) clearTimeout(_syncRetryTimer);
+    _syncTimer = null;
+    _syncRetryTimer = null;
+
+    hideSheet();
+    render();
+    showToast("Дані відновлено з хмари.", "ok");
+    ensureDbTasksCache(true);
+  } catch(err){
+    console.warn("force cloud reload failed", err);
+    showToast(`Не вдалося відновити з хмари: ${err?.message || "помилка"}`, "warn");
+  }
+
+}
+
+function openSyncRecovery(){
+
+  const syncState = syncUiState();
+  const dirtyNote = (_syncDirty || _syncPending)
+    ? `<div class="hint warn">На цьому компʼютері є локальний стан у режимі очікування. Якщо натиснути “Відновити з хмари”, локальні незасинхронені зміни на цьому компʼютері буде відкинуто, а дані підтягнуться з сервера.</div>`
+    : `<div class="hint">Можна примусово підтягнути актуальні дані з хмари, якщо індикатор завис.</div>`;
+
+  showSheet("Синхронізація", `
+    <div class="item" style="cursor:default;">
+      <div class="row">
+        <div>
+          <div class="name">Поточний стан: ${htmlesc(syncState.label)}</div>
+          <div class="hint">${htmlesc(syncState.title || "")}</div>
+        </div>
+      </div>
+    </div>
+    ${dirtyNote}
+    <div class="sep"></div>
+    <button class="btn primary" data-action="forceReloadStateFromCloud">Відновити з хмари</button>
+    <button class="btn ghost" data-action="pullSync">Перевірити ще раз</button>
+    <button class="btn ghost" data-action="hideSheet">Закрити</button>
+  `);
+
+}
+
 
 
 function appShell({title, subtitle, bodyHtml, showFab, fabAction, tabs}){
@@ -14894,7 +14975,7 @@ function appShell({title, subtitle, bodyHtml, showFab, fabAction, tabs}){
 
           <div class="top-actions">
 
-            <div class="header-sync" title="${htmlesc(syncTitle)}">
+            <div class="header-sync" title="${htmlesc(syncTitle)}" data-action="openSyncRecovery">
 
               ${syncDot}
 
@@ -27037,6 +27118,9 @@ const ACTIONS = {
   goProfile,
 
   openSyncLogin,
+  openSyncRecovery,
+  forceReloadStateFromCloud,
+  pullSync,
 
   hideSheet,
   exportCurrentRenderedModalPng,
