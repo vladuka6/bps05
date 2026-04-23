@@ -2178,6 +2178,20 @@
         box-shadow:0 6px 18px rgba(95,142,245,.08);
         transform:translateY(-1px);
       }
+    .comparison-card-btn.is-not-used,
+    .comparison-not-used-card{
+        border-color:rgba(255,92,122,.5) !important;
+        background:linear-gradient(180deg, rgba(255,246,248,.98), rgba(255,239,243,.92)) !important;
+      }
+    .comparison-card-btn.is-not-used .comparison-compact-rank,
+    .comparison-not-used-card .comparison-compact-rank{
+        background:rgba(255,92,122,.12);
+        color:#c22e4b;
+      }
+    .comparison-card-btn.is-not-used .comparison-compact-title,
+    .comparison-not-used-card .comparison-compact-title{
+        color:#9f233b;
+      }
     .comparison-card-btn:focus-visible{
         outline:2px solid rgba(95,142,245,.45);
         outline-offset:2px;
@@ -5596,6 +5610,15 @@
     body.theme-dark .comparison-card-btn:hover{
       border-color:rgba(95,142,245,.34);
       box-shadow:none;
+    }
+    body.theme-dark .comparison-card-btn.is-not-used,
+    body.theme-dark .comparison-not-used-card{
+      border-color:rgba(255,92,122,.38) !important;
+      background:linear-gradient(180deg, rgba(66,28,39,.9), rgba(45,22,31,.82)) !important;
+    }
+    body.theme-dark .comparison-card-btn.is-not-used .comparison-compact-title,
+    body.theme-dark .comparison-not-used-card .comparison-compact-title{
+      color:#ffb3c0;
     }
     body.theme-dark .comparison-detail-row{
       border-color:rgba(35,42,58,.78);

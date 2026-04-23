@@ -4455,6 +4455,123 @@ function formatComparisonUsageMeta(item){
 
 }
 
+function extractComparisonUsageDetachments(item){
+
+  const usage = item?.usage || parseComparisonUsageInfo(item?.notes || "");
+  if(usage.status !== "used") return [];
+
+  const text = String(usage.usedBy || usage.note || "").trim();
+  if(!text) return [];
+
+  const labels = new Set();
+  const source = text.replace(/\s+/g, " ");
+  source.matchAll(/((?:\d{1,2}\s*,\s*)*\d{1,2})\s*(ПРИКЗ|прикз|ПрикЗ|ЗМО|змо|ООДК|оодк)/gi).forEach(match=>{
+    const suffix = String(match[2] || "").replace(/прикз|ПрикЗ/i, "ПРИКЗ").replace(/змо/i, "ЗМО").replace(/оодк/i, "ООДК");
+    match[1].split(",").map(part=>part.trim()).filter(Boolean).forEach(num=>{
+      labels.add(`${num} ${suffix}`);
+    });
+  });
+
+  source.match(/\b\d{1,2}\s*(?:ПРИКЗ|прикз|ПрикЗ|ЗМО|змо|ООДК|оодк)\b/g)?.forEach(match=>{
+    labels.add(match.replace(/\s+/g, " ").replace(/прикз|ПрикЗ/i, "ПРИКЗ").replace(/змо/i, "ЗМО").replace(/оодк/i, "ООДК"));
+  });
+
+  if(!labels.size){
+    source
+      .split(/[;；]/)
+      .map(part=>part.trim())
+      .filter(Boolean)
+      .forEach(part=>labels.add(part));
+  }
+
+  return [...labels];
+
+}
+
+function buildComparisonUsageByDetachmentsHtml(items=[]){
+
+  const usedMap = new Map();
+  const notUsed = [];
+  const unknown = [];
+
+  (items || []).forEach(item=>{
+    const usage = item?.usage || parseComparisonUsageInfo(item?.notes || "");
+    if(usage.status === "not_used"){
+      notUsed.push(item);
+      return;
+    }
+    if(usage.status !== "used"){
+      unknown.push(item);
+      return;
+    }
+
+    const detachments = extractComparisonUsageDetachments(item);
+    if(!detachments.length){
+      unknown.push(item);
+      return;
+    }
+
+    detachments.forEach(label=>{
+      if(!usedMap.has(label)) usedMap.set(label, []);
+      usedMap.get(label).push(item);
+    });
+  });
+
+  const usedRows = [...usedMap.entries()]
+    .map(([label, rows])=>({label, rows}))
+    .sort((a,b)=>b.rows.length - a.rows.length || a.label.localeCompare(b.label, "uk"));
+
+  const renderNames = (rows, limit=6)=>rows
+    .slice(0, limit)
+    .map(item=>item.name)
+    .join(" · ") + (rows.length > limit ? ` · +${rows.length - limit}` : "");
+
+  return `
+    <div class="item analytics-block comparison-compact-section comparison-usage-section">
+      <div class="row">
+        <div class="name">Засоби по загонах у цій категорії</div>
+        <span class="badge b-blue mono">${fmtNum(usedRows.length)}</span>
+      </div>
+      <div class="comparison-compact-grid">
+        ${usedRows.length
+          ? usedRows.slice(0, 8).map((row, index)=>`
+              <div class="comparison-compact-card delta-nrk-card">
+                <div class="comparison-compact-rank mono">${index + 1}</div>
+                <div class="comparison-compact-main">
+                  <div class="comparison-compact-title">${htmlesc(row.label)}</div>
+                  <div class="comparison-compact-meta">${htmlesc(renderNames(row.rows))}</div>
+                </div>
+                <div class="badge b-ok mono">${fmtNum(row.rows.length)}</div>
+              </div>
+            `).join("")
+          : `<div class="hint">У примітках немає зрозумілої привʼязки до загонів.</div>`
+        }
+        ${notUsed.length ? `
+          <div class="comparison-compact-card delta-nrk-card comparison-not-used-card">
+            <div class="comparison-compact-rank mono">!</div>
+            <div class="comparison-compact-main">
+              <div class="comparison-compact-title">Не використовуються / треба вивчити</div>
+              <div class="comparison-compact-meta">${htmlesc(renderNames(notUsed, 8))}</div>
+            </div>
+            <div class="badge b-danger mono">${fmtNum(notUsed.length)}</div>
+          </div>
+        ` : ""}
+        ${unknown.length ? `
+          <div class="comparison-compact-card delta-nrk-card">
+            <div class="comparison-compact-rank mono">?</div>
+            <div class="comparison-compact-main">
+              <div class="comparison-compact-title">Без даних по загонах</div>
+              <div class="comparison-compact-meta">${htmlesc(renderNames(unknown, 8))}</div>
+            </div>
+            <div class="badge b-warn mono">${fmtNum(unknown.length)}</div>
+          </div>
+        ` : ""}
+      </div>
+    </div>
+  `;
+
+}
+
 function pickTopComparisonRows(items, key, limit=5){
 
   return items
@@ -5005,14 +5122,15 @@ function renderComparisonTopList(title, rows, metricKey, metricLabel, unit=""){
         ${rows.length
           ? rows.map((item, index)=>{
               const detailKey = registerRenderedTableModal(`Модель: ${item.name}`, buildComparisonItemDetailHtml(item));
+              const isNotUsed = item?.usage?.status === "not_used";
               return `
-              <button type="button" class="comparison-compact-card comparison-card-btn" data-action="openRenderedTableModal" data-arg1="${detailKey}">
+              <button type="button" class="comparison-compact-card comparison-card-btn ${isNotUsed ? "is-not-used" : ""}" data-action="openRenderedTableModal" data-arg1="${detailKey}">
                 <div class="comparison-compact-rank mono">${index + 1}</div>
                 <div class="comparison-compact-main">
                   <div class="comparison-compact-title">${htmlesc(item.name)}</div>
                   <div class="comparison-compact-meta">${metricLabel}: ${fmtNum(item[metricKey])}${unit}${item.vendor ? ` · ${htmlesc(item.vendor)}` : ""}${item.notes ? ` · ${htmlesc(formatComparisonUsageMeta(item))}` : ""}</div>
                 </div>
-                <div class="badge b-blue mono">${fmtNum(item[metricKey])}${unit}</div>
+                <div class="badge ${isNotUsed ? "b-danger" : "b-blue"} mono">${fmtNum(item[metricKey])}${unit}</div>
               </button>
             `;
             }).join("")
@@ -5038,14 +5156,15 @@ function renderComparisonTopListAsc(title, rows, metricKey, metricLabel, unit=""
         ${rows.length
           ? rows.map((item, index)=>{
               const detailKey = registerRenderedTableModal(`Модель: ${item.name}`, buildComparisonItemDetailHtml(item));
+              const isNotUsed = item?.usage?.status === "not_used";
               return `
-              <button type="button" class="comparison-compact-card comparison-card-btn" data-action="openRenderedTableModal" data-arg1="${detailKey}">
+              <button type="button" class="comparison-compact-card comparison-card-btn ${isNotUsed ? "is-not-used" : ""}" data-action="openRenderedTableModal" data-arg1="${detailKey}">
                 <div class="comparison-compact-rank mono">${index + 1}</div>
                 <div class="comparison-compact-main">
                   <div class="comparison-compact-title">${htmlesc(item.name)}</div>
                   <div class="comparison-compact-meta">${metricLabel}: ${formatValue(item)}${item.vendor ? ` · ${htmlesc(item.vendor)}` : ""}${item.notes ? ` · ${htmlesc(formatComparisonUsageMeta(item))}` : ""}</div>
                 </div>
-                <div class="badge b-ok mono">${formatValue(item)}</div>
+                <div class="badge ${isNotUsed ? "b-danger" : "b-ok"} mono">${formatValue(item)}</div>
               </button>
             `;
             }).join("")
@@ -5782,15 +5901,7 @@ function buildComparisonAnalyticsModalHtml(rows, title=""){
       </div>
     `;
 
-    const technicalLeaders = renderComparisonLeaderCards("Лідери за технічними критеріями", [
-    maxDistance ? {label:"Дальність", item:maxDistance, value:maxDistance.distance, metricLabel:"Дальність", unit:` ${units?.distance || "км"}`} : null,
-    maxPayload ? {label:"Навантаження", item:maxPayload, value:maxPayload.payload, metricLabel:"Навантаження", unit:` ${units?.payload || "кг"}`} : null,
-    maxSpeed ? {label:"Швидкість", item:maxSpeed, value:maxSpeed.speed, metricLabel:"Швидкість", unit:` ${units?.speed || "км/год"}`} : null,
-    topFlightTime[0] ? {label:"Час польоту", item:topFlightTime[0], value:topFlightTime[0].flightTime, metricLabel:"Час польоту", unit:` ${units?.flightTime || "хв"}`} : null,
-    maxRadius ? {label:"Радіус", item:maxRadius, value:maxRadius.radius, metricLabel:"Радіус", unit:` ${units?.radius || "км"}`} : null,
-    maxHeight ? {label:"Висота", item:maxHeight, value:maxHeight.height, metricLabel:"Висота", unit:` ${units?.height || "м"}`} : null,
-    maxWind ? {label:"Стійкість до вітру", item:maxWind, value:maxWind.wind, metricLabel:"Вітер", unit:` ${units?.wind || "м/с"}`} : null,
-    ]);
+    const usageByDetachments = buildComparisonUsageByDetachmentsHtml(items);
   const switchTopBlock = renderComparisonSwitchTopBlock("Рейтинг по критерію", {
     overall: overallTop,
     price: cheapestSystems,
@@ -5807,7 +5918,7 @@ function buildComparisonAnalyticsModalHtml(rows, title=""){
       <div class="staffing-analytics-modal comparison-analytics-modal">
         ${summaryGrid}
         ${buildComparisonAutoSummaryHtml(analytics)}
-        ${technicalLeaders}
+        ${usageByDetachments}
         ${switchTopBlock}
       </div>
     `;
