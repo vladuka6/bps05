@@ -2571,6 +2571,9 @@
         width:100%;
         accent-color:#5f8ef5;
       }
+    .comparison-weight-total{
+        margin:8px 0 10px;
+      }
     .comparison-profile-help-grid{
         display:grid;
         grid-template-columns:repeat(3, minmax(0, 1fr));
@@ -2623,6 +2626,12 @@
       }
     .comparison-score-row span{
         color:var(--muted);
+      }
+    .comparison-score-formula-line{
+        display:block;
+        margin-top:3px;
+        font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+        color:#2f5ea8 !important;
       }
     .comparison-switch-panel.is-active{
         display:block;
@@ -5577,6 +5586,9 @@
     body.theme-dark .comparison-score-formula{
       border-color:rgba(95,142,245,.28);
       background:rgba(95,142,245,.1);
+    }
+    body.theme-dark .comparison-score-formula-line{
+      color:#9bbcff !important;
     }
     body.theme-dark .comparison-weight-bar{
       background:rgba(255,255,255,.08);

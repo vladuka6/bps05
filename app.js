@@ -4532,11 +4532,30 @@ function buildComparisonScoreBreakdown(item, metricStats, profile){
 
     let score = null;
     let rawValue = item?.[metric.key];
+    const stat = metricStats?.[metric.key] || null;
+    let formulaText = "";
+    let minValue = null;
+    let maxValue = null;
     if(metric.kind === "flag"){
       score = item?.[metric.key] ? 1 : 0;
       rawValue = item?.[metric.key] ? "так" : "ні";
+      formulaText = rawValue === "так" ? "наявно = 100 балів" : "немає = 0 балів";
     } else {
-      score = normalizeComparisonMetric(item?.[metric.key], metricStats?.[metric.key], !!metric.inverse);
+      score = normalizeComparisonMetric(item?.[metric.key], stat, !!metric.inverse);
+      if(stat){
+        minValue = stat.min;
+        maxValue = stat.max;
+        const valueText = fmtNum(Number(rawValue));
+        const minText = fmtNum(stat.min);
+        const maxText = fmtNum(stat.max);
+        if(stat.max === stat.min){
+          formulaText = `у всіх однакове значення ${valueText}, тому критерій дає 100 балів`;
+        } else if(metric.inverse){
+          formulaText = `(${maxText} - ${valueText}) / (${maxText} - ${minText}) × 100`;
+        } else {
+          formulaText = `(${valueText} - ${minText}) / (${maxText} - ${minText}) × 100`;
+        }
+      }
     }
 
     if(score == null) return;
@@ -4552,7 +4571,15 @@ function buildComparisonScoreBreakdown(item, metricStats, profile){
       normalized: score,
       weight,
       contribution,
+      minValue,
+      maxValue,
+      formulaText,
     });
+  });
+
+  rows.forEach(row=>{
+    row.normalizedWeight = totalWeight > 0 ? row.weight / totalWeight : 0;
+    row.normalizedContribution = row.normalized * row.normalizedWeight;
   });
 
   return {
@@ -5060,7 +5087,7 @@ function buildComparisonOverallRankingHelpHtml(profileIds=["universal"]){
         <div class="comparison-weight-bar">
           <div class="comparison-weight-fill" data-weight-fill="${groupId}:${htmlesc(item.key)}" style="width:${Math.max(4, Math.min(percent, 100))}%"></div>
         </div>
-        <div class="comparison-weight-note">${item.inverse ? "Менше = краще" : "Більше = краще"} · приклад: ${Math.round(example * 100)} зі 100</div>
+        <div class="comparison-weight-note">${item.inverse ? "Менше = краще" : "Більше = краще"} · приклад: ${Math.round(example * 100)} балів зі 100</div>
       </div>
     `;
   }).join("");
@@ -5083,7 +5110,7 @@ function buildComparisonOverallRankingHelpHtml(profileIds=["universal"]){
       <div class="comparison-help-block">
         <div class="comparison-help-title">Бальна система рейтингу</div>
         <div class="comparison-help-text">
-          Для кожного підвиду БпЛА використовується свій профіль. Кожна характеристика переводиться у шкалу <b>0–100</b>, множиться на свою вагу, після чого сума нормалізується до загального рейтингу.
+          Для кожного підвиду БпЛА використовується свій профіль. Спочатку кожна характеристика переводиться у <b>бал 0–100</b> відносно інших БпЛА в цій таблиці, потім цей бал множиться на вагу критерію. Сума ваг завжди приводиться до <b>100%</b>.
         </div>
       </div>
       <div class="comparison-help-block comparison-help-primary">
@@ -5092,13 +5119,17 @@ function buildComparisonOverallRankingHelpHtml(profileIds=["universal"]){
       </div>
       <div class="comparison-help-block" data-weight-help="${groupId}">
         <div class="comparison-help-title">Ваги критеріїв: ${htmlesc(primaryProfile.shortLabel || primaryProfile.label)}</div>
-        <div class="comparison-help-text">За замовчуванням виставлені робочі ваги. Можеш посунути повзунки нижче, щоб побачити, як зміниться приклад розрахунку.</div>
+        <div class="comparison-help-text">Повзунки задають відносну важливість. Якщо один критерій збільшити, система автоматично перерахує відсотки всіх критеріїв так, щоб разом було 100%.</div>
+        <div class="comparison-score-formula comparison-weight-total">
+          <div>Сума ваг після нормалізації</div>
+          <b class="mono" data-weight-total="${groupId}">100%</b>
+        </div>
         <div class="comparison-weight-grid">${weightRows}</div>
       </div>
       <div class="comparison-help-block">
         <div class="comparison-help-title">Приклад розрахунку</div>
         <div class="comparison-help-text">
-          Формула: <b>рейтинг = сума(бал характеристики × вага) / сума ваг</b>. Наприклад: ${htmlesc(exampleRows)}.
+          Формула: <b>рейтинг = сума(бал характеристики × нормалізована вага)</b>. Наприклад: ${htmlesc(exampleRows)}. Якщо вага після руху повзунка стала 24%, то 100 балів за характеристику дають 24 бали у фінальний рейтинг.
         </div>
         <div class="comparison-score-formula">
           <div>Рейтинг прикладу</div>
@@ -5480,7 +5511,7 @@ function buildComparisonItemDetailHtml(item){
     <div class="comparison-detail-section comparison-score-breakdown">
       <div class="comparison-detail-section-title">Розрахунок рейтингу: ${htmlesc(primaryProfileConfig.shortLabel || primaryProfileConfig.label || "профіль")}</div>
       <div class="comparison-score-formula">
-        <div>Формула: сума(бал характеристики × вага) / сума ваг</div>
+        <div>Формула: сума(бал характеристики × нормалізована вага)</div>
         <b class="mono">${fmtNum(scoreBreakdown.score)} / 100</b>
       </div>
       <div class="comparison-score-rows">
@@ -5489,9 +5520,10 @@ function buildComparisonItemDetailHtml(item){
               <div class="comparison-score-row">
                 <div>
                   <b>${htmlesc(row.label)}</b>
-                  <span>${htmlesc(row.direction)} · значення: ${htmlesc(String(row.rawValue ?? "—"))}</span>
+                  <span>${htmlesc(row.direction)} · значення цього БпЛА: ${htmlesc(String(row.rawValue ?? "—"))}${row.minValue != null && row.maxValue != null ? ` · мін/макс у таблиці: ${htmlesc(fmtNum(row.minValue))}/${htmlesc(fmtNum(row.maxValue))}` : ""}</span>
+                  ${row.formulaText ? `<span class="comparison-score-formula-line">${htmlesc(row.formulaText)} = ${fmtNum(row.normalized * 100)} балів</span>` : ""}
                 </div>
-                <div class="mono">${fmtNum(row.normalized * 100)} × ${fmtNum(row.weight * 100)}% = ${fmtNum(row.contribution * 100)}</div>
+                <div class="mono">${fmtNum(row.normalized * 100)}/100 × ${fmtNum(row.normalizedWeight * 100)}% = ${fmtNum(row.normalizedContribution * 100)}</div>
               </div>
             `).join("")
           : `<div class="hint">Для розрахунку не вистачає числових характеристик.</div>`
@@ -10836,23 +10868,27 @@ function updateComparisonWeightPreview(){
   const groupId = input?.getAttribute("data-weight-group");
   if(!groupId) return;
 
+  const inputs = [...document.querySelectorAll(`[data-weight-group="${CSS.escape(groupId)}"]`)];
+  const rawTotal = inputs.reduce((sum, el)=>sum + Math.max(0, Number(el.value || 0)), 0);
   let weightedSum = 0;
-  let totalWeight = 0;
-  document.querySelectorAll(`[data-weight-group="${CSS.escape(groupId)}"]`).forEach(el=>{
+  inputs.forEach(el=>{
     const key = el.getAttribute("data-weight-key") || "";
-    const weightPercent = Number(el.value || 0);
+    const rawWeight = Math.max(0, Number(el.value || 0));
+    const weightPercent = rawTotal > 0 ? (rawWeight / rawTotal) * 100 : 0;
     const exampleScore = Number(el.getAttribute("data-example-score") || 0);
     const valueEl = document.querySelector(`[data-weight-value="${CSS.escape(`${groupId}:${key}`)}"]`);
     const fillEl = document.querySelector(`[data-weight-fill="${CSS.escape(`${groupId}:${key}`)}"]`);
-    if(valueEl) valueEl.textContent = String(Math.round(weightPercent));
+    if(valueEl) valueEl.textContent = fmtNum(weightPercent);
     if(fillEl) fillEl.style.width = `${Math.max(4, Math.min(weightPercent, 100))}%`;
-    weightedSum += exampleScore * weightPercent;
-    totalWeight += weightPercent;
+    weightedSum += exampleScore * (weightPercent / 100);
   });
+
+  const totalEl = document.querySelector(`[data-weight-total="${CSS.escape(groupId)}"]`);
+  if(totalEl) totalEl.textContent = rawTotal > 0 ? "100%" : "0%";
 
   const resultEl = document.querySelector(`[data-weight-result="${CSS.escape(groupId)}"]`);
   if(resultEl){
-    const score = totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 0;
+    const score = rawTotal > 0 ? Math.round(weightedSum * 100) : 0;
     resultEl.textContent = `${fmtNum(score)} / 100`;
   }
 
