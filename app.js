@@ -4413,7 +4413,7 @@ function parseComparisonUsageInfo(notes=""){
   const normalized = normalizeAnalyticsHeader(raw);
   const notUsed = /(не використ|не застосов|відсутн.*використ|в розробц)/.test(normalized);
   const usedMatch = raw.match(/(?:Використовує(?:ться)?|Використовується|Використовують|Застосовує(?:ться)?|Застосовують)\s*:?\s*-?\s*(.+)$/i);
-  const detachmentMatch = raw.match(/((?:\d{1,2}\s*,\s*)*\d{1,2})\s*(ПРИКЗ|прикз|ПрикЗ|ЗМО|змо|ООДК|оодк)/i);
+  const detachmentMatch = raw.match(/((?:\d{1,3}\s*,\s*)*\d{1,3})\s*(ПРИКЗ|прикз|ПрикЗ|МППРКЗ|мппркз|ЗМО|змо|ООДК|оодк|НАДПСУ|надпсу|ГЦПОС|гцпос)/i);
   const usedBy = usedMatch ? usedMatch[1].trim() : (detachmentMatch ? raw : "");
 
   if(notUsed){
@@ -4466,15 +4466,31 @@ function extractComparisonUsageDetachments(item){
 
   const labels = new Set();
   const source = text.replace(/\s+/g, " ");
-  source.matchAll(/((?:\d{1,2}\s*,\s*)*\d{1,2})\s*(ПРИКЗ|прикз|ПрикЗ|ЗМО|змо|ООДК|оодк)/gi).forEach(match=>{
-    const suffix = String(match[2] || "").replace(/прикз|ПрикЗ/i, "ПРИКЗ").replace(/змо/i, "ЗМО").replace(/оодк/i, "ООДК");
+  const normalizeSuffix = value=>String(value || "")
+    .replace(/прикз|ПрикЗ/i, "ПРИКЗ")
+    .replace(/мппркз/i, "МППРКЗ")
+    .replace(/змо/i, "ЗМО")
+    .replace(/оодк/i, "ООДК")
+    .replace(/надпсу/i, "НАДПСУ")
+    .replace(/гцпос/i, "ГЦПОС");
+
+  source.matchAll(/((?:\d{1,3}\s*,\s*)*\d{1,3})\s*(ПРИКЗ|прикз|ПрикЗ|МППРКЗ|мппркз|ЗМО|змо|ООДК|оодк|НАДПСУ|надпсу|ГЦПОС|гцпос)/gi).forEach(match=>{
+    const suffix = normalizeSuffix(match[2]);
     match[1].split(",").map(part=>part.trim()).filter(Boolean).forEach(num=>{
       labels.add(`${num} ${suffix}`);
     });
   });
 
-  source.match(/\b\d{1,2}\s*(?:ПРИКЗ|прикз|ПрикЗ|ЗМО|змо|ООДК|оодк)\b/g)?.forEach(match=>{
-    labels.add(match.replace(/\s+/g, " ").replace(/прикз|ПрикЗ/i, "ПРИКЗ").replace(/змо/i, "ЗМО").replace(/оодк/i, "ООДК"));
+  source.match(/\b\d{1,3}\s*(?:ПРИКЗ|прикз|ПрикЗ|МППРКЗ|мппркз|ЗМО|змо|ООДК|оодк|НАДПСУ|надпсу|ГЦПОС|гцпос)\b/g)?.forEach(match=>{
+    const cleaned = match.replace(/\s+/g, " ");
+    const parts = cleaned.split(" ");
+    if(parts.length >= 2){
+      labels.add(`${parts[0]} ${normalizeSuffix(parts.slice(1).join(" "))}`);
+    }
+  });
+
+  source.match(/\b(?:НАДПСУ|надпсу|ГЦПОС|гцпос|ООДК|оодк)\b/g)?.forEach(match=>{
+    labels.add(normalizeSuffix(match));
   });
 
   if(!labels.size && usage.status === "used"){
