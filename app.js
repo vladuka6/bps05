@@ -4519,6 +4519,41 @@ function calculateComparisonProfileScore(item, metricStats, weights){
 
 }
 
+function getComparisonMetricUnit(key, units={}){
+
+  const map = {
+    systemPrice: units.price || "грн",
+    unitPrice: units.price || "грн",
+    payload: units.payload || "кг",
+    distance: units.distance || "км",
+    flightTime: units.flightTime || "хв",
+    speed: units.speed || "км/год",
+    radius: units.radius || "км",
+    wind: units.wind || "м/с",
+    deployTime: units.deployTime || "хв",
+    height: units.height || "м",
+  };
+
+  return map[key] || "";
+
+}
+
+function formatComparisonBreakdownValue(value, key, units={}){
+
+  if(value == null || value === "") return "—";
+  if(key === "systemPrice" || key === "unitPrice"){
+    const num = Number(value);
+    return Number.isFinite(num) ? fmtCompactMoneyUa(num) : String(value);
+  }
+
+  const num = Number(value);
+  if(!Number.isFinite(num)) return String(value);
+
+  const unit = getComparisonMetricUnit(key, units);
+  return `${fmtNum(num)}${unit ? ` ${unit}` : ""}`;
+
+}
+
 function buildComparisonScoreBreakdown(item, metricStats, profile){
 
   const rows = [];
@@ -5516,16 +5551,22 @@ function buildComparisonItemDetailHtml(item){
       </div>
       <div class="comparison-score-rows">
         ${scoreBreakdown.rows.length
-          ? scoreBreakdown.rows.map(row=>`
+          ? scoreBreakdown.rows.map(row=>{
+            const valueText = formatComparisonBreakdownValue(row.rawValue, row.key, units);
+            const rangeText = row.minValue != null && row.maxValue != null
+              ? `${formatComparisonBreakdownValue(row.minValue, row.key, units)}–${formatComparisonBreakdownValue(row.maxValue, row.key, units)}`
+              : "";
+            return `
               <div class="comparison-score-row">
                 <div>
                   <b>${htmlesc(row.label)}</b>
-                  <span>${htmlesc(row.direction)} · значення цього БпЛА: ${htmlesc(String(row.rawValue ?? "—"))}${row.minValue != null && row.maxValue != null ? ` · мін/макс у таблиці: ${htmlesc(fmtNum(row.minValue))}/${htmlesc(fmtNum(row.maxValue))}` : ""}</span>
+                  <span>${htmlesc(valueText)}${rangeText ? ` · діапазон у таблиці: ${htmlesc(rangeText)}` : ""}</span>
                   ${row.formulaText ? `<span class="comparison-score-formula-line">${htmlesc(row.formulaText)} = ${fmtNum(row.normalized * 100)} балів</span>` : ""}
                 </div>
                 <div class="mono">${fmtNum(row.normalized * 100)}/100 × ${fmtNum(row.normalizedWeight * 100)}% = ${fmtNum(row.normalizedContribution * 100)}</div>
               </div>
-            `).join("")
+            `;
+          }).join("")
           : `<div class="hint">Для розрахунку не вистачає числових характеристик.</div>`
         }
       </div>
