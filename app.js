@@ -4153,7 +4153,8 @@ function detectComparisonSubtype(title="", headerRow=[]){
 
   if(COMPARISON_SUBTYPE_KEYWORDS.logistics.test(source)) return "logistics_multirotor";
   if(COMPARISON_SUBTYPE_KEYWORDS.interceptor.test(source)) return "interceptor";
-  if(COMPARISON_SUBTYPE_KEYWORDS.fpv.test(source)) return "fpv";
+  if(COMPARISON_SUBTYPE_KEYWORDS.fpv.test(source) && /(оптоволокон|ов\b)/.test(source)) return "fpv_fiber";
+  if(COMPARISON_SUBTYPE_KEYWORDS.fpv.test(source)) return "fpv_kamikaze";
   if(COMPARISON_SUBTYPE_KEYWORDS.fixedWing.test(source) && COMPARISON_SUBTYPE_KEYWORDS.recon.test(source)) return "fixed_wing_recon";
   if(COMPARISON_SUBTYPE_KEYWORDS.fixedWing.test(source) && COMPARISON_SUBTYPE_KEYWORDS.strike.test(source)) return "fixed_wing_strike";
   if(COMPARISON_SUBTYPE_KEYWORDS.fixedWing.test(source)) return "fixed_wing";
@@ -4398,9 +4399,74 @@ const COMPARISON_PROFILE_CONFIG = {
       {kind:"flag", key:"codified", weight:0.01},
     ],
   },
+  fpv_kamikaze: {
+    label: "FPV-камікадзе",
+    shortLabel: "FPV",
+    tone: "warn",
+    weights: [
+      {key:"payload", weight:0.24, inverse:false},
+      {key:"radius", weight:0.2, inverse:false},
+      {key:"distance", weight:0.14, inverse:false},
+      {key:"speed", weight:0.13, inverse:false},
+      {key:"wind", weight:0.08, inverse:false},
+      {key:"flightTime", weight:0.06, inverse:false},
+      {key:"deployTime", weight:0.05, inverse:true},
+      {key:"systemPrice", weight:0.08, inverse:true},
+      {kind:"flag", key:"codified", weight:0.02},
+    ],
+  },
+  fpv_fiber: {
+    label: "FPV на оптоволокні",
+    shortLabel: "FPV ОВ",
+    tone: "warn",
+    weights: [
+      {key:"payload", weight:0.22, inverse:false},
+      {key:"radius", weight:0.24, inverse:false},
+      {key:"speed", weight:0.12, inverse:false},
+      {key:"flightTime", weight:0.1, inverse:false},
+      {key:"wind", weight:0.08, inverse:false},
+      {key:"deployTime", weight:0.05, inverse:true},
+      {key:"systemPrice", weight:0.15, inverse:true},
+      {kind:"flag", key:"codified", weight:0.02},
+      {kind:"flag", key:"thermal", weight:0.02},
+    ],
+  },
+  multirotor_recon: {
+    label: "Розвідувальний мультиротор",
+    shortLabel: "Розвідка МР",
+    tone: "blue",
+    weights: [
+      {key:"flightTime", weight:0.24, inverse:false},
+      {key:"distance", weight:0.18, inverse:false},
+      {key:"height", weight:0.14, inverse:false},
+      {key:"wind", weight:0.12, inverse:false},
+      {key:"speed", weight:0.06, inverse:false},
+      {key:"deployTime", weight:0.06, inverse:true},
+      {key:"systemPrice", weight:0.08, inverse:true},
+      {kind:"flag", key:"thermal", weight:0.08},
+      {kind:"flag", key:"codified", weight:0.04},
+    ],
+  },
+  fixed_wing_strike: {
+    label: "Ударний літак",
+    shortLabel: "Удар літак",
+    tone: "warn",
+    weights: [
+      {key:"distance", weight:0.22, inverse:false},
+      {key:"payload", weight:0.2, inverse:false},
+      {key:"speed", weight:0.16, inverse:false},
+      {key:"flightTime", weight:0.12, inverse:false},
+      {key:"height", weight:0.08, inverse:false},
+      {key:"wind", weight:0.08, inverse:false},
+      {key:"deployTime", weight:0.04, inverse:true},
+      {key:"systemPrice", weight:0.06, inverse:true},
+      {kind:"flag", key:"codified", weight:0.02},
+      {kind:"flag", key:"thermal", weight:0.02},
+    ],
+  },
   strike_multirotor: {
     label: "Ударний профіль",
-    shortLabel: "Ударний",
+    shortLabel: "Удар МР",
     tone: "warn",
     weights: [
       {key:"payload", weight:0.24, inverse:false},
@@ -4487,8 +4553,12 @@ const COMPARISON_PROFILE_CONFIG = {
 
 const COMPARISON_SCENARIO_PROFILES = {
   default: ["universal", "value"],
+  fpv_kamikaze: ["fpv_kamikaze", "value", "universal"],
+  fpv_fiber: ["fpv_fiber", "value", "universal"],
   strike_multirotor: ["strike_multirotor", "value", "universal"],
+  multirotor_recon: ["multirotor_recon", "value", "universal"],
   recon_fixed_wing: ["recon_fixed_wing", "value", "universal"],
+  fixed_wing_strike: ["fixed_wing_strike", "value", "universal"],
   interceptor: ["interceptor", "value", "universal"],
   logistics: ["logistics", "value", "universal"],
 };
@@ -4498,7 +4568,11 @@ function detectComparisonScenario(title="", items=[]){
   const source = `${title || ""} ${(items || []).map(item=>item?.name || "").join(" ")}`.toLowerCase();
 
   if(/перехоп|шахед|інтерцеп|intercept/.test(source)) return "interceptor";
+  if(/fpv/.test(source) && /(оптоволокон|ов\b)/.test(source)) return "fpv_fiber";
+  if(/fpv/.test(source)) return "fpv_kamikaze";
   if(/розвід.*(літак|літаков|крил|fixed wing|fw\b)|((літак|літаков|крил|fixed wing|fw\b).*(розвід))/.test(source)) return "recon_fixed_wing";
+  if(/(удар|бомбер|камікадзе).*(літак|літаков|крил|fixed wing|fw\b)|((літак|літаков|крил|fixed wing|fw\b).*(удар|бомбер|камікадзе))/.test(source)) return "fixed_wing_strike";
+  if(/розвід.*(мультиротор|\bмр\b|коптер|квадро|гекса|окто)|((мультиротор|\bмр\b|коптер|квадро|гекса|окто).*(розвід))/.test(source)) return "multirotor_recon";
   if(/логіст|транспорт|вантаж/.test(source)) return "logistics";
   if(/удар|бомбер|мультиротор|multirotor|\bмр\b|fpv/.test(source)) return "strike_multirotor";
 
@@ -4974,7 +5048,7 @@ function buildComparisonAutoSummaryHtml(analytics){
     ? `Корисне навантаження ${fmtNum(maxPayload.payload)} ${analytics?.units?.payload || "кг"}.`
     : "Ключового лідера за цим профілем поки не видно.";
 
-  if(scenario === "recon_fixed_wing"){
+  if(scenario === "recon_fixed_wing" || scenario === "multirotor_recon"){
     focusLeader = bestFlightTime || maxDistance;
     focusLabel = bestFlightTime ? "Лідер по тривалості польоту" : "Лідер по дальності";
     focusText = bestFlightTime
@@ -4992,12 +5066,18 @@ function buildComparisonAutoSummaryHtml(analytics){
     focusText = maxPayload
       ? `Корисне навантаження ${fmtNum(maxPayload.payload)} ${analytics?.units?.payload || "кг"}.`
       : (bestFlightTime ? `Час польоту ${fmtNum(bestFlightTime.flightTime)} ${analytics?.units?.flightTime || "хв"}.` : "Ключового лідера поки не видно.");
-  } else if(scenario === "strike_multirotor"){
+  } else if(scenario === "fpv_kamikaze" || scenario === "fpv_fiber" || scenario === "strike_multirotor"){
     focusLeader = maxPayload || maxDistance;
     focusLabel = maxPayload ? "Лідер по навантаженню" : "Лідер по дальності";
     focusText = maxPayload
       ? `Корисне навантаження ${fmtNum(maxPayload.payload)} ${analytics?.units?.payload || "кг"}.`
       : (maxDistance ? `Дальність ${fmtNum(maxDistance.distance)} ${analytics?.units?.distance || "км"}.` : "Ключового лідера поки не видно.");
+  } else if(scenario === "fixed_wing_strike"){
+    focusLeader = maxDistance || maxPayload;
+    focusLabel = maxDistance ? "Лідер по дальності" : "Лідер по навантаженню";
+    focusText = maxDistance
+      ? `Дальність ${fmtNum(maxDistance.distance)} ${analytics?.units?.distance || "км"}.`
+      : (maxPayload ? `Корисне навантаження ${fmtNum(maxPayload.payload)} ${analytics?.units?.payload || "кг"}.` : "Ключового лідера поки не видно.");
   }
 
   const coverageText = thermalCount <= 0
@@ -5136,14 +5216,8 @@ function buildComparisonItemDetailHtml(item){
     },
   ].filter(group=>group.rows.some(row=>String(row.value || "").trim() && String(row.value || "").trim() !== "—"));
 
-  const profileRows = [
-    {label:"Універсальний", key:"universalScore"},
-    {label:"Ударний", key:"strike_multirotorScore"},
-    {label:"Розвідка", key:"recon_fixed_wingScore"},
-    {label:"Перехоплення", key:"interceptorScore"},
-    {label:"Логістика", key:"logisticsScore"},
-    {label:"Ціна / можливості", key:"valueScore"},
-  ]
+  const profileRows = Object.entries(COMPARISON_PROFILE_CONFIG)
+    .map(([profileId, config])=>({label:config?.shortLabel || config?.label || profileId, key:`${profileId}Score`}))
     .filter(row=>Number.isFinite(item?.[row.key]))
     .map(row=>({...row, score:Number(item[row.key])}))
     .sort((a,b)=>b.score - a.score);
