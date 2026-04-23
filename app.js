@@ -4637,21 +4637,119 @@ function sanitizeComparisonMetricNumber(value){
 
 }
 
-function calculateComparisonProfileScore(item, metricStats, weights){
+const COMPARISON_THRESHOLD_BANDS = {
+  price_fpv: [{to:150000, score:100}, {to:250000, score:85}, {to:400000, score:70}, {to:600000, score:55}, {to:900000, score:35}, {score:20}],
+  price_medium: [{to:500000, score:100}, {to:1000000, score:85}, {to:2000000, score:70}, {to:3000000, score:55}, {to:5000000, score:35}, {score:20}],
+  price_system: [{to:700000, score:100}, {to:1500000, score:85}, {to:2500000, score:70}, {to:4000000, score:55}, {to:7000000, score:35}, {score:20}],
+  deploy_fast: [{to:3, score:100}, {to:5, score:90}, {to:7, score:75}, {to:10, score:60}, {to:15, score:40}, {score:20}],
+  deploy_medium: [{to:5, score:100}, {to:8, score:90}, {to:12, score:75}, {to:18, score:60}, {to:25, score:40}, {score:20}],
+  payload_fpv: [{to:0.3, score:20}, {to:0.5, score:40}, {to:0.8, score:60}, {to:1.2, score:80}, {to:2, score:90}, {score:100}],
+  payload_strike_mr: [{to:0.5, score:20}, {to:1, score:40}, {to:2, score:60}, {to:4, score:80}, {to:8, score:90}, {score:100}],
+  payload_strike_fw: [{to:1, score:20}, {to:3, score:40}, {to:5, score:60}, {to:10, score:80}, {to:20, score:90}, {score:100}],
+  payload_logistics: [{to:1, score:20}, {to:3, score:40}, {to:5, score:60}, {to:10, score:80}, {to:20, score:90}, {score:100}],
+  distance_short: [{to:5, score:20}, {to:10, score:40}, {to:15, score:60}, {to:20, score:80}, {to:25, score:90}, {score:100}],
+  distance_medium: [{to:10, score:20}, {to:20, score:40}, {to:40, score:60}, {to:80, score:80}, {to:150, score:90}, {score:100}],
+  distance_long: [{to:20, score:20}, {to:40, score:40}, {to:80, score:60}, {to:120, score:80}, {to:180, score:90}, {score:100}],
+  radius_short: [{to:5, score:20}, {to:10, score:40}, {to:15, score:60}, {to:20, score:80}, {to:25, score:90}, {score:100}],
+  radius_medium: [{to:10, score:20}, {to:20, score:40}, {to:35, score:60}, {to:50, score:80}, {to:80, score:90}, {score:100}],
+  radius_long: [{to:20, score:20}, {to:40, score:40}, {to:60, score:60}, {to:100, score:80}, {to:150, score:90}, {score:100}],
+  flight_short: [{to:10, score:20}, {to:20, score:40}, {to:30, score:60}, {to:45, score:80}, {to:60, score:90}, {score:100}],
+  flight_medium: [{to:20, score:20}, {to:40, score:40}, {to:60, score:60}, {to:90, score:80}, {to:120, score:90}, {score:100}],
+  flight_long: [{to:60, score:20}, {to:120, score:40}, {to:180, score:60}, {to:240, score:80}, {to:360, score:90}, {score:100}],
+  speed_fast: [{to:60, score:20}, {to:80, score:40}, {to:100, score:60}, {to:120, score:80}, {to:140, score:90}, {score:100}],
+  speed_interceptor: [{to:80, score:20}, {to:100, score:40}, {to:120, score:60}, {to:140, score:80}, {to:160, score:90}, {score:100}],
+  height_medium: [{to:300, score:20}, {to:700, score:40}, {to:1200, score:60}, {to:2000, score:80}, {to:3000, score:90}, {score:100}],
+  height_long: [{to:500, score:20}, {to:1000, score:40}, {to:2000, score:60}, {to:3000, score:80}, {to:5000, score:90}, {score:100}],
+  wind_medium: [{to:4, score:20}, {to:6, score:40}, {to:8, score:60}, {to:10, score:80}, {to:12, score:90}, {score:100}],
+};
+
+const COMPARISON_PROFILE_SCORE_BANDS = {
+  universal: {systemPrice:"price_medium", payload:"payload_strike_mr", distance:"distance_medium", flightTime:"flight_medium", speed:"speed_fast", radius:"radius_medium", wind:"wind_medium", deployTime:"deploy_fast", height:"height_medium"},
+  value: {systemPrice:"price_medium", payload:"payload_strike_mr", distance:"distance_medium", flightTime:"flight_medium", speed:"speed_fast", radius:"radius_medium", wind:"wind_medium", deployTime:"deploy_fast"},
+  fpv_kamikaze: {payload:"payload_fpv", radius:"radius_short", distance:"distance_short", speed:"speed_fast", wind:"wind_medium", flightTime:"flight_short", deployTime:"deploy_fast", systemPrice:"price_fpv"},
+  fpv_fiber: {payload:"payload_fpv", radius:"radius_medium", speed:"speed_fast", flightTime:"flight_short", wind:"wind_medium", deployTime:"deploy_fast", systemPrice:"price_medium"},
+  multirotor_recon: {flightTime:"flight_medium", distance:"distance_medium", height:"height_medium", wind:"wind_medium", speed:"speed_fast", deployTime:"deploy_fast", systemPrice:"price_medium"},
+  fixed_wing_strike: {distance:"distance_long", payload:"payload_strike_fw", speed:"speed_fast", flightTime:"flight_long", height:"height_long", wind:"wind_medium", deployTime:"deploy_medium", systemPrice:"price_system"},
+  strike_multirotor: {payload:"payload_strike_mr", distance:"distance_medium", speed:"speed_fast", radius:"radius_medium", flightTime:"flight_medium", wind:"wind_medium", height:"height_medium", deployTime:"deploy_fast", systemPrice:"price_medium"},
+  recon_fixed_wing: {flightTime:"flight_long", distance:"distance_long", radius:"radius_long", speed:"speed_fast", wind:"wind_medium", height:"height_long", deployTime:"deploy_medium", systemPrice:"price_medium"},
+  interceptor: {speed:"speed_interceptor", distance:"distance_medium", radius:"radius_medium", flightTime:"flight_medium", height:"height_long", wind:"wind_medium", deployTime:"deploy_fast", systemPrice:"price_medium"},
+  logistics: {payload:"payload_logistics", distance:"distance_medium", flightTime:"flight_medium", radius:"radius_medium", wind:"wind_medium", deployTime:"deploy_medium", systemPrice:"price_system"},
+};
+
+function formatComparisonThresholdBandLabel(bands, index, key, units={}){
+
+  const unit = getComparisonMetricUnit(key, units);
+  const current = bands[index] || {};
+  const prev = index > 0 ? bands[index - 1] : null;
+  const from = prev?.to ?? 0;
+  const to = current?.to;
+  const fmt = value=>`${fmtNum(value)}${unit ? ` ${unit}` : ""}`;
+
+  if(to == null) return `понад ${fmt(from)}`;
+  if(index === 0) return `до ${fmt(to)}`;
+  return `${fmt(from)} – ${fmt(to)}`;
+
+}
+
+function getComparisonMetricScoreDetails(profileId, metric, rawValue, stat, units={}){
+
+  if(metric?.kind === "flag"){
+    const enabled = !!rawValue;
+    return {
+      normalized: enabled ? 1 : 0,
+      rawValue: enabled ? "так" : "ні",
+      formulaText: enabled ? "наявно = 100 балів" : "немає = 0 балів",
+      minValue: null,
+      maxValue: null,
+      mode: "flag",
+    };
+  }
+
+  const num = Number(rawValue);
+  if(!Number.isFinite(num) || num <= 0) return null;
+
+  const bandKey = COMPARISON_PROFILE_SCORE_BANDS?.[profileId]?.[metric.key];
+  const bands = bandKey ? COMPARISON_THRESHOLD_BANDS[bandKey] : null;
+  if(bands?.length){
+    const bandIndex = Math.max(0, bands.findIndex(band=>band.to == null || num <= band.to));
+    const band = bands[bandIndex] || bands[bands.length - 1];
+    const score = Number(band?.score || 0) / 100;
+    return {
+      normalized: score,
+      rawValue: num,
+      formulaText: `порогова шкала профілю: ${formatComparisonThresholdBandLabel(bands, bandIndex, metric.key, units)} = ${fmtNum(score * 100)} балів`,
+      minValue: null,
+      maxValue: null,
+      mode: "threshold",
+    };
+  }
+
+  const normalized = normalizeComparisonMetric(num, stat, !!metric.inverse);
+  if(normalized == null) return null;
+  return {
+    normalized,
+    rawValue: num,
+    formulaText: stat
+      ? (metric.inverse
+        ? `(${fmtNum(stat.max)} - ${fmtNum(num)}) / (${fmtNum(stat.max)} - ${fmtNum(stat.min)}) × 100`
+        : `(${fmtNum(num)} - ${fmtNum(stat.min)}) / (${fmtNum(stat.max)} - ${fmtNum(stat.min)}) × 100`)
+      : "",
+    minValue: stat?.min ?? null,
+    maxValue: stat?.max ?? null,
+    mode: "minmax",
+  };
+
+}
+
+function calculateComparisonProfileScore(item, metricStats, weights, profileId="", units={}){
 
   let weightedSum = 0;
   let totalWeight = 0;
 
   (weights || []).forEach(metric=>{
-    if(metric.kind === "flag"){
-      weightedSum += (item?.[metric.key] ? 1 : 0) * metric.weight;
-      totalWeight += metric.weight;
-      return;
-    }
-
-    const score = normalizeComparisonMetric(item?.[metric.key], metricStats?.[metric.key], !!metric.inverse);
-    if(score == null) return;
-    weightedSum += score * metric.weight;
+    const details = getComparisonMetricScoreDetails(profileId, metric, item?.[metric.key], metricStats?.[metric.key], units);
+    if(!details) return;
+    weightedSum += details.normalized * metric.weight;
     totalWeight += metric.weight;
   });
 
@@ -4705,48 +4803,24 @@ function buildComparisonScoreBreakdown(item, metricStats, profile){
     const weight = Number(metric.weight || 0);
     if(weight <= 0) return;
 
-    let score = null;
-    let rawValue = item?.[metric.key];
-    const stat = metricStats?.[metric.key] || null;
-    let formulaText = "";
-    let minValue = null;
-    let maxValue = null;
-    if(metric.kind === "flag"){
-      score = item?.[metric.key] ? 1 : 0;
-      rawValue = item?.[metric.key] ? "так" : "ні";
-      formulaText = rawValue === "так" ? "наявно = 100 балів" : "немає = 0 балів";
-    } else {
-      score = normalizeComparisonMetric(item?.[metric.key], stat, !!metric.inverse);
-      if(stat){
-        minValue = stat.min;
-        maxValue = stat.max;
-        const valueText = fmtNum(Number(rawValue));
-        const minText = fmtNum(stat.min);
-        const maxText = fmtNum(stat.max);
-        if(metric.inverse){
-          formulaText = `(${maxText} - ${valueText}) / (${maxText} - ${minText}) × 100`;
-        } else {
-          formulaText = `(${valueText} - ${minText}) / (${maxText} - ${minText}) × 100`;
-        }
-      }
-    }
-
-    if(score == null) return;
-    const contribution = score * weight;
+    const details = getComparisonMetricScoreDetails(profile?.id || "", metric, item?.[metric.key], metricStats?.[metric.key], item?.units || {});
+    if(!details) return;
+    const contribution = details.normalized * weight;
     weightedSum += contribution;
     totalWeight += weight;
 
     rows.push({
       key: metric.key,
       label,
-      rawValue,
+      rawValue: details.rawValue,
       direction: metric.inverse ? "менше = краще" : "більше = краще",
-      normalized: score,
+      normalized: details.normalized,
       weight,
       contribution,
-      minValue,
-      maxValue,
-      formulaText,
+      minValue: details.minValue,
+      maxValue: details.maxValue,
+      formulaText: details.formulaText,
+      mode: details.mode,
     });
   });
 
@@ -5068,7 +5142,7 @@ function buildComparisonAnalytics(rows, title=""){
   Object.entries(COMPARISON_PROFILE_CONFIG).forEach(([profileId, profile])=>{
     const scoreKey = `${profileId}Score`;
     items.forEach(item=>{
-      item[scoreKey] = calculateComparisonProfileScore(item, metricStats, profile.weights);
+      item[scoreKey] = calculateComparisonProfileScore(item, metricStats, profile.weights, profileId, comparisonUnits);
       item.__comparisonMetricStats = metricStats;
       item.__comparisonScenario = scenario;
     });
@@ -5305,7 +5379,7 @@ function buildComparisonOverallRankingHelpHtml(profileIds=["universal"]){
       <div class="comparison-help-block">
         <div class="comparison-help-title">Бальна система рейтингу</div>
         <div class="comparison-help-text">
-          Для кожного підвиду БпЛА використовується свій профіль. Спочатку кожна характеристика переводиться у <b>бал 0–100</b> відносно інших БпЛА в цій таблиці, потім цей бал множиться на вагу критерію. Сума ваг завжди приводиться до <b>100%</b>.
+          Для кожного підвиду БпЛА використовується свій профіль. Ключові характеристики оцінюються не відносно одного "екстремального" зразка, а через <b>порогові діапазони</b> профілю: наприклад, для розвідки 120 хв польоту — це один клас балів, 240 хв — вищий клас. Потім цей бал множиться на вагу критерію. Сума ваг завжди приводиться до <b>100%</b>.
         </div>
       </div>
       <div class="comparison-help-block comparison-help-primary">
@@ -5699,7 +5773,7 @@ function buildComparisonItemDetailHtml(item){
     .sort((a,b)=>b.score - a.score);
   const primaryProfile = profileRows[0] || null;
   const primaryProfileId = primaryProfile?.key ? primaryProfile.key.replace(/Score$/, "") : "";
-  const primaryProfileConfig = COMPARISON_PROFILE_CONFIG[primaryProfileId] || COMPARISON_PROFILE_CONFIG.universal;
+  const primaryProfileConfig = {id: primaryProfileId || "universal", ...(COMPARISON_PROFILE_CONFIG[primaryProfileId] || COMPARISON_PROFILE_CONFIG.universal)};
   const scoreBreakdown = buildComparisonScoreBreakdown(item, item.__comparisonMetricStats || {}, primaryProfileConfig);
   const scoreBreakdownHtml = `
     <div class="comparison-detail-section comparison-score-breakdown">
