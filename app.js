@@ -11123,6 +11123,9 @@ function applyReferenceWorkbookImport(sheetName="", opts={}){
     _sheetStack = [];
     modal.classList.remove("show");
     sheetBody.innerHTML = "";
+  } else {
+    _sheetStackOn = false;
+    _sheetStack = [];
   }
 
   showToast(`Таблицю оновлено: ${Math.max(0, importedRows.length - 1)} рядків з аркуша ${resolvedSheetName}`, "ok");
@@ -11131,7 +11134,8 @@ function applyReferenceWorkbookImport(sheetName="", opts={}){
 
 function importReferenceWorkbookSheet(sheetName=""){
 
-  applyReferenceWorkbookImport(sheetName);
+  applyReferenceWorkbookImport(sheetName, {keepModal:true});
+  UI.pendingReferenceWorkbook = null;
 
 }
 
