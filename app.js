@@ -4489,9 +4489,16 @@ function extractComparisonUsageDetachments(item){
 
 }
 
+function getComparisonUsageDetachmentCount(item){
+
+  return extractComparisonUsageDetachments(item).length;
+
+}
+
 function buildComparisonUsageByDetachmentsHtml(items=[]){
 
-  const usedMap = new Map();
+  const usedItems = [];
+  const usedDetachments = new Set();
   const notUsed = [];
   const unknown = [];
 
@@ -4507,15 +4514,9 @@ function buildComparisonUsageByDetachmentsHtml(items=[]){
       return;
     }
 
-    detachments.forEach(label=>{
-      if(!usedMap.has(label)) usedMap.set(label, []);
-      usedMap.get(label).push(item);
-    });
+    usedItems.push(item);
+    detachments.forEach(label=>usedDetachments.add(label));
   });
-
-  const usedRows = [...usedMap.entries()]
-    .map(([label, rows])=>({label, rows}))
-    .sort((a,b)=>b.rows.length - a.rows.length || a.label.localeCompare(b.label, "uk"));
 
   const renderNames = (rows, limit=6)=>rows
     .slice(0, limit)
@@ -4525,21 +4526,21 @@ function buildComparisonUsageByDetachmentsHtml(items=[]){
   return `
     <div class="item analytics-block comparison-compact-section comparison-usage-section">
       <div class="row">
-        <div class="name">Засоби по загонах у цій категорії</div>
-        <span class="badge b-blue mono">${fmtNum(usedRows.length)}</span>
+        <div class="name">Засоби у цій категорії</div>
+        <span class="badge b-blue mono">${fmtNum(items.length)}</span>
       </div>
       <div class="comparison-compact-grid">
-        ${usedRows.length
-          ? usedRows.slice(0, 8).map((row, index)=>`
+        ${usedItems.length
+          ? `
               <div class="comparison-compact-card delta-nrk-card">
-                <div class="comparison-compact-rank mono">${index + 1}</div>
+                <div class="comparison-compact-rank mono">✓</div>
                 <div class="comparison-compact-main">
-                  <div class="comparison-compact-title">${htmlesc(row.label)}</div>
-                  <div class="comparison-compact-meta">${htmlesc(renderNames(row.rows))}</div>
+                  <div class="comparison-compact-title">Використовуються у загонах</div>
+                  <div class="comparison-compact-meta">Загальна кіл-ть загонів: ${fmtNum(usedDetachments.size)} · ${htmlesc(renderNames(usedItems, 12))}</div>
                 </div>
-                <div class="badge b-ok mono">${fmtNum(row.rows.length)}</div>
+                <div class="badge b-ok mono">${fmtNum(usedItems.length)}</div>
               </div>
-            `).join("")
+            `
           : `<div class="hint">У примітках немає зрозумілої привʼязки до загонів.</div>`
         }
         ${notUsed.length ? `
@@ -5119,6 +5120,18 @@ function buildComparisonAnalytics(rows, title=""){
 
 function renderComparisonTopList(title, rows, metricKey, metricLabel, unit=""){
 
+  const buildMeta = (item)=>{
+    const parts = [];
+    if(metricKey !== "universalScore"){
+      parts.push(`${metricLabel}: ${fmtNum(item[metricKey])}${unit}`);
+    }
+    if(item.vendor) parts.push(item.vendor);
+    const detachmentCount = getComparisonUsageDetachmentCount(item);
+    if(detachmentCount) parts.push(`Загальна кіл-ть загонів: ${fmtNum(detachmentCount)}`);
+    if(item.notes) parts.push(formatComparisonUsageMeta(item));
+    return parts.join(" · ");
+  };
+
   return `
     <div class="item analytics-block comparison-compact-section">
       <div class="row"><div class="name">${htmlesc(title)}</div></div>
@@ -5132,7 +5145,7 @@ function renderComparisonTopList(title, rows, metricKey, metricLabel, unit=""){
                 <div class="comparison-compact-rank mono">${index + 1}</div>
                 <div class="comparison-compact-main">
                   <div class="comparison-compact-title">${htmlesc(item.name)}</div>
-                  <div class="comparison-compact-meta">${metricLabel}: ${fmtNum(item[metricKey])}${unit}${item.vendor ? ` · ${htmlesc(item.vendor)}` : ""}${item.notes ? ` · ${htmlesc(formatComparisonUsageMeta(item))}` : ""}</div>
+                  <div class="comparison-compact-meta">${htmlesc(buildMeta(item))}</div>
                 </div>
                 <div class="badge ${isNotUsed ? "b-danger" : "b-blue"} mono">${fmtNum(item[metricKey])}${unit}</div>
               </button>
@@ -5152,6 +5165,14 @@ function renderComparisonTopListAsc(title, rows, metricKey, metricLabel, unit=""
     if(metricKey === "systemPrice") return fmtCompactMoneyUa(item?.[metricKey]);
     return `${fmtNum(item?.[metricKey])}${unit}`;
   };
+  const buildMeta = (item)=>{
+    const parts = [`${metricLabel}: ${formatValue(item)}`];
+    if(item.vendor) parts.push(item.vendor);
+    const detachmentCount = getComparisonUsageDetachmentCount(item);
+    if(detachmentCount) parts.push(`Загальна кіл-ть загонів: ${fmtNum(detachmentCount)}`);
+    if(item.notes) parts.push(formatComparisonUsageMeta(item));
+    return parts.join(" · ");
+  };
 
   return `
     <div class="item analytics-block comparison-compact-section">
@@ -5166,7 +5187,7 @@ function renderComparisonTopListAsc(title, rows, metricKey, metricLabel, unit=""
                 <div class="comparison-compact-rank mono">${index + 1}</div>
                 <div class="comparison-compact-main">
                   <div class="comparison-compact-title">${htmlesc(item.name)}</div>
-                  <div class="comparison-compact-meta">${metricLabel}: ${formatValue(item)}${item.vendor ? ` · ${htmlesc(item.vendor)}` : ""}${item.notes ? ` · ${htmlesc(formatComparisonUsageMeta(item))}` : ""}</div>
+                  <div class="comparison-compact-meta">${htmlesc(buildMeta(item))}</div>
                 </div>
                 <div class="badge ${isNotUsed ? "b-danger" : "b-ok"} mono">${formatValue(item)}</div>
               </button>
