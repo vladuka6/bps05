@@ -3407,6 +3407,30 @@ function parseAnalyticsNumber(value){
 
 }
 
+function parseComparisonMetricNumber(value){
+
+  const raw = String(value ?? "").replace(/\u00A0/g, " ").trim();
+  if(!raw) return null;
+
+  const firstChunk = raw
+    .split(/\r?\n|;/)
+    .map(part=>String(part || "").trim())
+    .find(Boolean) || "";
+
+  if(!firstChunk) return null;
+
+  const normalized = firstChunk
+    .replace(/\s+/g, "")
+    .replace(/,/g, ".");
+
+  const match = normalized.match(/-?\d+(?:\.\d+)?/);
+  if(!match) return null;
+
+  const num = Number(match[0]);
+  return Number.isFinite(num) ? num : null;
+
+}
+
 function normalizeAnalyticsHeader(value){
 
   return String(value || "")
@@ -5078,17 +5102,17 @@ function buildComparisonAnalytics(rows, title=""){
       vendor,
       model,
       section: currentSection,
-      systemPrice: columns.systemPrice >= 0 ? sanitizeComparisonMetricNumber(parseAnalyticsNumber(row?.[columns.systemPrice])) : null,
-      unitPrice: columns.unitPrice >= 0 ? sanitizeComparisonMetricNumber(parseAnalyticsNumber(row?.[columns.unitPrice])) : null,
-      quantity: columns.quantity >= 0 ? parseAnalyticsNumber(row?.[columns.quantity]) : null,
-      payload: columns.payload >= 0 ? sanitizeComparisonMetricNumber(parseAnalyticsNumber(row?.[columns.payload])) : null,
-      speed: columns.speed >= 0 ? sanitizeComparisonMetricNumber(parseAnalyticsNumber(row?.[columns.speed])) : null,
-      radius: columns.radius >= 0 ? sanitizeComparisonMetricNumber(parseAnalyticsNumber(row?.[columns.radius])) : null,
-      distance: columns.distance >= 0 ? sanitizeComparisonMetricNumber(parseAnalyticsNumber(row?.[columns.distance])) : null,
-      flightTime: columns.flightTime >= 0 ? sanitizeComparisonMetricNumber(parseAnalyticsNumber(row?.[columns.flightTime])) : null,
-      height: columns.height >= 0 ? sanitizeComparisonMetricNumber(parseAnalyticsNumber(row?.[columns.height])) : null,
-      wind: columns.wind >= 0 ? sanitizeComparisonMetricNumber(parseAnalyticsNumber(row?.[columns.wind])) : null,
-      deployTime: columns.deployTime >= 0 ? sanitizeComparisonMetricNumber(parseAnalyticsNumber(row?.[columns.deployTime])) : null,
+      systemPrice: columns.systemPrice >= 0 ? sanitizeComparisonMetricNumber(parseComparisonMetricNumber(row?.[columns.systemPrice])) : null,
+      unitPrice: columns.unitPrice >= 0 ? sanitizeComparisonMetricNumber(parseComparisonMetricNumber(row?.[columns.unitPrice])) : null,
+      quantity: columns.quantity >= 0 ? parseComparisonMetricNumber(row?.[columns.quantity]) : null,
+      payload: columns.payload >= 0 ? sanitizeComparisonMetricNumber(parseComparisonMetricNumber(row?.[columns.payload])) : null,
+      speed: columns.speed >= 0 ? sanitizeComparisonMetricNumber(parseComparisonMetricNumber(row?.[columns.speed])) : null,
+      radius: columns.radius >= 0 ? sanitizeComparisonMetricNumber(parseComparisonMetricNumber(row?.[columns.radius])) : null,
+      distance: columns.distance >= 0 ? sanitizeComparisonMetricNumber(parseComparisonMetricNumber(row?.[columns.distance])) : null,
+      flightTime: columns.flightTime >= 0 ? sanitizeComparisonMetricNumber(parseComparisonMetricNumber(row?.[columns.flightTime])) : null,
+      height: columns.height >= 0 ? sanitizeComparisonMetricNumber(parseComparisonMetricNumber(row?.[columns.height])) : null,
+      wind: columns.wind >= 0 ? sanitizeComparisonMetricNumber(parseComparisonMetricNumber(row?.[columns.wind])) : null,
+      deployTime: columns.deployTime >= 0 ? sanitizeComparisonMetricNumber(parseComparisonMetricNumber(row?.[columns.deployTime])) : null,
       cameraType: columns.cameraType >= 0 ? String(row?.[columns.cameraType] || "").trim() : "",
       codifiedRaw: columns.codified >= 0 ? String(row?.[columns.codified] || "").trim().toLowerCase() : "",
       notes: notesColumn >= 0 ? String(row?.[notesColumn] || "").trim() : "",
