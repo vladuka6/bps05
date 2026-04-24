@@ -4546,6 +4546,20 @@ function getComparisonItemMetricStats(item, sectionMetricStats, globalMetricStat
 
 }
 
+function groupComparisonRowsBySection(rows=[]){
+
+  const groups = new Map();
+
+  (rows || []).forEach(item=>{
+    const label = getComparisonSectionLabel(item);
+    if(!groups.has(label)) groups.set(label, []);
+    groups.get(label).push(item);
+  });
+
+  return Array.from(groups.entries()).map(([label, items])=>({label, items}));
+
+}
+
 function parseComparisonUsageInfo(notes=""){
 
   const raw = String(notes || "").replace(/\s+/g, " ").trim();
@@ -5366,33 +5380,40 @@ function renderComparisonTopList(title, rows, metricKey, metricLabel, unit=""){
     return parts.join(" · ");
   };
 
+  const sectionGroups = groupComparisonRowsBySection(rows);
+
   return `
     <div class="item analytics-block comparison-compact-section">
       <div class="row"><div class="name">${htmlesc(title)}</div></div>
-      <div class="comparison-compact-grid">
-        ${rows.length
-          ? rows.map((item, index)=>{
-              const detailKey = registerRenderedTableModal(`Модель: ${item.name}`, buildComparisonItemDetailHtml(item));
-              const isNotUsed = item?.usage?.status === "not_used";
-              const showOptionsBadge = metricKey === "systemPrice"
-                ? hasComparisonMetricOptions(item, "systemPrice")
-                : metricKey === "universalScore"
-                  ? hasComparisonPriceOptions(item)
-                  : false;
-              return `
-              <button type="button" class="comparison-compact-card comparison-card-btn ${isNotUsed ? "is-not-used" : ""}" data-action="openRenderedTableModal" data-arg1="${detailKey}">
-                <div class="comparison-compact-rank mono">${index + 1}</div>
-                <div class="comparison-compact-main">
-                  <div class="comparison-compact-title">${htmlesc(item.name)}${showOptionsBadge ? ` <span class="comparison-insight-tag">є варіанти</span>` : ""}</div>
-                  <div class="comparison-compact-meta">${htmlesc(buildMeta(item))}</div>
-                </div>
-                <div class="badge ${isNotUsed ? "b-danger" : "b-blue"} mono">${fmtNum(item[metricKey])}${unit}</div>
-              </button>
-            `;
-            }).join("")
-          : `<div class="hint">Даних для цього рейтингу поки немає.</div>`
-        }
-      </div>
+      ${rows.length
+        ? sectionGroups.map(group=>`
+            <div class="comparison-section-group">
+              <div class="comparison-section-heading">${htmlesc(group.label)}</div>
+              <div class="comparison-compact-grid">
+                ${group.items.map((item, index)=>{
+                  const detailKey = registerRenderedTableModal(`Модель: ${item.name}`, buildComparisonItemDetailHtml(item));
+                  const isNotUsed = item?.usage?.status === "not_used";
+                  const showOptionsBadge = metricKey === "systemPrice"
+                    ? hasComparisonMetricOptions(item, "systemPrice")
+                    : metricKey === "universalScore"
+                      ? hasComparisonPriceOptions(item)
+                      : false;
+                  return `
+                    <button type="button" class="comparison-compact-card comparison-card-btn ${isNotUsed ? "is-not-used" : ""}" data-action="openRenderedTableModal" data-arg1="${detailKey}">
+                      <div class="comparison-compact-rank mono">${index + 1}</div>
+                      <div class="comparison-compact-main">
+                        <div class="comparison-compact-title">${htmlesc(item.name)}${showOptionsBadge ? ` <span class="comparison-insight-tag">є варіанти</span>` : ""}</div>
+                        <div class="comparison-compact-meta">${htmlesc(buildMeta(item))}</div>
+                      </div>
+                      <div class="badge ${isNotUsed ? "b-danger" : "b-blue"} mono">${fmtNum(item[metricKey])}${unit}</div>
+                    </button>
+                  `;
+                }).join("")}
+              </div>
+            </div>
+          `).join("")
+        : `<div class="hint">Даних для цього рейтингу поки немає.</div>`
+      }
     </div>
   `;
 
@@ -5413,29 +5434,36 @@ function renderComparisonTopListAsc(title, rows, metricKey, metricLabel, unit=""
     return parts.join(" · ");
   };
 
+  const sectionGroups = groupComparisonRowsBySection(rows);
+
   return `
     <div class="item analytics-block comparison-compact-section">
       <div class="row"><div class="name">${htmlesc(title)}</div></div>
-      <div class="comparison-compact-grid">
-        ${rows.length
-          ? rows.map((item, index)=>{
-              const detailKey = registerRenderedTableModal(`Модель: ${item.name}`, buildComparisonItemDetailHtml(item));
-              const isNotUsed = item?.usage?.status === "not_used";
-              const showOptionsBadge = metricKey === "systemPrice" ? hasComparisonMetricOptions(item, "systemPrice") : false;
-              return `
-              <button type="button" class="comparison-compact-card comparison-card-btn ${isNotUsed ? "is-not-used" : ""}" data-action="openRenderedTableModal" data-arg1="${detailKey}">
-                <div class="comparison-compact-rank mono">${index + 1}</div>
-                <div class="comparison-compact-main">
-                  <div class="comparison-compact-title">${htmlesc(item.name)}${showOptionsBadge ? ` <span class="comparison-insight-tag">є варіанти</span>` : ""}</div>
-                  <div class="comparison-compact-meta">${htmlesc(buildMeta(item))}</div>
-                </div>
-                <div class="badge ${isNotUsed ? "b-danger" : "b-ok"} mono">${formatValue(item)}</div>
-              </button>
-            `;
-            }).join("")
-          : `<div class="hint">Даних для цього рейтингу поки немає.</div>`
-        }
-      </div>
+      ${rows.length
+        ? sectionGroups.map(group=>`
+            <div class="comparison-section-group">
+              <div class="comparison-section-heading">${htmlesc(group.label)}</div>
+              <div class="comparison-compact-grid">
+                ${group.items.map((item, index)=>{
+                  const detailKey = registerRenderedTableModal(`Модель: ${item.name}`, buildComparisonItemDetailHtml(item));
+                  const isNotUsed = item?.usage?.status === "not_used";
+                  const showOptionsBadge = metricKey === "systemPrice" ? hasComparisonMetricOptions(item, "systemPrice") : false;
+                  return `
+                    <button type="button" class="comparison-compact-card comparison-card-btn ${isNotUsed ? "is-not-used" : ""}" data-action="openRenderedTableModal" data-arg1="${detailKey}">
+                      <div class="comparison-compact-rank mono">${index + 1}</div>
+                      <div class="comparison-compact-main">
+                        <div class="comparison-compact-title">${htmlesc(item.name)}${showOptionsBadge ? ` <span class="comparison-insight-tag">є варіанти</span>` : ""}</div>
+                        <div class="comparison-compact-meta">${htmlesc(buildMeta(item))}</div>
+                      </div>
+                      <div class="badge ${isNotUsed ? "b-danger" : "b-ok"} mono">${formatValue(item)}</div>
+                    </button>
+                  `;
+                }).join("")}
+              </div>
+            </div>
+          `).join("")
+        : `<div class="hint">Даних для цього рейтингу поки немає.</div>`
+      }
     </div>
   `;
 

@@ -2658,6 +2658,31 @@
     .comparison-switch-panel .comparison-compact-grid{
         margin-top:0;
       }
+    .comparison-section-group{
+        margin-top:10px;
+      }
+    .comparison-section-group:first-child{
+        margin-top:0;
+      }
+    .comparison-section-heading{
+        display:flex;
+        align-items:center;
+        gap:8px;
+        margin:2px 0 6px;
+        padding:0 2px;
+        font-size:11px;
+        font-weight:1000;
+        color:var(--text);
+      }
+    .comparison-section-heading::before{
+        content:"";
+        width:10px;
+        height:10px;
+        border-radius:999px;
+        background:rgba(95,142,245,.16);
+        border:1px solid rgba(95,142,245,.28);
+        flex:0 0 auto;
+      }
     .comparison-compact-grid{
         display:grid;
         grid-template-columns:1fr;
@@ -5597,6 +5622,13 @@
     body.theme-dark .comparison-score-row{
       border-color:rgba(55,69,98,.72);
       background:rgba(21,25,37,.82);
+    }
+    body.theme-dark .comparison-section-heading{
+      color:#d7e6ff;
+    }
+    body.theme-dark .comparison-section-heading::before{
+      background:rgba(95,142,245,.22);
+      border-color:rgba(95,142,245,.34);
     }
     body.theme-dark .comparison-score-formula{
       border-color:rgba(95,142,245,.28);
