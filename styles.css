@@ -2048,25 +2048,27 @@
       gap:10px;
     }
     .comparison-analytics-modal .report-grid{
-        grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
-        gap:4px;
+        grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+        gap:6px;
       }
     .comparison-analytics-modal .report-tile{
-        padding:5px 6px;
-        gap:1px;
-        min-height:62px;
+        padding:8px 10px;
+        gap:3px;
+        min-height:74px;
       }
     .comparison-analytics-modal .report-tile .k{
-        font-size:9px;
+        font-size:clamp(10px, 0.72vw, 12px);
+        line-height:1.15;
       }
     .comparison-analytics-modal .report-tile .v{
-        font-size:12px;
-        line-height:1.05;
+        font-size:clamp(18px, 1.35vw, 24px);
+        line-height:1.02;
         overflow-wrap:anywhere;
         word-break:break-word;
       }
     .comparison-analytics-modal .report-tile .s{
-        font-size:9px;
+        font-size:clamp(11px, 0.78vw, 13px);
+        line-height:1.15;
       }
     .comparison-title-tile .v{
       font-size:11px !important;
@@ -2820,18 +2822,18 @@
             gap:4px;
         }
         .comparison-analytics-modal .report-tile{
-            padding:5px 6px;
-            min-height:58px;
+            padding:7px 8px;
+            min-height:64px;
         }
         .comparison-analytics-modal .report-tile .k{
-            font-size:8px;
+            font-size:9px;
         }
         .comparison-analytics-modal .report-tile .v{
-            font-size:11px;
+            font-size:14px;
             line-height:1.02;
         }
         .comparison-analytics-modal .report-tile .s{
-            font-size:8px;
+            font-size:10px;
             line-height:1.1;
         }
       }

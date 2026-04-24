@@ -4560,6 +4560,46 @@ function groupComparisonRowsBySection(rows=[]){
 
 }
 
+function formatComparisonSectionShortLabel(label=""){
+
+  const raw = String(label || "").replace(/\s+/g, " ").trim();
+  if(!raw) return "Секція";
+
+  const normalized = normalizeAnalyticsHeader(raw);
+  if(/тактич/.test(normalized) && /оператив/.test(normalized)) return "Опер.-тактичні";
+  if(/оператив/.test(normalized)) return "Оперативні";
+  if(/тактич/.test(normalized)) return "Тактичні";
+  if(/зеніт/.test(normalized) || /перехоп/.test(normalized)) return "Перехоплення";
+  if(/розвід/.test(normalized) && /крил|літак/.test(normalized)) return "Розвідка";
+  if(/fpv/.test(normalized)) return "FPV";
+
+  return raw;
+
+}
+
+function getComparisonSectionLeaders(rows=[]){
+
+  return groupComparisonRowsBySection(rows)
+    .map(group=>({
+      label: group.label,
+      shortLabel: formatComparisonSectionShortLabel(group.label),
+      best: (group.items || [])[0] || null,
+      count: (group.items || []).length,
+    }))
+    .filter(group=>group.best)
+    .sort((a,b)=>{
+      const orderScore = (label)=>{
+        const normalized = normalizeAnalyticsHeader(label);
+        if(/тактич/.test(normalized) && !/оператив/.test(normalized)) return 1;
+        if(/тактич/.test(normalized) && /оператив/.test(normalized)) return 2;
+        if(/оператив/.test(normalized)) return 3;
+        return 9;
+      };
+      return orderScore(a.label) - orderScore(b.label) || String(a.label).localeCompare(String(b.label), "uk");
+    });
+
+}
+
 function parseComparisonUsageInfo(notes=""){
 
   const raw = String(notes || "").replace(/\s+/g, " ").trim();
@@ -6176,8 +6216,7 @@ function buildComparisonAnalyticsModalHtml(rows, title=""){
       cameraSlices,
     } = analytics;
 
-    const primaryProfile = featuredProfiles[0] || null;
-    const secondaryProfile = featuredProfiles[1] || null;
+    const sectionLeaders = getComparisonSectionLeaders(overallTop || []);
     const summaryTile = (label, value, sub, item=null)=>{
       if(item){
         const detailKey = registerRenderedTableModal(`Модель: ${item.name}`, buildComparisonItemDetailHtml(item));
@@ -6185,10 +6224,12 @@ function buildComparisonAnalyticsModalHtml(rows, title=""){
       }
       return `<div class="report-tile"><div class="k">${htmlesc(label)}</div><div class="v mono">${htmlesc(String(value))}</div><div class="s">${htmlesc(sub || "—")}</div></div>`;
     };
+    const sectionLeaderTiles = sectionLeaders
+      .slice(0, 3)
+      .map(group=>summaryTile(group.shortLabel, fmtNum(group.best?.universalScore || 0), group.best?.name || "—", group.best));
     const summaryTiles = [
       avgSystemPrice > 0 ? summaryTile("Сер. ціна БпАК", fmtCompactMoneyUa(avgSystemPrice), "грн") : "",
-      primaryProfile?.best ? summaryTile(primaryProfile.config.shortLabel || "Профіль 1", fmtNum(primaryProfile.best[primaryProfile.scoreKey]), primaryProfile.best.name, primaryProfile.best) : "",
-      secondaryProfile?.best ? summaryTile(secondaryProfile.config.shortLabel || "Профіль 2", fmtNum(secondaryProfile.best[secondaryProfile.scoreKey]), secondaryProfile.best.name, secondaryProfile.best) : "",
+      ...sectionLeaderTiles,
       codifiedCount > 0 ? summaryTile("Кодифіковано", fmtNum(codifiedCount), `із ${fmtNum(items.length)}`) : "",
       thermalCount > 0 ? summaryTile("З тепловізором", fmtNum(thermalCount), `із ${fmtNum(items.length)}`) : "",
       vendorCount > 0 ? summaryTile("Виробників", fmtNum(vendorCount), "у таблиці") : "",
