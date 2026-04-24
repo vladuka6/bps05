@@ -3431,6 +3431,47 @@ function parseComparisonMetricNumber(value){
 
 }
 
+function parseComparisonMetricCell(value){
+
+  const raw = String(value ?? "").replace(/\u00A0/g, " ").trim();
+  if(!raw) return {primary:null, min:null, max:null, hasRange:false, values:[]};
+
+  const chunks = raw
+    .split(/\r?\n|;/)
+    .map(part=>String(part || "").trim())
+    .filter(Boolean);
+
+  const values = chunks
+    .map(part=>parseAnalyticsNumber(part))
+    .filter(num=>Number.isFinite(num));
+
+  if(!values.length){
+    const primary = parseComparisonMetricNumber(raw);
+    return {
+      primary,
+      min: primary,
+      max: primary,
+      hasRange: false,
+      values: Number.isFinite(primary) ? [primary] : [],
+    };
+  }
+
+  return {
+    primary: values[0],
+    min: Math.min(...values),
+    max: Math.max(...values),
+    hasRange: values.length > 1 && Math.min(...values) !== Math.max(...values),
+    values,
+  };
+
+}
+
+function getComparisonMetricMeta(item, key){
+
+  return item?.metricMeta?.[key] || null;
+
+}
+
 function normalizeAnalyticsHeader(value){
 
   return String(value || "")
@@ -4815,6 +4856,31 @@ function formatComparisonBreakdownValue(value, key, units={}){
 
 }
 
+function formatComparisonMetricRange(item, key, units={}){
+
+  const meta = getComparisonMetricMeta(item, key);
+  if(!meta || !Number.isFinite(meta.min) || !Number.isFinite(meta.max)) return "";
+
+  if(meta.hasRange && meta.min !== meta.max){
+    return `${formatComparisonBreakdownValue(meta.min, key, units)}–${formatComparisonBreakdownValue(meta.max, key, units)}`;
+  }
+
+  if(Number.isFinite(meta.primary)){
+    return formatComparisonBreakdownValue(meta.primary, key, units);
+  }
+
+  return "";
+
+}
+
+function formatComparisonMetricDisplay(item, key, units={}){
+
+  const text = formatComparisonMetricRange(item, key, units);
+  if(text) return text;
+  return formatComparisonBreakdownValue(item?.[key], key, units);
+
+}
+
 function buildComparisonScoreBreakdown(item, metricStats, profile){
 
   const rows = [];
@@ -5097,22 +5163,37 @@ function buildComparisonAnalytics(rows, title=""){
 
     if(isAnalyticsSummaryLabel(name)) return;
 
+    const metricMeta = {
+      systemPrice: parseComparisonMetricCell(columns.systemPrice >= 0 ? row?.[columns.systemPrice] : null),
+      unitPrice: parseComparisonMetricCell(columns.unitPrice >= 0 ? row?.[columns.unitPrice] : null),
+      quantity: parseComparisonMetricCell(columns.quantity >= 0 ? row?.[columns.quantity] : null),
+      payload: parseComparisonMetricCell(columns.payload >= 0 ? row?.[columns.payload] : null),
+      speed: parseComparisonMetricCell(columns.speed >= 0 ? row?.[columns.speed] : null),
+      radius: parseComparisonMetricCell(columns.radius >= 0 ? row?.[columns.radius] : null),
+      distance: parseComparisonMetricCell(columns.distance >= 0 ? row?.[columns.distance] : null),
+      flightTime: parseComparisonMetricCell(columns.flightTime >= 0 ? row?.[columns.flightTime] : null),
+      height: parseComparisonMetricCell(columns.height >= 0 ? row?.[columns.height] : null),
+      wind: parseComparisonMetricCell(columns.wind >= 0 ? row?.[columns.wind] : null),
+      deployTime: parseComparisonMetricCell(columns.deployTime >= 0 ? row?.[columns.deployTime] : null),
+    };
+
     const item = {
       name,
       vendor,
       model,
       section: currentSection,
-      systemPrice: columns.systemPrice >= 0 ? sanitizeComparisonMetricNumber(parseComparisonMetricNumber(row?.[columns.systemPrice])) : null,
-      unitPrice: columns.unitPrice >= 0 ? sanitizeComparisonMetricNumber(parseComparisonMetricNumber(row?.[columns.unitPrice])) : null,
-      quantity: columns.quantity >= 0 ? parseComparisonMetricNumber(row?.[columns.quantity]) : null,
-      payload: columns.payload >= 0 ? sanitizeComparisonMetricNumber(parseComparisonMetricNumber(row?.[columns.payload])) : null,
-      speed: columns.speed >= 0 ? sanitizeComparisonMetricNumber(parseComparisonMetricNumber(row?.[columns.speed])) : null,
-      radius: columns.radius >= 0 ? sanitizeComparisonMetricNumber(parseComparisonMetricNumber(row?.[columns.radius])) : null,
-      distance: columns.distance >= 0 ? sanitizeComparisonMetricNumber(parseComparisonMetricNumber(row?.[columns.distance])) : null,
-      flightTime: columns.flightTime >= 0 ? sanitizeComparisonMetricNumber(parseComparisonMetricNumber(row?.[columns.flightTime])) : null,
-      height: columns.height >= 0 ? sanitizeComparisonMetricNumber(parseComparisonMetricNumber(row?.[columns.height])) : null,
-      wind: columns.wind >= 0 ? sanitizeComparisonMetricNumber(parseComparisonMetricNumber(row?.[columns.wind])) : null,
-      deployTime: columns.deployTime >= 0 ? sanitizeComparisonMetricNumber(parseComparisonMetricNumber(row?.[columns.deployTime])) : null,
+      metricMeta,
+      systemPrice: sanitizeComparisonMetricNumber(metricMeta.systemPrice?.primary),
+      unitPrice: sanitizeComparisonMetricNumber(metricMeta.unitPrice?.primary),
+      quantity: metricMeta.quantity?.primary,
+      payload: sanitizeComparisonMetricNumber(metricMeta.payload?.primary),
+      speed: sanitizeComparisonMetricNumber(metricMeta.speed?.primary),
+      radius: sanitizeComparisonMetricNumber(metricMeta.radius?.primary),
+      distance: sanitizeComparisonMetricNumber(metricMeta.distance?.primary),
+      flightTime: sanitizeComparisonMetricNumber(metricMeta.flightTime?.primary),
+      height: sanitizeComparisonMetricNumber(metricMeta.height?.primary),
+      wind: sanitizeComparisonMetricNumber(metricMeta.wind?.primary),
+      deployTime: sanitizeComparisonMetricNumber(metricMeta.deployTime?.primary),
       cameraType: columns.cameraType >= 0 ? String(row?.[columns.cameraType] || "").trim() : "",
       codifiedRaw: columns.codified >= 0 ? String(row?.[columns.codified] || "").trim().toLowerCase() : "",
       notes: notesColumn >= 0 ? String(row?.[notesColumn] || "").trim() : "",
@@ -5261,7 +5342,7 @@ function renderComparisonTopList(title, rows, metricKey, metricLabel, unit=""){
   const buildMeta = (item)=>{
     const parts = [];
     if(metricKey !== "universalScore"){
-      parts.push(`${metricLabel}: ${fmtNum(item[metricKey])}${unit}`);
+      parts.push(`${metricLabel}: ${formatComparisonMetricDisplay(item, metricKey, item?.units || {})}`);
     }
     if(item.vendor) parts.push(item.vendor);
     if(item?.section) parts.push(`Секція: ${getComparisonSectionLabel(item)}`);
@@ -5301,8 +5382,7 @@ function renderComparisonTopList(title, rows, metricKey, metricLabel, unit=""){
 function renderComparisonTopListAsc(title, rows, metricKey, metricLabel, unit=""){
 
   const formatValue = (item)=>{
-    if(metricKey === "systemPrice") return fmtCompactMoneyUa(item?.[metricKey]);
-    return `${fmtNum(item?.[metricKey])}${unit}`;
+    return formatComparisonMetricDisplay(item, metricKey, item?.units || {});
   };
   const buildMeta = (item)=>{
     const parts = [`${metricLabel}: ${formatValue(item)}`];
@@ -5778,27 +5858,27 @@ function buildComparisonItemDetailHtml(item){
       rows: [
         {label:"Виробник", value:item.vendor || "—", accent:"neutral"},
         {label:"Секція", value:getComparisonSectionLabel(item), accent:item.section ? "strong" : "neutral"},
-        {label:"Вартість БпАК", value:Number.isFinite(item.systemPrice) ? fmtCompactMoneyUa(item.systemPrice) : "—", accent:classifyAccent("systemPrice", item.systemPrice)},
-        {label:"Вартість БпЛА", value:Number.isFinite(item.unitPrice) ? fmtCompactMoneyUa(item.unitPrice) : "—", accent:"neutral"},
-        {label:"Кількість у комплексі", value:Number.isFinite(item.quantity) ? fmtNum(item.quantity) : "—", accent:classifyAccent("quantity", item.quantity)},
+        {label:"Вартість БпАК", value:Number.isFinite(item.systemPrice) ? formatComparisonMetricDisplay(item, "systemPrice", units) : "—", accent:classifyAccent("systemPrice", item.systemPrice)},
+        {label:"Вартість БпЛА", value:Number.isFinite(item.unitPrice) ? formatComparisonMetricDisplay(item, "unitPrice", units) : "—", accent:"neutral"},
+        {label:"Кількість у комплексі", value:Number.isFinite(item.quantity) ? formatComparisonMetricDisplay(item, "quantity", units) : "—", accent:classifyAccent("quantity", item.quantity)},
       ],
     },
     {
       title: "Льотні характеристики",
       rows: [
-        {label:"Дальність", value:Number.isFinite(item.distance) ? `${fmtNum(item.distance)} ${units.distance}` : "—", accent:classifyAccent("distance", item.distance)},
-        {label:"Час польоту", value:Number.isFinite(item.flightTime) ? `${fmtNum(item.flightTime)} ${units.flightTime}` : "—", accent:classifyAccent("flightTime", item.flightTime)},
-        {label:"Швидкість", value:Number.isFinite(item.speed) ? `${fmtNum(item.speed)} ${units.speed}` : "—", accent:classifyAccent("speed", item.speed)},
-        {label:"Радіус", value:Number.isFinite(item.radius) ? `${fmtNum(item.radius)} ${units.radius}` : "—", accent:classifyAccent("radius", item.radius)},
-        {label:"Висота", value:Number.isFinite(item.height) ? `${fmtNum(item.height)} ${units.height}` : "—", accent:classifyAccent("height", item.height)},
-        {label:"Стійкість до вітру", value:Number.isFinite(item.wind) ? `${fmtNum(item.wind)} ${units.wind}` : "—", accent:classifyAccent("wind", item.wind)},
+        {label:"Дальність", value:Number.isFinite(item.distance) ? formatComparisonMetricDisplay(item, "distance", units) : "—", accent:classifyAccent("distance", item.distance)},
+        {label:"Час польоту", value:Number.isFinite(item.flightTime) ? formatComparisonMetricDisplay(item, "flightTime", units) : "—", accent:classifyAccent("flightTime", item.flightTime)},
+        {label:"Швидкість", value:Number.isFinite(item.speed) ? formatComparisonMetricDisplay(item, "speed", units) : "—", accent:classifyAccent("speed", item.speed)},
+        {label:"Радіус", value:Number.isFinite(item.radius) ? formatComparisonMetricDisplay(item, "radius", units) : "—", accent:classifyAccent("radius", item.radius)},
+        {label:"Висота", value:Number.isFinite(item.height) ? formatComparisonMetricDisplay(item, "height", units) : "—", accent:classifyAccent("height", item.height)},
+        {label:"Стійкість до вітру", value:Number.isFinite(item.wind) ? formatComparisonMetricDisplay(item, "wind", units) : "—", accent:classifyAccent("wind", item.wind)},
       ],
     },
     {
       title: "Навантаження та розгортання",
       rows: [
-        {label:"Корисне навантаження", value:Number.isFinite(item.payload) ? `${fmtNum(item.payload)} ${units.payload}` : "—", accent:classifyAccent("payload", item.payload)},
-        {label:"Час розгортання", value:Number.isFinite(item.deployTime) ? `${fmtNum(item.deployTime)} ${units.deployTime}` : "—", accent:classifyAccent("deployTime", item.deployTime)},
+        {label:"Корисне навантаження", value:Number.isFinite(item.payload) ? formatComparisonMetricDisplay(item, "payload", units) : "—", accent:classifyAccent("payload", item.payload)},
+        {label:"Час розгортання", value:Number.isFinite(item.deployTime) ? formatComparisonMetricDisplay(item, "deployTime", units) : "—", accent:classifyAccent("deployTime", item.deployTime)},
       ],
     },
     {
@@ -5837,15 +5917,20 @@ function buildComparisonItemDetailHtml(item){
       <div class="comparison-score-rows">
         ${scoreBreakdown.rows.length
           ? scoreBreakdown.rows.map(row=>{
-            const valueText = formatComparisonBreakdownValue(row.rawValue, row.key, units);
+            const valueText = formatComparisonMetricDisplay(item, row.key, units);
             const rangeText = row.minValue != null && row.maxValue != null
               ? `${formatComparisonBreakdownValue(row.minValue, row.key, units)}–${formatComparisonBreakdownValue(row.maxValue, row.key, units)}`
+              : "";
+            const rawMeta = getComparisonMetricMeta(item, row.key);
+            const primaryNote = rawMeta?.hasRange && Number.isFinite(rawMeta.primary)
+              ? `Для розрахунку взято перше значення з комірки: ${formatComparisonBreakdownValue(rawMeta.primary, row.key, units)}`
               : "";
             return `
               <div class="comparison-score-row">
                 <div>
                   <b>${htmlesc(row.label)}</b>
                   <span>цей БпЛА — ${htmlesc(valueText)}${rangeText ? ` · діапазон у таблиці: ${htmlesc(rangeText)}` : ""}</span>
+                  ${primaryNote ? `<span class="comparison-score-formula-line">${htmlesc(primaryNote)}</span>` : ""}
                   ${row.formulaText ? `<span class="comparison-score-formula-line">${htmlesc(row.formulaText)} = ${fmtNum(row.normalized * 100)} балів</span>` : ""}
                 </div>
                 <div class="mono">${fmtNum(row.normalized * 100)}/100 × ${fmtNum(row.normalizedWeight * 100)}% = ${fmtNum(row.normalizedContribution * 100)}</div>
