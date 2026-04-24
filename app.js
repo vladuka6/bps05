@@ -4398,6 +4398,75 @@ function isComparisonSummaryRow(row, columns){
 
 }
 
+function isComparisonSectionLabelText(value=""){
+
+  const raw = String(value || "").replace(/\s+/g, " ").trim();
+  if(!raw) return false;
+
+  const normalized = normalizeAnalyticsHeader(raw);
+  if(!normalized) return false;
+  if(/^(всього|усього|разом)\b/.test(normalized)) return false;
+
+  if(/(тактич|оператив|операц|стратег|зеніт|перехоп|літак.?камікадз|fpv|розвід|удар|логіст|мультиротор|коптер|літаков|літак|бомбер)/.test(normalized)){
+    return true;
+  }
+
+  return false;
+
+}
+
+function detectComparisonSectionRow(row, columns){
+
+  const rawValues = (row || []).map(value=>String(value || "").replace(/\s+/g, " ").trim());
+  const nonEmptyValues = rawValues.filter(Boolean);
+  if(!nonEmptyValues.length) return "";
+  if(isComparisonSummaryRow(row, columns)) return "";
+
+  const candidate = String(row?.[columns?.name] || row?.[columns?.model] || row?.[0] || "").replace(/\s+/g, " ").trim();
+  if(!candidate || !isComparisonSectionLabelText(candidate)) return "";
+
+  const hasAnyStructuredData = [
+    columns?.vendor,
+    columns?.systemPrice,
+    columns?.unitPrice,
+    columns?.quantity,
+    columns?.payload,
+    columns?.speed,
+    columns?.radius,
+    columns?.distance,
+    columns?.flightTime,
+    columns?.height,
+    columns?.wind,
+    columns?.deployTime,
+    columns?.cameraType,
+    columns?.codified,
+    columns?.notes,
+  ]
+    .filter(idx=>idx >= 0)
+    .some(idx=>String(row?.[idx] || "").trim());
+
+  if(hasAnyStructuredData) return "";
+  if(nonEmptyValues.length > 2) return "";
+
+  return candidate;
+
+}
+
+function getComparisonSectionLabel(item){
+
+  const raw = String(item?.section || "").trim();
+  return raw || "Загальний зріз";
+
+}
+
+function getComparisonItemMetricStats(item, sectionMetricStats, globalMetricStats){
+
+  const sectionKey = String(item?.section || "").trim();
+  if(sectionKey && sectionMetricStats?.[sectionKey]) return sectionMetricStats[sectionKey];
+  return globalMetricStats || {};
+
+}
+
 function parseComparisonUsageInfo(notes=""){
 
   const raw = String(notes || "").replace(/\s+/g, " ").trim();
@@ -4986,20 +5055,29 @@ function buildComparisonAnalytics(rows, title=""){
     deployTime: "хв",
   };
   const notesColumn = detectComparisonNotesColumn(grid.slice(1), columns);
+  const items = [];
+  let currentSection = "";
 
-  const items = grid.slice(1).map((row, index)=>{
-    if(isComparisonSummaryRow(row, columns)) return null;
+  grid.slice(1).forEach((row, index)=>{
+    if(isComparisonSummaryRow(row, columns)) return;
+
+    const sectionLabel = detectComparisonSectionRow(row, columns);
+    if(sectionLabel){
+      currentSection = sectionLabel;
+      return;
+    }
 
     const model = String(row?.[columns.model] || row?.[columns.name] || "").trim();
     const vendor = columns.vendor >= 0 ? String(row?.[columns.vendor] || "").trim() : "";
     const name = model || vendor || `Позиція ${index + 1}`;
 
-    if(isAnalyticsSummaryLabel(name)) return null;
+    if(isAnalyticsSummaryLabel(name)) return;
 
     const item = {
       name,
       vendor,
       model,
+      section: currentSection,
       systemPrice: columns.systemPrice >= 0 ? sanitizeComparisonMetricNumber(parseAnalyticsNumber(row?.[columns.systemPrice])) : null,
       unitPrice: columns.unitPrice >= 0 ? sanitizeComparisonMetricNumber(parseAnalyticsNumber(row?.[columns.unitPrice])) : null,
       quantity: columns.quantity >= 0 ? parseAnalyticsNumber(row?.[columns.quantity]) : null,
@@ -5023,14 +5101,13 @@ function buildComparisonAnalytics(rows, title=""){
       item.distance, item.flightTime, item.height, item.wind, item.deployTime
     ].some(v=>Number.isFinite(v)) || !!item.cameraType || !!item.vendor || !!item.model;
 
-    if(!hasData) return null;
+    if(!hasData) return;
 
     item.codified = /^(так|є|yes|true|1)$/i.test(item.codifiedRaw);
     item.thermal = /тепловіз|thermal|ir/i.test(item.cameraType);
     item.usage = parseComparisonUsageInfo(item.notes);
-
-    return item;
-  }).filter(Boolean);
+    items.push(item);
+  });
 
   if(!items.length) return null;
 
@@ -5063,7 +5140,22 @@ function buildComparisonAnalytics(rows, title=""){
   const codifiedCount = items.filter(item=>item.codified).length;
   const thermalCount = items.filter(item=>item.thermal).length;
   const vendors = Array.from(new Set(items.map(item=>item.vendor).filter(Boolean)));
-  const metricStats = buildComparisonMetricStats(items, ["payload", "distance", "speed", "flightTime", "radius", "height", "wind", "systemPrice", "deployTime"]);
+  const comparisonMetricKeys = ["payload", "distance", "speed", "flightTime", "radius", "height", "wind", "systemPrice", "deployTime"];
+  const metricStats = buildComparisonMetricStats(items, comparisonMetricKeys);
+  const sectionMetricStats = {};
+  const sectionGroups = items.reduce((acc, item)=>{
+    const key = String(item?.section || "").trim();
+    if(!key) return acc;
+    if(!acc[key]) acc[key] = [];
+    acc[key].push(item);
+    return acc;
+  }, {});
+
+  Object.entries(sectionGroups).forEach(([sectionKey, sectionItems])=>{
+    if((sectionItems || []).length >= 2){
+      sectionMetricStats[sectionKey] = buildComparisonMetricStats(sectionItems, comparisonMetricKeys);
+    }
+  });
   const scenario = detectComparisonScenario(title, items);
   const scenarioProfiles = COMPARISON_SCENARIO_PROFILES[scenario] || COMPARISON_SCENARIO_PROFILES.default;
   const profileScores = {};
@@ -5072,9 +5164,11 @@ function buildComparisonAnalytics(rows, title=""){
   Object.entries(COMPARISON_PROFILE_CONFIG).forEach(([profileId, profile])=>{
     const scoreKey = `${profileId}Score`;
     items.forEach(item=>{
-      item[scoreKey] = calculateComparisonProfileScore(item, metricStats, profile.weights, profileId, comparisonUnits);
-      item.__comparisonMetricStats = metricStats;
+      const itemMetricStats = getComparisonItemMetricStats(item, sectionMetricStats, metricStats);
+      item[scoreKey] = calculateComparisonProfileScore(item, itemMetricStats, profile.weights, profileId, comparisonUnits);
+      item.__comparisonMetricStats = itemMetricStats;
       item.__comparisonScenario = scenario;
+      item.__comparisonSection = item.section || "";
     });
     profileScores[profileId] = scoreKey;
     profileRankings[profileId] = items
@@ -5146,6 +5240,7 @@ function renderComparisonTopList(title, rows, metricKey, metricLabel, unit=""){
       parts.push(`${metricLabel}: ${fmtNum(item[metricKey])}${unit}`);
     }
     if(item.vendor) parts.push(item.vendor);
+    if(item?.section) parts.push(`Секція: ${getComparisonSectionLabel(item)}`);
     const detachmentCount = getComparisonUsageDetachmentCount(item);
     if(detachmentCount) parts.push(`Загальна кіл-ть загонів: ${fmtNum(detachmentCount)}`);
     if(item.notes) parts.push(formatComparisonUsageMeta(item));
@@ -5188,6 +5283,7 @@ function renderComparisonTopListAsc(title, rows, metricKey, metricLabel, unit=""
   const buildMeta = (item)=>{
     const parts = [`${metricLabel}: ${formatValue(item)}`];
     if(item.vendor) parts.push(item.vendor);
+    if(item?.section) parts.push(`Секція: ${getComparisonSectionLabel(item)}`);
     const detachmentCount = getComparisonUsageDetachmentCount(item);
     if(detachmentCount) parts.push(`Загальна кіл-ть загонів: ${fmtNum(detachmentCount)}`);
     if(item.notes) parts.push(formatComparisonUsageMeta(item));
@@ -5309,7 +5405,7 @@ function buildComparisonOverallRankingHelpHtml(profileIds=["universal"]){
       <div class="comparison-help-block">
         <div class="comparison-help-title">Бальна система рейтингу</div>
         <div class="comparison-help-text">
-          Для кожного підвиду БпЛА використовується свій профіль. Кожна характеристика переводиться у <b>бал 0–100 відносно інших БпЛА в цій самій вкладці</b> за принципом мінімум–максимум, після чого множиться на вагу критерію. Сума ваг завжди приводиться до <b>100%</b>.
+          Для кожного підвиду БпЛА використовується свій профіль. Кожна характеристика переводиться у <b>бал 0–100 відносно інших БпЛА в цій самій секції таблиці</b> (наприклад, тактичні / оперативно-тактичні), а якщо секції немає — у межах усієї вкладки. Після цього бал множиться на вагу критерію. Сума ваг завжди приводиться до <b>100%</b>.
         </div>
       </div>
       <div class="comparison-help-block comparison-help-primary">
@@ -5657,6 +5753,7 @@ function buildComparisonItemDetailHtml(item){
       title: "Економіка",
       rows: [
         {label:"Виробник", value:item.vendor || "—", accent:"neutral"},
+        {label:"Секція", value:getComparisonSectionLabel(item), accent:item.section ? "strong" : "neutral"},
         {label:"Вартість БпАК", value:Number.isFinite(item.systemPrice) ? fmtCompactMoneyUa(item.systemPrice) : "—", accent:classifyAccent("systemPrice", item.systemPrice)},
         {label:"Вартість БпЛА", value:Number.isFinite(item.unitPrice) ? fmtCompactMoneyUa(item.unitPrice) : "—", accent:"neutral"},
         {label:"Кількість у комплексі", value:Number.isFinite(item.quantity) ? fmtNum(item.quantity) : "—", accent:classifyAccent("quantity", item.quantity)},
@@ -5705,9 +5802,10 @@ function buildComparisonItemDetailHtml(item){
   const primaryProfileId = primaryProfile?.key ? primaryProfile.key.replace(/Score$/, "") : "";
   const primaryProfileConfig = {id: primaryProfileId || "universal", ...(COMPARISON_PROFILE_CONFIG[primaryProfileId] || COMPARISON_PROFILE_CONFIG.universal)};
   const scoreBreakdown = buildComparisonScoreBreakdown(item, item.__comparisonMetricStats || {}, primaryProfileConfig);
+  const sectionLabel = getComparisonSectionLabel(item);
   const scoreBreakdownHtml = `
     <div class="comparison-detail-section comparison-score-breakdown">
-      <div class="comparison-detail-section-title">Розрахунок рейтингу: ${htmlesc(primaryProfileConfig.shortLabel || primaryProfileConfig.label || "профіль")}</div>
+      <div class="comparison-detail-section-title">Розрахунок рейтингу: ${htmlesc(primaryProfileConfig.shortLabel || primaryProfileConfig.label || "профіль")}${item.section ? ` · ${htmlesc(sectionLabel)}` : ""}</div>
       <div class="comparison-score-formula">
         <div>Формула: сума(бал характеристики × нормалізована вага)</div>
         <b class="mono">${fmtNum(scoreBreakdown.score)} / 100</b>
@@ -5786,7 +5884,7 @@ function buildComparisonItemDetailHtml(item){
     <div class="comparison-detail-modal">
       <div class="comparison-detail-head">
         <div class="comparison-detail-title">${htmlesc(item.name || "Модель")}</div>
-        ${item.vendor ? `<div class="comparison-detail-sub">${htmlesc(item.vendor)}</div>` : ``}
+        ${(item.vendor || item.section) ? `<div class="comparison-detail-sub">${htmlesc([item.vendor, item.section ? `Секція: ${sectionLabel}` : ""].filter(Boolean).join(" · "))}</div>` : ``}
       </div>
       ${recommendationBlock}
       <div class="comparison-detail-groups">
