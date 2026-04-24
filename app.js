@@ -3451,6 +3451,7 @@ function parseComparisonMetricCell(value){
       primary,
       min: primary,
       max: primary,
+      avg: primary,
       hasRange: false,
       values: Number.isFinite(primary) ? [primary] : [],
     };
@@ -3460,6 +3461,7 @@ function parseComparisonMetricCell(value){
     primary: values[0],
     min: Math.min(...values),
     max: Math.max(...values),
+    avg: values.reduce((sum, num)=>sum + num, 0) / values.length,
     hasRange: values.length > 1 && Math.min(...values) !== Math.max(...values),
     values,
   };
@@ -3469,6 +3471,18 @@ function parseComparisonMetricCell(value){
 function getComparisonMetricMeta(item, key){
 
   return item?.metricMeta?.[key] || null;
+
+}
+
+function hasComparisonMetricOptions(item, key){
+
+  return !!getComparisonMetricMeta(item, key)?.hasRange;
+
+}
+
+function hasComparisonPriceOptions(item){
+
+  return hasComparisonMetricOptions(item, "systemPrice") || hasComparisonMetricOptions(item, "unitPrice");
 
 }
 
@@ -5183,8 +5197,8 @@ function buildComparisonAnalytics(rows, title=""){
       model,
       section: currentSection,
       metricMeta,
-      systemPrice: sanitizeComparisonMetricNumber(metricMeta.systemPrice?.primary),
-      unitPrice: sanitizeComparisonMetricNumber(metricMeta.unitPrice?.primary),
+      systemPrice: sanitizeComparisonMetricNumber(metricMeta.systemPrice?.hasRange ? metricMeta.systemPrice?.avg : metricMeta.systemPrice?.primary),
+      unitPrice: sanitizeComparisonMetricNumber(metricMeta.unitPrice?.hasRange ? metricMeta.unitPrice?.avg : metricMeta.unitPrice?.primary),
       quantity: metricMeta.quantity?.primary,
       payload: sanitizeComparisonMetricNumber(metricMeta.payload?.primary),
       speed: sanitizeComparisonMetricNumber(metricMeta.speed?.primary),
@@ -5360,11 +5374,16 @@ function renderComparisonTopList(title, rows, metricKey, metricLabel, unit=""){
           ? rows.map((item, index)=>{
               const detailKey = registerRenderedTableModal(`Модель: ${item.name}`, buildComparisonItemDetailHtml(item));
               const isNotUsed = item?.usage?.status === "not_used";
+              const showOptionsBadge = metricKey === "systemPrice"
+                ? hasComparisonMetricOptions(item, "systemPrice")
+                : metricKey === "universalScore"
+                  ? hasComparisonPriceOptions(item)
+                  : false;
               return `
               <button type="button" class="comparison-compact-card comparison-card-btn ${isNotUsed ? "is-not-used" : ""}" data-action="openRenderedTableModal" data-arg1="${detailKey}">
                 <div class="comparison-compact-rank mono">${index + 1}</div>
                 <div class="comparison-compact-main">
-                  <div class="comparison-compact-title">${htmlesc(item.name)}</div>
+                  <div class="comparison-compact-title">${htmlesc(item.name)}${showOptionsBadge ? ` <span class="comparison-insight-tag">є варіанти</span>` : ""}</div>
                   <div class="comparison-compact-meta">${htmlesc(buildMeta(item))}</div>
                 </div>
                 <div class="badge ${isNotUsed ? "b-danger" : "b-blue"} mono">${fmtNum(item[metricKey])}${unit}</div>
@@ -5402,11 +5421,12 @@ function renderComparisonTopListAsc(title, rows, metricKey, metricLabel, unit=""
           ? rows.map((item, index)=>{
               const detailKey = registerRenderedTableModal(`Модель: ${item.name}`, buildComparisonItemDetailHtml(item));
               const isNotUsed = item?.usage?.status === "not_used";
+              const showOptionsBadge = metricKey === "systemPrice" ? hasComparisonMetricOptions(item, "systemPrice") : false;
               return `
               <button type="button" class="comparison-compact-card comparison-card-btn ${isNotUsed ? "is-not-used" : ""}" data-action="openRenderedTableModal" data-arg1="${detailKey}">
                 <div class="comparison-compact-rank mono">${index + 1}</div>
                 <div class="comparison-compact-main">
-                  <div class="comparison-compact-title">${htmlesc(item.name)}</div>
+                  <div class="comparison-compact-title">${htmlesc(item.name)}${showOptionsBadge ? ` <span class="comparison-insight-tag">є варіанти</span>` : ""}</div>
                   <div class="comparison-compact-meta">${htmlesc(buildMeta(item))}</div>
                 </div>
                 <div class="badge ${isNotUsed ? "b-danger" : "b-ok"} mono">${formatValue(item)}</div>
@@ -5858,8 +5878,8 @@ function buildComparisonItemDetailHtml(item){
       rows: [
         {label:"Виробник", value:item.vendor || "—", accent:"neutral"},
         {label:"Секція", value:getComparisonSectionLabel(item), accent:item.section ? "strong" : "neutral"},
-        {label:"Вартість БпАК", value:Number.isFinite(item.systemPrice) ? formatComparisonMetricDisplay(item, "systemPrice", units) : "—", accent:classifyAccent("systemPrice", item.systemPrice)},
-        {label:"Вартість БпЛА", value:Number.isFinite(item.unitPrice) ? formatComparisonMetricDisplay(item, "unitPrice", units) : "—", accent:"neutral"},
+        {label:"Вартість БпАК", value:Number.isFinite(item.systemPrice) ? formatComparisonMetricDisplay(item, "systemPrice", units) : "—", accent:classifyAccent("systemPrice", item.systemPrice), hasOptions:hasComparisonMetricOptions(item, "systemPrice")},
+        {label:"Вартість БпЛА", value:Number.isFinite(item.unitPrice) ? formatComparisonMetricDisplay(item, "unitPrice", units) : "—", accent:"neutral", hasOptions:hasComparisonMetricOptions(item, "unitPrice")},
         {label:"Кількість у комплексі", value:Number.isFinite(item.quantity) ? formatComparisonMetricDisplay(item, "quantity", units) : "—", accent:classifyAccent("quantity", item.quantity)},
       ],
     },
@@ -5922,7 +5942,9 @@ function buildComparisonItemDetailHtml(item){
               ? `${formatComparisonBreakdownValue(row.minValue, row.key, units)}–${formatComparisonBreakdownValue(row.maxValue, row.key, units)}`
               : "";
             const rawMeta = getComparisonMetricMeta(item, row.key);
-            const primaryNote = rawMeta?.hasRange && Number.isFinite(rawMeta.primary)
+            const primaryNote = rawMeta?.hasRange && (row.key === "systemPrice" || row.key === "unitPrice") && Number.isFinite(rawMeta.avg)
+              ? `Для розрахунку взято середнє значення з комірки: ${formatComparisonBreakdownValue(rawMeta.avg, row.key, units)}`
+              : rawMeta?.hasRange && Number.isFinite(rawMeta.primary)
               ? `Для розрахунку взято перше значення з комірки: ${formatComparisonBreakdownValue(rawMeta.primary, row.key, units)}`
               : "";
             return `
@@ -6005,6 +6027,7 @@ function buildComparisonItemDetailHtml(item){
                 <div class="comparison-detail-row ${row.accent === "strong" ? "is-strong" : (row.accent === "weak" ? "is-weak" : "")}">
                   <div class="comparison-detail-row-top">
                     <div class="comparison-detail-label">${htmlesc(row.label)}</div>
+                    ${row.hasOptions ? `<span class="comparison-detail-flag">є варіанти</span>` : ``}
                     ${row.accent === "strong" ? `<span class="comparison-detail-flag is-strong">сильна</span>` : (row.accent === "weak" ? `<span class="comparison-detail-flag is-weak">слабка</span>` : ``)}
                   </div>
                   <div class="comparison-detail-value">${htmlesc(String(row.value || "—"))}</div>
