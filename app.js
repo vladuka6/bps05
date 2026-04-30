@@ -23,6 +23,7 @@ const SYNC_DEBOUNCE_MS = 2500;
 const DEVICE_ID_KEY = "planner_device_id";
 
 const EVAL_TOAST_DATE_KEY = "planner_eval_toast_date";
+const COMPARISON_WEIGHT_PREFS_KEY = "planner_comparison_weight_prefs_v1";
 
 const SYNC_DIRTY_KEY = "planner_sync_dirty";
 
@@ -3407,6 +3408,22 @@ function parseAnalyticsNumber(value){
 
 }
 
+function loadComparisonWeightPrefs(){
+
+  try{
+    return JSON.parse(safeGet(COMPARISON_WEIGHT_PREFS_KEY) || "{}") || {};
+  } catch{
+    return {};
+  }
+
+}
+
+function saveComparisonWeightPrefsMap(data){
+
+  return safeSet(COMPARISON_WEIGHT_PREFS_KEY, JSON.stringify(data || {}));
+
+}
+
 function parseComparisonMetricNumber(value){
 
   const raw = String(value ?? "").replace(/\u00A0/g, " ").trim();
@@ -4750,25 +4767,25 @@ function buildComparisonUsageByDetachmentsHtml(items=[]){
       <div class="comparison-compact-grid">
         ${usedItems.length
           ? `
-              <div class="comparison-compact-card delta-nrk-card">
+              <div class="comparison-compact-card delta-nrk-card comparison-used-card">
                 <div class="comparison-compact-rank mono">✓</div>
                 <div class="comparison-compact-main">
                   <div class="comparison-compact-title">Використовуються у загонах</div>
                   <div class="comparison-compact-meta">Загальна кіл-ть загонів: ${fmtNum(usedDetachments.size)} · ${htmlesc(renderNames(usedItems, 12))}</div>
                 </div>
-                <div class="badge b-ok mono">${fmtNum(usedItems.length)}</div>
+                <div class="badge b-danger mono">${fmtNum(usedItems.length)}</div>
               </div>
             `
           : `<div class="hint">У примітках немає зрозумілої привʼязки до загонів.</div>`
         }
         ${notUsed.length ? `
-          <div class="comparison-compact-card delta-nrk-card comparison-not-used-card">
+          <div class="comparison-compact-card delta-nrk-card">
             <div class="comparison-compact-rank mono">!</div>
             <div class="comparison-compact-main">
               <div class="comparison-compact-title">Не використовуються / треба вивчити</div>
               <div class="comparison-compact-meta">${htmlesc(renderNames(notUsed, 8))}</div>
             </div>
-            <div class="badge b-danger mono">${fmtNum(notUsed.length)}</div>
+            <div class="badge b-ok mono">${fmtNum(notUsed.length)}</div>
           </div>
         ` : ""}
         ${unknown.length ? `
@@ -4825,10 +4842,12 @@ function normalizeComparisonMetric(value, stat, inverse=false){
   if(!Number.isFinite(num) || !stat) return null;
   if(num <= 0) return null;
 
-  if(stat.max <= stat.min) return null;
+  const base = inverse ? Number(stat.min) : Number(stat.max);
+  if(!Number.isFinite(base) || base <= 0) return null;
 
-  const raw = (num - stat.min) / (stat.max - stat.min);
-  return inverse ? (1 - raw) : raw;
+  const raw = inverse ? (base / num) : (num / base);
+  if(!Number.isFinite(raw)) return null;
+  return Math.max(0, Math.min(raw, 1));
 
 }
 
@@ -4863,8 +4882,8 @@ function getComparisonMetricScoreDetails(profileId, metric, rawValue, stat, unit
     rawValue: num,
     formulaText: stat
       ? (metric.inverse
-        ? `(${fmtNum(stat.max)} - ${fmtNum(num)}) / (${fmtNum(stat.max)} - ${fmtNum(stat.min)}) × 100`
-        : `(${fmtNum(num)} - ${fmtNum(stat.min)}) / (${fmtNum(stat.max)} - ${fmtNum(stat.min)}) × 100`)
+        ? `${fmtNum(stat.min)} / ${fmtNum(num)} × 100`
+        : `${fmtNum(num)} / ${fmtNum(stat.max)} × 100`)
       : "",
     minValue: stat?.min ?? null,
     maxValue: stat?.max ?? null,
@@ -5166,6 +5185,46 @@ const COMPARISON_PROFILE_CONFIG = {
   },
 };
 
+const COMPARISON_WEIGHT_STORAGE_KEY = "bps05_bpla_weight_profiles_v1";
+
+function loadComparisonWeightProfiles(){
+
+  try{
+    const raw = localStorage.getItem(COMPARISON_WEIGHT_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  }catch{
+    return {};
+  }
+
+}
+
+function saveComparisonWeightProfiles(data){
+
+  try{
+    localStorage.setItem(COMPARISON_WEIGHT_STORAGE_KEY, JSON.stringify(data || {}));
+  }catch{}
+
+}
+
+function getComparisonProfileRuntimeConfig(profileId="universal"){
+
+  const base = COMPARISON_PROFILE_CONFIG[profileId] || COMPARISON_PROFILE_CONFIG.universal;
+  const saved = loadComparisonWeightProfiles()?.[profileId];
+  const savedMap = saved && typeof saved === "object" ? saved : null;
+
+  return {
+    ...base,
+    id: profileId,
+    weights: (base.weights || []).map(metric=>{
+      const fallbackPercent = Math.round(Number(metric.weight || 0) * 100);
+      const savedPercent = savedMap && Number.isFinite(Number(savedMap[metric.key])) ? Math.max(0, Number(savedMap[metric.key])) : fallbackPercent;
+      return {...metric, weight: savedPercent / 100};
+    }),
+  };
+
+}
+
 const COMPARISON_SCENARIO_PROFILES = {
   default: ["universal", "value"],
   fpv_kamikaze: ["fpv_kamikaze", "value", "universal"],
@@ -5334,7 +5393,8 @@ function buildComparisonAnalytics(rows, title=""){
   const profileScores = {};
   const profileRankings = {};
 
-  Object.entries(COMPARISON_PROFILE_CONFIG).forEach(([profileId, profile])=>{
+  Object.keys(COMPARISON_PROFILE_CONFIG).forEach(profileId=>{
+    const profile = getComparisonProfileRuntimeConfig(profileId);
     const scoreKey = `${profileId}Score`;
     items.forEach(item=>{
       const itemMetricStats = getComparisonItemMetricStats(item, sectionMetricStats, metricStats);
@@ -5353,7 +5413,7 @@ function buildComparisonAnalytics(rows, title=""){
   const bestOverall = overallTop[0] || null;
   const featuredProfiles = scenarioProfiles.map(profileId=>({
     id: profileId,
-    config: COMPARISON_PROFILE_CONFIG[profileId],
+    config: getComparisonProfileRuntimeConfig(profileId),
     scoreKey: profileScores[profileId],
     top: profileRankings[profileId] || [],
     best: (profileRankings[profileId] || [])[0] || null,
@@ -5432,20 +5492,20 @@ function renderComparisonTopList(title, rows, metricKey, metricLabel, unit=""){
               <div class="comparison-compact-grid">
                 ${group.items.map((item, index)=>{
                   const detailKey = registerRenderedTableModal(`Модель: ${item.name}`, buildComparisonItemDetailHtml(item));
-                  const isNotUsed = item?.usage?.status === "not_used";
+                  const isUsed = item?.usage?.status === "used";
                   const showOptionsBadge = metricKey === "systemPrice"
                     ? hasComparisonMetricOptions(item, "systemPrice")
                     : metricKey === "universalScore"
                       ? hasComparisonPriceOptions(item)
                       : false;
                   return `
-                    <button type="button" class="comparison-compact-card comparison-card-btn ${isNotUsed ? "is-not-used" : ""}" data-action="openRenderedTableModal" data-arg1="${detailKey}">
+                    <button type="button" class="comparison-compact-card comparison-card-btn ${isUsed ? "is-used" : ""}" data-action="openRenderedTableModal" data-arg1="${detailKey}">
                       <div class="comparison-compact-rank mono">${index + 1}</div>
                       <div class="comparison-compact-main">
                         <div class="comparison-compact-title">${htmlesc(item.name)}${showOptionsBadge ? ` <span class="comparison-insight-tag">є варіанти</span>` : ""}</div>
                         <div class="comparison-compact-meta">${htmlesc(buildMeta(item))}</div>
                       </div>
-                      <div class="badge ${isNotUsed ? "b-danger" : "b-blue"} mono">${fmtNum(item[metricKey])}${unit}</div>
+                      <div class="badge ${isUsed ? "b-danger" : "b-blue"} mono">${fmtNum(item[metricKey])}${unit}</div>
                     </button>
                   `;
                 }).join("")}
@@ -5486,16 +5546,16 @@ function renderComparisonTopListAsc(title, rows, metricKey, metricLabel, unit=""
               <div class="comparison-compact-grid">
                 ${group.items.map((item, index)=>{
                   const detailKey = registerRenderedTableModal(`Модель: ${item.name}`, buildComparisonItemDetailHtml(item));
-                  const isNotUsed = item?.usage?.status === "not_used";
+                  const isUsed = item?.usage?.status === "used";
                   const showOptionsBadge = metricKey === "systemPrice" ? hasComparisonMetricOptions(item, "systemPrice") : false;
                   return `
-                    <button type="button" class="comparison-compact-card comparison-card-btn ${isNotUsed ? "is-not-used" : ""}" data-action="openRenderedTableModal" data-arg1="${detailKey}">
+                    <button type="button" class="comparison-compact-card comparison-card-btn ${isUsed ? "is-used" : ""}" data-action="openRenderedTableModal" data-arg1="${detailKey}">
                       <div class="comparison-compact-rank mono">${index + 1}</div>
                       <div class="comparison-compact-main">
                         <div class="comparison-compact-title">${htmlesc(item.name)}${showOptionsBadge ? ` <span class="comparison-insight-tag">є варіанти</span>` : ""}</div>
                         <div class="comparison-compact-meta">${htmlesc(buildMeta(item))}</div>
                       </div>
-                      <div class="badge ${isNotUsed ? "b-danger" : "b-ok"} mono">${formatValue(item)}</div>
+                      <div class="badge ${isUsed ? "b-danger" : "b-ok"} mono">${formatValue(item)}</div>
                     </button>
                   `;
                 }).join("")}
@@ -5514,7 +5574,7 @@ function buildComparisonOverallRankingHelpHtml(profileIds=["universal"]){
   const activeIds = (Array.isArray(profileIds) && profileIds.length ? profileIds : ["universal"])
     .filter(id=>COMPARISON_PROFILE_CONFIG[id]);
   const primaryId = activeIds[0] || "universal";
-  const primaryProfile = COMPARISON_PROFILE_CONFIG[primaryId] || COMPARISON_PROFILE_CONFIG.universal;
+  const primaryProfile = getComparisonProfileRuntimeConfig(primaryId);
   const groupId = `cmp_weight_${Math.random().toString(36).slice(2, 8)}`;
   const exampleValues = {
     systemPrice: 0.82,
@@ -5533,7 +5593,7 @@ function buildComparisonOverallRankingHelpHtml(profileIds=["universal"]){
   };
 
   const profileCards = activeIds.map(id=>{
-    const profile = COMPARISON_PROFILE_CONFIG[id];
+    const profile = getComparisonProfileRuntimeConfig(id);
     const topWeights = (profile.weights || [])
       .slice()
       .sort((a,b)=>(b.weight || 0) - (a.weight || 0))
@@ -5597,14 +5657,14 @@ function buildComparisonOverallRankingHelpHtml(profileIds=["universal"]){
       <div class="comparison-help-block">
         <div class="comparison-help-title">Бальна система рейтингу</div>
         <div class="comparison-help-text">
-          Для кожного підвиду БпЛА використовується свій профіль. Кожна характеристика переводиться у <b>бал 0–100 відносно інших БпЛА в цій самій секції таблиці</b> (наприклад, тактичні / оперативно-тактичні), а якщо секції немає — у межах усієї вкладки. Після цього бал множиться на вагу критерію. Сума ваг завжди приводиться до <b>100%</b>.
+          Для кожного підвиду БпЛА використовується свій профіль. Для характеристик, де <b>більше = краще</b>, бал рахується як <b>значення / максимум секції × 100</b>. Для характеристик, де <b>менше = краще</b>, як <b>мінімум секції / значення × 100</b>. Якщо секції немає — береться вся вкладка. Після цього бал множиться на вагу критерію. Сума ваг завжди приводиться до <b>100%</b>.
         </div>
       </div>
       <div class="comparison-help-block comparison-help-primary">
         <div class="comparison-help-title">Профілі для цієї таблиці</div>
         <div class="comparison-profile-help-grid">${profileCards}</div>
       </div>
-      <div class="comparison-help-block" data-weight-help="${groupId}">
+      <div class="comparison-help-block" data-weight-help="${groupId}" data-weight-profile="${htmlesc(primaryId)}">
         <div class="comparison-help-title">Ваги критеріїв: ${htmlesc(primaryProfile.shortLabel || primaryProfile.label)}</div>
         <div class="comparison-help-text">Повзунки задають відносну важливість. Якщо один критерій збільшити, система автоматично перерахує відсотки всіх критеріїв так, щоб разом було 100%.</div>
         <div class="comparison-score-formula comparison-weight-total">
@@ -5612,6 +5672,10 @@ function buildComparisonOverallRankingHelpHtml(profileIds=["universal"]){
           <b class="mono" data-weight-total="${groupId}">100%</b>
         </div>
         <div class="comparison-weight-grid">${weightRows}</div>
+        <div class="actions" style="margin-top:10px;">
+          <button type="button" class="btn primary" data-action="saveComparisonWeightProfile" data-arg1="${groupId}">Зберегти</button>
+          <button type="button" class="btn ghost" data-action="resetComparisonWeightProfile" data-arg1="${groupId}">Скинути</button>
+        </div>
       </div>
       <div class="comparison-help-block">
         <div class="comparison-help-title">Приклад розрахунку</div>
@@ -5985,14 +6049,17 @@ function buildComparisonItemDetailHtml(item){
     },
   ].filter(group=>group.rows.some(row=>String(row.value || "").trim() && String(row.value || "").trim() !== "—"));
 
-  const profileRows = Object.entries(COMPARISON_PROFILE_CONFIG)
-    .map(([profileId, config])=>({label:config?.shortLabel || config?.label || profileId, key:`${profileId}Score`}))
+  const profileRows = Object.keys(COMPARISON_PROFILE_CONFIG)
+    .map(profileId=>{
+      const config = getComparisonProfileRuntimeConfig(profileId);
+      return {label:config?.shortLabel || config?.label || profileId, key:`${profileId}Score`};
+    })
     .filter(row=>Number.isFinite(item?.[row.key]))
     .map(row=>({...row, score:Number(item[row.key])}))
     .sort((a,b)=>b.score - a.score);
   const primaryProfile = profileRows[0] || null;
   const primaryProfileId = primaryProfile?.key ? primaryProfile.key.replace(/Score$/, "") : "";
-  const primaryProfileConfig = {id: primaryProfileId || "universal", ...(COMPARISON_PROFILE_CONFIG[primaryProfileId] || COMPARISON_PROFILE_CONFIG.universal)};
+  const primaryProfileConfig = getComparisonProfileRuntimeConfig(primaryProfileId || "universal");
   const scoreBreakdown = buildComparisonScoreBreakdown(item, item.__comparisonMetricStats || {}, primaryProfileConfig);
   const sectionLabel = getComparisonSectionLabel(item);
   const scoreBreakdownHtml = `
@@ -9159,6 +9226,15 @@ function openRenderedTableModal(key){
 
   requestAnimationFrame(()=>{
     animateRenderedDonuts(document.querySelector('.sheet'));
+    document.querySelectorAll("[data-weight-help]").forEach(helpBlock=>{
+      const groupId = String(helpBlock.getAttribute("data-weight-help") || "");
+      const inputs = [...document.querySelectorAll(`[data-weight-group="${CSS.escape(groupId)}"]`)];
+      const baseline = inputs.map(el=>`${el.getAttribute("data-weight-key") || ""}:${Math.max(0, Number(el.value || 0))}`).join("|");
+      helpBlock.setAttribute("data-weight-baseline", baseline);
+      helpBlock.setAttribute("data-weight-current", baseline);
+      helpBlock.setAttribute("data-weight-dirty", "0");
+      updateComparisonWeightPreview();
+    });
   });
 
 }
@@ -11382,6 +11458,79 @@ function updateComparisonWeightPreview(){
     const score = rawTotal > 0 ? Math.round(weightedSum * 100) : 0;
     resultEl.textContent = `${fmtNum(score)} / 100`;
   }
+
+  const helpBlock = document.querySelector(`[data-weight-help="${CSS.escape(groupId)}"]`);
+  if(helpBlock){
+    const baseline = String(helpBlock.getAttribute("data-weight-baseline") || "");
+    const current = inputs
+      .map(el=>`${el.getAttribute("data-weight-key") || ""}:${Math.max(0, Number(el.value || 0))}`)
+      .join("|");
+    helpBlock.setAttribute("data-weight-current", current);
+    helpBlock.setAttribute("data-weight-dirty", baseline && baseline !== current ? "1" : "0");
+  }
+
+}
+
+function saveComparisonWeightProfile(groupId=""){
+
+  const helpBlock = document.querySelector(`[data-weight-help="${CSS.escape(String(groupId || ""))}"]`);
+  if(!helpBlock) return;
+
+  const profileId = String(helpBlock.getAttribute("data-weight-profile") || "").trim();
+  if(!profileId) return;
+
+  const inputs = [...document.querySelectorAll(`[data-weight-group="${CSS.escape(String(groupId || ""))}"]`)];
+  if(!inputs.length) return;
+
+  const payload = {};
+  inputs.forEach(input=>{
+    const key = String(input.getAttribute("data-weight-key") || "").trim();
+    if(!key) return;
+    payload[key] = Math.max(0, Number(input.value || 0));
+  });
+
+  const allProfiles = loadComparisonWeightProfiles();
+  allProfiles[profileId] = payload;
+  saveComparisonWeightProfiles(allProfiles);
+
+  const current = inputs.map(el=>`${el.getAttribute("data-weight-key") || ""}:${Math.max(0, Number(el.value || 0))}`).join("|");
+  helpBlock.setAttribute("data-weight-baseline", current);
+  helpBlock.setAttribute("data-weight-current", current);
+  helpBlock.setAttribute("data-weight-dirty", "0");
+
+  toast("Ваги збережено. Онови аналітику, щоб рейтинг перерахувався.");
+
+}
+
+function resetComparisonWeightProfile(groupId=""){
+
+  const helpBlock = document.querySelector(`[data-weight-help="${CSS.escape(String(groupId || ""))}"]`);
+  if(!helpBlock) return;
+
+  const profileId = String(helpBlock.getAttribute("data-weight-profile") || "").trim();
+  if(!profileId) return;
+
+  const inputs = [...document.querySelectorAll(`[data-weight-group="${CSS.escape(String(groupId || ""))}"]`)];
+  if(!inputs.length) return;
+
+  const allProfiles = loadComparisonWeightProfiles();
+  delete allProfiles[profileId];
+  saveComparisonWeightProfiles(allProfiles);
+
+  const runtimeProfile = getComparisonProfileRuntimeConfig(profileId);
+  inputs.forEach(input=>{
+    const key = String(input.getAttribute("data-weight-key") || "").trim();
+    const metric = (runtimeProfile.weights || []).find(item=>item.key === key);
+    input.value = Math.round(Number(metric?.weight || 0) * 100);
+  });
+
+  const current = inputs.map(el=>`${el.getAttribute("data-weight-key") || ""}:${Math.max(0, Number(el.value || 0))}`).join("|");
+  helpBlock.setAttribute("data-weight-baseline", current);
+  helpBlock.setAttribute("data-weight-current", current);
+  helpBlock.setAttribute("data-weight-dirty", "0");
+  updateComparisonWeightPreview();
+
+  toast("Ваги скинуто до базових.");
 
 }
 
@@ -15356,6 +15505,15 @@ function showSheet(title, html, opts={}){
 }
 
 function hideSheet(){
+
+  const dirtyWeightBlock = document.querySelector(".rendered-analytics-sheet [data-weight-help][data-weight-dirty='1']");
+  if(dirtyWeightBlock){
+    const groupId = String(dirtyWeightBlock.getAttribute("data-weight-help") || "");
+    const shouldSave = confirm("Зберегти зміни ваг перед закриттям?");
+    if(shouldSave){
+      saveComparisonWeightProfile(groupId);
+    }
+  }
 
   if(_sheetStackOn && _sheetStack.length){
 
@@ -28268,6 +28426,8 @@ const ACTIONS = {
   saveTaskEvaluationNow,
 
   openRenderedTableModal,
+  saveComparisonWeightProfile,
+  resetComparisonWeightProfile,
 
   openReferenceGeneral,
 
