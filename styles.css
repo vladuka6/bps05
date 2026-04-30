@@ -2672,13 +2672,16 @@
         justify-content:center;
         gap:8px;
         margin:4px 0 8px;
-        padding:2px 8px;
+        padding:6px 12px;
         text-align:center;
         font-size:13px;
         font-weight:1000;
         color:var(--text);
         text-transform:uppercase;
         letter-spacing:.04em;
+        border:1px solid rgba(95,142,245,.18);
+        border-radius:999px;
+        background:linear-gradient(180deg, rgba(95,142,245,.08), rgba(95,142,245,.04));
       }
     .comparison-section-heading::before{
         content:"";
@@ -5631,6 +5634,8 @@
     }
     body.theme-dark .comparison-section-heading{
       color:#d7e6ff;
+      border-color:rgba(95,142,245,.28);
+      background:linear-gradient(180deg, rgba(95,142,245,.14), rgba(95,142,245,.07));
     }
     body.theme-dark .comparison-section-heading::before{
       background:rgba(95,142,245,.22);
