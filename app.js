@@ -28688,6 +28688,17 @@ function looksLikeRemoteStateRegression(localState, remoteState){
 
 }
 
+function shouldPreferRemoteOverDirtyLocal(localState, remoteState){
+
+  const localStamp = stateStamp(localState);
+  const remoteStamp = stateStamp(remoteState);
+  if(!remoteStamp) return false;
+  if(localStamp && remoteStamp <= localStamp) return false;
+
+  return looksLikeRemoteStateRegression(remoteState, localState);
+
+}
+
 function queueSync(){
 
   if(!SYNC_URL) return;
@@ -28871,6 +28882,30 @@ async function pullSync(){
     const remoteStamp = stateStamp(remote);
 
     if(_syncDirty || _syncPending){
+
+      if(shouldPreferRemoteOverDirtyLocal(STATE, remote)){
+
+        STATE = remote;
+
+        saveState(STATE, {skipSyncStamp:true});
+
+        markSyncDirty(false);
+
+        _syncPending = false;
+
+        render();
+
+        showToast("Локальний стан був застарілий. Підтягнуто актуальні дані з хмари.", "info");
+
+        await refreshDbTasksCacheAfterSync();
+
+        _lastPullAt = nowIsoKyiv();
+
+        _syncInFlight = false;
+
+        return;
+
+      }
 
       queueSync();
 
