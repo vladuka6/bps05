@@ -28773,6 +28773,25 @@ async function pushSync(){
 
     } else {
 
+      let handledStale = false;
+      if(res.status === 409){
+        const body = await res.json().catch(()=>null);
+        if(body?.error === "stale state rejected"){
+          handledStale = true;
+          _syncLastError = "stale state rejected";
+          markSyncDirty(false);
+          _syncPending = false;
+          render();
+          showToast("На цьому комп’ютері був старий стан. Підтягую актуальні дані з хмари.", "info");
+          setTimeout(()=>pullSync(), 120);
+        }
+      }
+
+      if(handledStale){
+        _syncInFlight = false;
+        return;
+      }
+
       _syncLastError = `HTTP ${res.status}`;
 
       scheduleSyncRetry();
