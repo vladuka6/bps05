@@ -110,11 +110,23 @@ async function handleSyncPut(request, env) {
   let state = body?.state;
   if (!state || typeof state !== "object") return json({ ok: false, error: "bad state" }, { status: 400 }, request);
 
+  const currentState = await loadState(env);
+  const incomingStamp = String(state?.sync?.updatedAt || "");
+  const currentStamp = String(currentState?.sync?.updatedAt || "");
+
+  if (currentState && currentStamp && incomingStamp && incomingStamp < currentStamp) {
+    return json({
+      ok: false,
+      error: "stale state rejected",
+      currentStamp,
+      incomingStamp
+    }, { status: 409 }, request);
+  }
+
   const incomingTasks = Array.isArray(state.tasks) ? state.tasks.filter(t => t && t.id).length : 0;
   const deletedCount = Array.isArray(state.deletedTaskIds) ? state.deletedTaskIds.length : 0;
   const tableCountRow = await env.DB.prepare("SELECT COUNT(*) AS count FROM tasks").first();
   const tableTasks = Number(tableCountRow?.count || 0);
-  const currentState = await loadState(env);
   const currentStateTasks = Array.isArray(currentState?.tasks) ? currentState.tasks.length : 0;
 
   if (incomingTasks === 0 && deletedCount === 0 && Math.max(tableTasks, currentStateTasks) >= 20) {
