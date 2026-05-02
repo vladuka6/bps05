@@ -100,8 +100,122 @@ async function loadState(env) {
   return JSON.parse(row.state_json);
 }
 
+function taskStamp(task) {
+  return String(task?.updatedAt || task?.createdAt || "");
+}
+
+function dbRowToStateTask(row) {
+  return {
+    id: String(row?.id || ""),
+    type: String(row?.type || "internal"),
+    title: String(row?.title || ""),
+    description: row?.description || "",
+    departmentId: row?.department_id || null,
+    responsibleUserId: row?.responsible_user_id || null,
+    createdBy: row?.created_by || null,
+    priority: row?.priority || null,
+    status: row?.status || "в_процесі",
+    startDate: row?.start_date || null,
+    dueDate: row?.due_date || null,
+    nextControlDate: row?.next_control_date || null,
+    controlAlways: !!row?.control_always,
+    createdAt: row?.created_at || null,
+    updatedAt: row?.updated_at || row?.created_at || null,
+    complexity: row?.complexity || null,
+    closedAt: row?.closed_at || null,
+    reportPlanId: row?.report_plan_id || null,
+    reportMonth: row?.report_month || null,
+    audience: row?.audience || null,
+    annOrder: Number.isFinite(Number(row?.ann_order)) ? Number(row.ann_order) : null,
+    meetingRepeatCount: Number.isFinite(Number(row?.meeting_repeat_count)) ? Number(row.meeting_repeat_count) : 0,
+    meetingLastDate: row?.meeting_last_date || null,
+    meetingNextDate: row?.meeting_next_date || null,
+    meetingSkipDate: row?.meeting_skip_date || null,
+  };
+}
+
+function mergeTaskVersions(dbTask, stateTask) {
+  const dbStamp = taskStamp(dbTask);
+  const stateStamp = taskStamp(stateTask);
+  const preferDb = !!dbStamp && (!stateStamp || dbStamp > stateStamp);
+  const base = preferDb ? stateTask : dbTask;
+  const top = preferDb ? dbTask : stateTask;
+  return {
+    ...base,
+    ...top,
+    id: String(top?.id || base?.id || ""),
+    type: String(top?.type || base?.type || "internal"),
+    title: String(top?.title || base?.title || ""),
+    description: top?.description ?? base?.description ?? "",
+    updatedAt: top?.updatedAt || base?.updatedAt || top?.createdAt || base?.createdAt || null,
+  };
+}
+
+async function loadTasksSnapshot(env) {
+  const { results } = await env.DB.prepare(
+    "SELECT * FROM tasks ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 5000"
+  ).all();
+  return Array.isArray(results) ? results.map(dbRowToStateTask).filter(t => t && t.id) : [];
+}
+
+async function persistStateSnapshot(env, state) {
+  const stateJson = JSON.stringify(state);
+  const updatedAt = state?.sync?.updatedAt || new Date().toISOString();
+  await env.DB.prepare(
+    "INSERT INTO app_state(id, state_json, updated_at) VALUES(?, ?, ?) ON CONFLICT(id) DO UPDATE SET state_json=excluded.state_json, updated_at=excluded.updated_at"
+  ).bind(PRIMARY_STATE_ID, stateJson, updatedAt).run();
+  for (const id of MIRROR_STATE_IDS) {
+    await env.DB.prepare(
+      "INSERT INTO app_state(id, state_json, updated_at) VALUES(?, ?, ?) ON CONFLICT(id) DO UPDATE SET state_json=excluded.state_json, updated_at=excluded.updated_at"
+    ).bind(id, stateJson, updatedAt).run();
+  }
+}
+
+async function hydrateStateWithTasksTable(env, state) {
+  if (!state || typeof state !== "object") return state;
+
+  const dbTasks = await loadTasksSnapshot(env);
+  if (!dbTasks.length) return state;
+
+  const stateTasks = Array.isArray(state.tasks) ? state.tasks.filter(t => t && t.id) : [];
+  const dbMax = dbTasks.reduce((max, t) => {
+    const stamp = taskStamp(t);
+    return stamp > max ? stamp : max;
+  }, "");
+  const stateMax = stateTasks.reduce((max, t) => {
+    const stamp = taskStamp(t);
+    return stamp > max ? stamp : max;
+  }, "");
+
+  const shouldHydrate = dbTasks.length !== stateTasks.length || (!!dbMax && dbMax > stateMax);
+  if (!shouldHydrate) return state;
+
+  const dbById = new Map(dbTasks.map(t => [String(t.id), t]));
+  const stateById = new Map(stateTasks.map(t => [String(t.id), t]));
+  const merged = [];
+  const allIds = new Set([...dbById.keys(), ...stateById.keys()]);
+
+  for (const id of allIds) {
+    const dbTask = dbById.get(id);
+    const stateTask = stateById.get(id);
+    if (dbTask && stateTask) merged.push(mergeTaskVersions(dbTask, stateTask));
+    else if (dbTask) merged.push(dbTask);
+    else if (stateTask) merged.push(stateTask);
+  }
+
+  const deletedIds = Array.isArray(state.deletedTaskIds) ? state.deletedTaskIds.map(String) : [];
+  const safeDeletedIds = deletedIds.filter(id => !dbById.has(id));
+  const nextState = {
+    ...state,
+    tasks: merged,
+    deletedTaskIds: safeDeletedIds,
+  };
+  await persistStateSnapshot(env, nextState);
+  return nextState;
+}
+
 async function handleSyncGet(request, env) {
-  const state = await loadState(env);
+  const state = await hydrateStateWithTasksTable(env, await loadState(env));
   return json({ state }, {}, request);
 }
 
@@ -140,17 +254,7 @@ async function handleSyncPut(request, env) {
 
   state = protectReferenceNotesFromStaleClients(currentState, state);
 
-  const stateJson = JSON.stringify(state);
-  const updatedAt = state?.sync?.updatedAt || new Date().toISOString();
-  await env.DB.prepare(
-    "INSERT INTO app_state(id, state_json, updated_at) VALUES(?, ?, ?) ON CONFLICT(id) DO UPDATE SET state_json=excluded.state_json, updated_at=excluded.updated_at"
-  ).bind(PRIMARY_STATE_ID, stateJson, updatedAt).run();
-
-  for (const id of MIRROR_STATE_IDS) {
-    await env.DB.prepare(
-      "INSERT INTO app_state(id, state_json, updated_at) VALUES(?, ?, ?) ON CONFLICT(id) DO UPDATE SET state_json=excluded.state_json, updated_at=excluded.updated_at"
-    ).bind(id, stateJson, updatedAt).run();
-  }
+  await persistStateSnapshot(env, state);
 
   await syncTasksTable(env, state);
   return json({ ok: true }, {}, request);
@@ -240,7 +344,7 @@ async function syncTasksTable(env, state) {
 
 async function handleDbTasks(request, env) {
   const { results } = await env.DB.prepare(
-    "SELECT * FROM tasks ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 2000"
+    "SELECT * FROM tasks ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 5000"
   ).all();
   return json({ items: results || [], tasks: results || [] }, {}, request);
 }
